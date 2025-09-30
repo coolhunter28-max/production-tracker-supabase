@@ -1,63 +1,59 @@
-// src/components/alertas/AlertasDashboard.tsx
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
-interface Alerta {
+type Alerta = {
   id: string;
-  tipo: string;
-  subtipo: string | null;
-  severidad: string;
-  fecha: string;
+  tipo: "muestra" | "produccion" | "etd" | string;
+  subtipo?: string | null;
+  severidad?: string | null;
+  fecha: string; // ISO
   es_estimada: boolean;
   leida: boolean;
-  po: string;
-  customer: string;
-  reference: string;
-  style: string;
-  color: string;
-  mensaje: string;
+  pos?: { id: string; po: string; customer: string };
+  lineas_pedido?: { reference: string; style: string; color: string };
+  muestras?: { tipo_muestra: string | null };
+};
+
+// util: días desde hoy hasta fecha (negativo si retraso)
+function daysDiffToToday(isoDate: string) {
+  const today = new Date();
+  const d = new Date(isoDate);
+  const ms = d.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0);
+  return Math.round(ms / (1000 * 60 * 60 * 24));
+}
+
+function fmtDate(iso: string) {
+  try {
+    const d = new Date(iso);
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return iso;
+  }
 }
 
 export default function AlertasDashboard() {
   const router = useRouter();
   const [alertas, setAlertas] = useState<Alerta[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtros, setFiltros] = useState({
-    customer: "todos",
-    tipo: "todos",
-    subtipo: "todos",
-    search: "",
-  });
 
-  // ========================
-  // Cargar alertas
-  // ========================
+  // filtros
+  const [filtroCliente, setFiltroCliente] = useState<string>("Todos");
+  const [filtroTipo, setFiltroTipo] = useState<string>("Todos");
+  const [filtroSubtipo, setFiltroSubtipo] = useState<string>("Todos");
+  const [texto, setTexto] = useState("");
+
   useEffect(() => {
     const fetchAlertas = async () => {
       try {
-        setLoading(true);
-        const res = await fetch("/api/alertas?leida=false", {
-          cache: "no-store",
-        });
+        const res = await fetch("/api/alertas?leida=false");
         const data = await res.json();
-        if (data.success) {
-          setAlertas(data.alertas);
-        } else {
-          console.error("❌ Error cargando alertas:", data.error);
-        }
-      } catch (err) {
-        console.error("❌ Error de red cargando alertas:", err);
+        if (!res.ok) throw new Error(data?.error || "Error cargando alertas");
+        setAlertas(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("❌ Error cargando alertas:", e);
+        setAlertas([]);
       } finally {
         setLoading(false);
       }
@@ -65,197 +61,227 @@ export default function AlertasDashboard() {
     fetchAlertas();
   }, []);
 
-  // ========================
-  // Marcar como leída
-  // ========================
-  const handleDescartar = async (id: string) => {
+  // opciones de filtros
+  const clientes = useMemo(() => {
+    const s = new Set<string>();
+    alertas.forEach((a) => a.pos?.customer && s.add(a.pos.customer));
+    return ["Todos", ...Array.from(s).sort()];
+  }, [alertas]);
+
+  const tipos = useMemo(() => {
+    const s = new Set<string>();
+    alertas.forEach((a) => a.tipo && s.add(a.tipo));
+    return ["Todos", ...Array.from(s).sort()];
+  }, [alertas]);
+
+  const subtipos = useMemo(() => {
+    const s = new Set<string>();
+    alertas.forEach((a) => {
+      if (a.tipo === "muestra" && a.muestras?.tipo_muestra) {
+        s.add(a.muestras.tipo_muestra);
+      } else if (a.tipo !== "muestra" && a.subtipo) {
+        s.add(a.subtipo);
+      }
+    });
+    return ["Todos", ...Array.from(s).sort()];
+  }, [alertas]);
+
+  const filtradas = useMemo(() => {
+    return alertas.filter((a) => {
+      if (filtroCliente !== "Todos" && a.pos?.customer !== filtroCliente)
+        return false;
+      if (filtroTipo !== "Todos" && a.tipo !== filtroTipo) return false;
+
+      if (filtroSubtipo !== "Todos") {
+        const st =
+          a.tipo === "muestra" ? a.muestras?.tipo_muestra : a.subtipo || "-";
+        if (st !== filtroSubtipo) return false;
+      }
+
+      if (texto.trim()) {
+        const t = texto.toLowerCase();
+        const hay =
+          (a.pos?.po || "").toLowerCase().includes(t) ||
+          (a.lineas_pedido?.reference || "").toLowerCase().includes(t) ||
+          (a.lineas_pedido?.style || "").toLowerCase().includes(t) ||
+          (a.lineas_pedido?.color || "").toLowerCase().includes(t);
+        if (!hay) return false;
+      }
+
+      return true;
+    });
+  }, [alertas, filtroCliente, filtroTipo, filtroSubtipo, texto]);
+
+  const descartar = async (id: string) => {
     try {
       const res = await fetch("/api/alertas", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
-      const data = await res.json();
-      if (data.success) {
-        setAlertas((prev) => prev.filter((a) => a.id !== id));
-      }
-    } catch (err) {
-      console.error("❌ Error descartando alerta:", err);
+      if (!res.ok) throw new Error("No se pudo descartar");
+      setAlertas((prev) => prev.filter((a) => a.id !== id));
+    } catch (e) {
+      console.error("❌ Error al descartar:", e);
+      alert("No se pudo descartar la alerta.");
     }
   };
 
-  // ========================
-  // Filtros dinámicos
-  // ========================
-  const customers = useMemo(
-    () => ["todos", ...new Set(alertas.map((a) => a.customer).filter(Boolean))],
-    [alertas]
-  );
+  // ✅ Si el PO tiene número → lo usa, si no → fallback al UUID
+  const goPo = (po?: string, uuid?: string) => {
+    if (po) {
+      router.push(`/po/${po}`);
+    } else if (uuid) {
+      router.push(`/po/${uuid}`);
+    }
+  };
 
-  const tipos = useMemo(
-    () => ["todos", ...new Set(alertas.map((a) => a.tipo).filter(Boolean))],
-    [alertas]
-  );
-
-  const subtipos = useMemo(
-    () =>
-      ["todos", ...new Set(alertas.map((a) => a.subtipo || "").filter(Boolean))],
-    [alertas]
-  );
-
-  const alertasFiltradas = useMemo(() => {
-    return alertas.filter((a) => {
-      if (filtros.customer !== "todos" && a.customer !== filtros.customer)
-        return false;
-      if (filtros.tipo !== "todos" && a.tipo !== filtros.tipo) return false;
-      if (filtros.subtipo !== "todos" && a.subtipo !== filtros.subtipo)
-        return false;
-      if (
-        filtros.search &&
-        !(
-          a.po.toLowerCase().includes(filtros.search.toLowerCase()) ||
-          a.reference.toLowerCase().includes(filtros.search.toLowerCase()) ||
-          a.style.toLowerCase().includes(filtros.search.toLowerCase()) ||
-          a.color.toLowerCase().includes(filtros.search.toLowerCase())
-        )
-      )
-        return false;
-      return true;
-    });
-  }, [alertas, filtros]);
-
-  if (loading) return <p className="p-4">Cargando alertas...</p>;
+  if (loading) return <div>Cargando alertas...</div>;
 
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">Sistema de Alertas</h2>
 
       {/* Filtros */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Customer */}
+      <div className="flex flex-wrap items-center gap-3">
         <div>
-          <label className="block text-sm font-medium mb-1">Customer</label>
-          <Select
-            value={filtros.customer}
-            onValueChange={(v) => setFiltros({ ...filtros, customer: v })}
+          <div className="text-xs text-gray-500 mb-1">Cliente</div>
+          <select
+            className="border rounded px-2 py-1"
+            value={filtroCliente}
+            onChange={(e) => setFiltroCliente(e.target.value)}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              {customers.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {clientes.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* Tipo */}
         <div>
-          <label className="block text-sm font-medium mb-1">Tipo</label>
-          <Select
-            value={filtros.tipo}
-            onValueChange={(v) => setFiltros({ ...filtros, tipo: v })}
+          <div className="text-xs text-gray-500 mb-1">Tipo</div>
+          <select
+            className="border rounded px-2 py-1"
+            value={filtroTipo}
+            onChange={(e) => setFiltroTipo(e.target.value)}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              {tipos.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {tipos.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* Subtipo */}
         <div>
-          <label className="block text-sm font-medium mb-1">Subtipo</label>
-          <Select
-            value={filtros.subtipo}
-            onValueChange={(v) => setFiltros({ ...filtros, subtipo: v })}
+          <div className="text-xs text-gray-500 mb-1">Subtipo</div>
+          <select
+            className="border rounded px-2 py-1"
+            value={filtroSubtipo}
+            onChange={(e) => setFiltroSubtipo(e.target.value)}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              {subtipos.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s || "-"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {subtipos.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* Buscar */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Buscar</label>
-          <Input
-            placeholder="PO, referencia, style, color..."
-            value={filtros.search}
-            onChange={(e) => setFiltros({ ...filtros, search: e.target.value })}
+        <div className="flex-1 min-w-[220px]">
+          <div className="text-xs text-gray-500 mb-1">
+            Buscar referencia / estilo / PO / color
+          </div>
+          <input
+            className="border rounded px-2 py-1 w-full"
+            placeholder="Ej: 78040, Luca, PO-G-010777..."
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
           />
         </div>
       </div>
 
-      {/* Tabla de alertas */}
+      {/* Tabla */}
       <div className="overflow-x-auto">
-        <table className="w-full border text-sm">
+        <table className="min-w-full text-sm">
           <thead>
-            <tr className="bg-gray-100 text-left">
-              <th className="px-2 py-1">PO</th>
-              <th className="px-2 py-1">Customer</th>
-              <th className="px-2 py-1">Referencia</th>
-              <th className="px-2 py-1">Style</th>
-              <th className="px-2 py-1">Color</th>
-              <th className="px-2 py-1">Tipo</th>
-              <th className="px-2 py-1">Subtipo</th>
-              <th className="px-2 py-1">Mensaje</th>
-              <th className="px-2 py-1">Fecha</th>
-              <th className="px-2 py-1">Acciones</th>
+            <tr className="border-b bg-gray-50">
+              <th className="text-left p-2">PO</th>
+              <th className="text-left p-2">Cliente</th>
+              <th className="text-left p-2">Referencia</th>
+              <th className="text-left p-2">Style</th>
+              <th className="text-left p-2">Color</th>
+              <th className="text-left p-2">Tipo</th>
+              <th className="text-left p-2">Subtipo</th>
+              <th className="text-left p-2">Mensaje</th>
+              <th className="text-left p-2">Fecha</th>
+              <th className="text-left p-2">Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {alertasFiltradas.map((a) => (
-              <tr key={a.id} className="border-t">
-                <td
-                  className="text-blue-600 cursor-pointer underline"
-                  onClick={() => router.push(`/po/${a.po}`)}
-                >
-                  {a.po}
-                </td>
-                <td>{a.customer}</td>
-                <td>{a.reference}</td>
-                <td>{a.style}</td>
-                <td>{a.color}</td>
-                <td>{a.tipo}</td>
-                <td>{a.subtipo || "-"}</td>
-                <td>{a.mensaje}</td>
-                <td className={a.es_estimada ? "text-red-500" : ""}>
-                  {a.fecha
-                    ? new Date(a.fecha).toLocaleDateString()
-                    : "-"}
-                </td>
-                <td>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDescartar(a.id)}
+            {filtradas.map((a) => {
+              const poNumber = a.pos?.po;
+              const uuid = a.pos?.id;
+              const st =
+                a.tipo === "muestra"
+                  ? a.muestras?.tipo_muestra || "-"
+                  : a.subtipo || "-";
+
+              const dd = daysDiffToToday(a.fecha);
+              const msg =
+                dd < 0
+                  ? `Con ${Math.abs(dd)} día(s) de retraso`
+                  : dd === 0
+                  ? "Es hoy"
+                  : `Faltan ${dd} día(s)`;
+
+              return (
+                <tr key={a.id} className="border-b hover:bg-gray-50">
+                  <td className="p-2">
+                    <button
+                      className="text-blue-600 underline"
+                      onClick={() => goPo(poNumber, uuid)}
+                    >
+                      {poNumber || "(sin PO)"}
+                    </button>
+                  </td>
+                  <td className="p-2">{a.pos?.customer}</td>
+                  <td className="p-2">{a.lineas_pedido?.reference}</td>
+                  <td className="p-2">{a.lineas_pedido?.style}</td>
+                  <td className="p-2">{a.lineas_pedido?.color}</td>
+                  <td className="p-2">{a.tipo}</td>
+                  <td className="p-2">{st}</td>
+                  <td className="p-2">
+                    {a.tipo === "muestra"
+                      ? `La muestra ${st} está pendiente · ${msg}`
+                      : `Alerta de ${a.tipo} · ${msg}`}
+                  </td>
+                  <td
+                    className="p-2"
+                    style={{
+                      color: a.es_estimada ? "red" : undefined,
+                      fontWeight: a.es_estimada ? 700 : 400,
+                    }}
                   >
-                    Descartar
-                  </Button>
-                </td>
-              </tr>
-            ))}
-            {alertasFiltradas.length === 0 && (
+                    {fmtDate(a.fecha)} {a.es_estimada ? "(estimada)" : "(real)"}
+                  </td>
+                  <td className="p-2">
+                    <button
+                      className="border rounded px-2 py-1 hover:bg-gray-100"
+                      onClick={() => descartar(a.id)}
+                    >
+                      Descartar
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+
+            {filtradas.length === 0 && (
               <tr>
-                <td colSpan={10} className="text-center py-4 text-gray-500">
-                  ✅ No hay alertas pendientes
+                <td className="p-4 text-gray-500" colSpan={10}>
+                  No hay alertas que cumplan los filtros.
                 </td>
               </tr>
             )}

@@ -1,114 +1,130 @@
-// src/app/api/alertas/route.ts
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-// 🔹 Deduplicar alertas por clave (PO + tipo + subtipo + ref + color)
-function dedupeAlertas(alertas: any[]) {
-  const map = new Map<string, any>();
+/**
+ * GET /api/alertas?leida=false
+ * Devuelve alertas deduplicadas con joins mínimos para el dashboard
+ * 🔹 Ahora solo devuelve las de los últimos 15 días
+ */
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const leida = searchParams.get("leida");
 
-  for (const a of alertas) {
-    const key = [
-      a.po,
-      a.tipo,
-      a.subtipo,
-      a.reference,
-      a.color,
-    ].join("|");
+    // Fecha mínima (15 días hacia atrás)
+    const hoy = new Date();
+    const hace15 = new Date(hoy);
+    hace15.setDate(hoy.getDate() - 15);
 
-    if (!map.has(key)) {
-      map.set(key, a);
-    } else {
-      const existente = map.get(key);
-      // Priorizar alerta real sobre estimada
-      if (existente.es_estimada && !a.es_estimada) {
-        map.set(key, a);
+    // Traemos lo que necesitamos para el dashboard
+    const { data, error } = await supabase
+      .from("alertas")
+      .select(`
+        id,
+        tipo,
+        subtipo,
+        severidad,
+        fecha,
+        es_estimada,
+        leida,
+        pos:pos (
+          id,
+          po,
+          customer
+        ),
+        lineas_pedido:lineas_pedido (
+          reference,
+          style,
+          color
+        ),
+        muestras:muestras (
+          tipo_muestra
+        )
+      `)
+      .eq("leida", leida === "true") // si no pasas leida, Next envía null → no filtra
+      .gte("fecha", hace15.toISOString().slice(0, 10)) // 👈 solo últimos 15 días
+      .order("fecha", { ascending: false });
+
+    if (error) {
+      console.error("❌ Error en la consulta de alertas:", error);
+      return NextResponse.json(
+        { error: "Error al obtener las alertas" },
+        { status: 500 }
+      );
+    }
+
+    // Asegurar array
+    const rows = Array.isArray(data) ? data : [];
+
+    // De-duplicado (preferimos no estimadas frente a estimadas)
+    const seen = new Map<string, any>();
+    for (const a of rows) {
+      const key = [
+        a?.pos?.po ?? "",
+        a?.tipo ?? "",
+        a?.tipo === "muestra"
+          ? a?.muestras?.tipo_muestra ?? ""
+          : a?.subtipo ?? "",
+        a?.lineas_pedido?.reference ?? "",
+        a?.lineas_pedido?.color ?? "",
+      ].join("|");
+
+      const prev = seen.get(key);
+      if (!prev) {
+        seen.set(key, a);
+      } else {
+        if (prev.es_estimada && !a.es_estimada) {
+          seen.set(key, a);
+        }
       }
     }
-  }
 
-  return Array.from(map.values());
+    const deduped = Array.from(seen.values());
+
+    return NextResponse.json(deduped);
+  } catch (err) {
+    console.error("❌ Error inesperado en alertas:", err);
+    return NextResponse.json(
+      { error: "Error inesperado en alertas" },
+      { status: 500 }
+    );
+  }
 }
 
-// ==========================
-// GET: Listar alertas
-// ==========================
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const leida = searchParams.get("leida");
-
-  let query = supabase
-    .from("alertas")
-    .select(
-      `
-      id,
-      tipo,
-      subtipo,
-      severidad,
-      fecha,
-      es_estimada,
-      leida,
-      pos (po, customer),
-      lineas_pedido (reference, style, color),
-      muestras (tipo_muestra)
-    `
-    )
-    .order("fecha", { ascending: true });
-
-  if (leida !== null) {
-    query = query.eq("leida", leida === "true");
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("❌ Error cargando alertas:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
-
-  // Normalizar alertas (manejar arrays de relaciones)
-  const alertas = data.map((a) => ({
-    id: a.id,
-    tipo: a.tipo,
-    subtipo: a.subtipo ?? (a.muestras?.[0]?.tipo_muestra ?? null),
-    severidad: a.severidad,
-    fecha: a.fecha,
-    es_estimada: a.es_estimada,
-    leida: a.leida,
-    po: Array.isArray(a.pos) ? a.pos[0]?.po ?? "-" : a.pos?.po ?? "-",
-    customer: Array.isArray(a.pos) ? a.pos[0]?.customer ?? "-" : a.pos?.customer ?? "-",
-    reference: Array.isArray(a.lineas_pedido) ? a.lineas_pedido[0]?.reference ?? "-" : a.lineas_pedido?.reference ?? "-",
-    style: Array.isArray(a.lineas_pedido) ? a.lineas_pedido[0]?.style ?? "-" : a.lineas_pedido?.style ?? "-",
-    color: Array.isArray(a.lineas_pedido) ? a.lineas_pedido[0]?.color ?? "-" : a.lineas_pedido?.color ?? "-",
-    mensaje:
-      a.tipo === "muestra"
-        ? `Muestra ${a.subtipo ?? a.muestras?.[0]?.tipo_muestra ?? "-"} pendiente`
-        : `Alerta de ${a.subtipo ?? a.tipo}`,
-  }));
-
-  const deduped = dedupeAlertas(alertas);
-
-  return NextResponse.json({ success: true, alertas: deduped });
-}
-
-// ==========================
-// PATCH: Marcar alerta como leída
-// ==========================
+/**
+ * PATCH /api/alertas
+ * Body: { id: string } → marca la alerta como leída (descartada)
+ */
 export async function PATCH(req: Request) {
   try {
-    const { id } = await req.json();
+    const body = await req.json();
+    const { id } = body as { id?: string };
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Falta id" },
+        { status: 400 }
+      );
+    }
 
     const { error } = await supabase
       .from("alertas")
       .update({ leida: true })
       .eq("id", id);
 
-    if (error) throw error;
+    if (error) {
+      console.error("❌ Error al descartar alerta:", error);
+      return NextResponse.json(
+        { error: "No se pudo descartar la alerta" },
+        { status: 500 }
+      );
+    }
 
-    return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error("❌ Error en PATCH /api/alertas:", err);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("❌ Error inesperado en PATCH alertas:", err);
     return NextResponse.json(
-      { success: false, error: err.message },
+      { error: "Error inesperado" },
       { status: 500 }
     );
   }
