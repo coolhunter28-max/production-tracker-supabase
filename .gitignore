@@ -1,6 +1,37 @@
-node_modules/
-.next/
-.env
-.env.local
+# Dependencias
+/node_modules
+
+# Build de Next.js
+/.next
+/out
+
+# Archivos de entorno (claves privadas)
+/.env
+/.env.local
+/.env.development
+/.env.production
+/.env.test
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Cachés
+/.turbo
+/.vercel
+/.cache
+
+# Configuración del sistema operativo
 .DS_Store
 Thumbs.db
+
+# Archivos de editor
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Coverage de tests
+/coverage

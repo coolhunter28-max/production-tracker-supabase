@@ -1,22 +1,29 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+// Definimos el tipo de datos que esperamos
+type AlertaRow = {
+  id: string;
+  tipo: string;
+  subtipo?: string | null;
+  severidad?: string | null;
+  fecha: string;
+  es_estimada: boolean;
+  leida: boolean;
+  pos?: { po: string; customer: string } | { po: string; customer: string }[];
+  lineas_pedido?: { reference?: string; style?: string; color?: string };
+  muestras?: { tipo_muestra?: string | null };
+};
+
 /**
  * GET /api/alertas?leida=false
  * Devuelve alertas deduplicadas con joins mínimos para el dashboard
- * 🔹 Ahora solo devuelve las de los últimos 15 días
  */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const leida = searchParams.get("leida");
 
-    // Fecha mínima (15 días hacia atrás)
-    const hoy = new Date();
-    const hace15 = new Date(hoy);
-    hace15.setDate(hoy.getDate() - 15);
-
-    // Traemos lo que necesitamos para el dashboard
     const { data, error } = await supabase
       .from("alertas")
       .select(`
@@ -28,7 +35,6 @@ export async function GET(req: Request) {
         es_estimada,
         leida,
         pos:pos (
-          id,
           po,
           customer
         ),
@@ -41,8 +47,7 @@ export async function GET(req: Request) {
           tipo_muestra
         )
       `)
-      .eq("leida", leida === "true") // si no pasas leida, Next envía null → no filtra
-      .gte("fecha", hace15.toISOString().slice(0, 10)) // 👈 solo últimos 15 días
+      .eq("leida", leida === "true")
       .order("fecha", { ascending: false });
 
     if (error) {
@@ -53,14 +58,20 @@ export async function GET(req: Request) {
       );
     }
 
-    // Asegurar array
-    const rows = Array.isArray(data) ? data : [];
+    const rows = (Array.isArray(data) ? data : []) as AlertaRow[];
 
     // De-duplicado (preferimos no estimadas frente a estimadas)
     const seen = new Map<string, any>();
     for (const a of rows) {
+      const poNumber = Array.isArray(a.pos)
+        ? a.pos[0]?.po ?? ""
+        : a.pos?.po ?? "";
+      const customer = Array.isArray(a.pos)
+        ? a.pos[0]?.customer ?? ""
+        : a.pos?.customer ?? "";
+
       const key = [
-        a?.pos?.po ?? "",
+        poNumber,
         a?.tipo ?? "",
         a?.tipo === "muestra"
           ? a?.muestras?.tipo_muestra ?? ""
@@ -69,19 +80,22 @@ export async function GET(req: Request) {
         a?.lineas_pedido?.color ?? "",
       ].join("|");
 
+      const normalizado = {
+        ...a,
+        pos: { po: poNumber, customer },
+      };
+
       const prev = seen.get(key);
       if (!prev) {
-        seen.set(key, a);
+        seen.set(key, normalizado);
       } else {
         if (prev.es_estimada && !a.es_estimada) {
-          seen.set(key, a);
+          seen.set(key, normalizado);
         }
       }
     }
 
-    const deduped = Array.from(seen.values());
-
-    return NextResponse.json(deduped);
+    return NextResponse.json(Array.from(seen.values()));
   } catch (err) {
     console.error("❌ Error inesperado en alertas:", err);
     return NextResponse.json(
@@ -93,7 +107,7 @@ export async function GET(req: Request) {
 
 /**
  * PATCH /api/alertas
- * Body: { id: string } → marca la alerta como leída (descartada)
+ * Body: { id: string }  → marca la alerta como leída (descartada)
  */
 export async function PATCH(req: Request) {
   try {
@@ -101,10 +115,7 @@ export async function PATCH(req: Request) {
     const { id } = body as { id?: string };
 
     if (!id) {
-      return NextResponse.json(
-        { error: "Falta id" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Falta id" }, { status: 400 });
     }
 
     const { error } = await supabase
@@ -123,9 +134,6 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("❌ Error inesperado en PATCH alertas:", err);
-    return NextResponse.json(
-      { error: "Error inesperado" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error inesperado" }, { status: 500 });
   }
 }

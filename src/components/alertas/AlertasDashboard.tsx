@@ -11,9 +11,9 @@ type Alerta = {
   fecha: string; // ISO
   es_estimada: boolean;
   leida: boolean;
-  pos?: { id: string; po: string; customer: string };
-  lineas_pedido?: { reference: string; style: string; color: string };
-  muestras?: { tipo_muestra: string | null };
+  pos: { po: string; customer: string };
+  lineas_pedido?: { reference?: string; style?: string; color?: string };
+  muestras?: { tipo_muestra?: string | null };
 };
 
 // util: días desde hoy hasta fecha (negativo si retraso)
@@ -74,6 +74,7 @@ export default function AlertasDashboard() {
     return ["Todos", ...Array.from(s).sort()];
   }, [alertas]);
 
+  // Subtipos:
   const subtipos = useMemo(() => {
     const s = new Set<string>();
     alertas.forEach((a) => {
@@ -127,13 +128,8 @@ export default function AlertasDashboard() {
     }
   };
 
-  // ✅ Si el PO tiene número → lo usa, si no → fallback al UUID
-  const goPo = (po?: string, uuid?: string) => {
-    if (po) {
-      router.push(`/po/${po}`);
-    } else if (uuid) {
-      router.push(`/po/${uuid}`);
-    }
+  const goPo = (po?: string) => {
+    if (po) router.push(`/po/${po}`);
   };
 
   if (loading) return <div>Cargando alertas...</div>;
@@ -221,8 +217,6 @@ export default function AlertasDashboard() {
           </thead>
           <tbody>
             {filtradas.map((a) => {
-              const poNumber = a.pos?.po;
-              const uuid = a.pos?.id;
               const st =
                 a.tipo === "muestra"
                   ? a.muestras?.tipo_muestra || "-"
@@ -241,12 +235,12 @@ export default function AlertasDashboard() {
                   <td className="p-2">
                     <button
                       className="text-blue-600 underline"
-                      onClick={() => goPo(poNumber, uuid)}
+                      onClick={() => goPo(a.pos.po)}
                     >
-                      {poNumber || "(sin PO)"}
+                      {a.pos.po}
                     </button>
                   </td>
-                  <td className="p-2">{a.pos?.customer}</td>
+                  <td className="p-2">{a.pos.customer}</td>
                   <td className="p-2">{a.lineas_pedido?.reference}</td>
                   <td className="p-2">{a.lineas_pedido?.style}</td>
                   <td className="p-2">{a.lineas_pedido?.color}</td>
