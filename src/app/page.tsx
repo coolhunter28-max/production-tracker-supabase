@@ -164,9 +164,9 @@ export default function DashboardPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Sistema de Producción</h1>
         <div className="flex space-x-2">
-          <Link href="/po/nuevo">
-            <Button variant="default">Nuevo PO</Button>
-          </Link>
+          <Link href="/po/nuevo/editar">
+  <Button variant="default">Nuevo PO</Button>
+</Link>
           <Link href="/import">
             <Button variant="outline">Importar Datos</Button>
           </Link>
