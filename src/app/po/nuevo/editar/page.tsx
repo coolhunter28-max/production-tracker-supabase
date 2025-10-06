@@ -1,90 +1,94 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
-export default function EditarPO() {
-  const params = useParams<{ id: string }>();
-  const id = params?.id;
+type TMuestra = {
+  tipo_muestra?: string;
+  fecha_muestra?: string;
+  estado_muestra?: string;
+  round?: string | number;
+  notas?: string;
+};
+
+type TLinea = {
+  reference?: string;
+  style?: string;
+  color?: string;
+  size_run?: string;
+  category?: string;
+  channel?: string;
+  qty?: number;
+  price?: number;
+  trial_upper?: string;
+  trial_lasting?: string;
+  lasting?: string;
+  finish_date?: string;
+  muestras?: TMuestra[];
+};
+
+type TPO = {
+  season?: string;
+  po?: string;
+  customer?: string;
+  supplier?: string;
+  factory?: string;
+  proforma_invoice?: string;
+  po_date?: string;
+  etd_pi?: string;
+  booking?: string;
+  closing?: string;
+  shipping_date?: string;
+  inspection?: string;
+  estado_inspeccion?: string;
+  currency?: "USD" | "EUR";
+  lineas_pedido?: TLinea[];
+};
+
+export default function NuevoPO() {
   const router = useRouter();
+  const [po, setPO] = useState<TPO>({
+    currency: "USD",
+    lineas_pedido: [],
+  });
 
-  const [po, setPO] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  // ✅ Formato español (punto para miles, coma para decimales)
+  const fmt = (v: number) =>
+    new Intl.NumberFormat("es-ES", {
+      style: "currency",
+      currency: po.currency || "USD",
+      minimumFractionDigits: 2,
+    }).format(v);
 
-  useEffect(() => {
-    const fetchPO = async () => {
-      try {
-        const res = await fetch(`/api/po/${id}`);
-        const data = await res.json();
-        setPO(data);
-      } catch (err) {
-        console.error("❌ Error cargando PO:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (id) fetchPO();
-  }, [id]);
+  const totalPairs = useMemo(
+    () => (po.lineas_pedido ?? []).reduce((a, l) => a + (l.qty || 0), 0),
+    [po]
+  );
+  const totalAmount = useMemo(
+    () => (po.lineas_pedido ?? []).reduce((a, l) => a + (l.qty || 0) * (l.price || 0), 0),
+    [po]
+  );
 
   const guardar = async () => {
     try {
-      const res = await fetch(`/api/po/${id}`, {
-        method: "PUT",
+      const res = await fetch("/api/po/nuevo", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(po),
       });
-      if (!res.ok) throw new Error("Error al guardar");
-      alert("✅ PO guardado correctamente");
-      router.push(`/po/${id}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message);
+      alert("✅ PO creado correctamente");
+      router.push(`/po/${data.id}/editar`);
     } catch (err) {
-      console.error("❌ Error al guardar:", err);
-      alert("Error al guardar");
+      console.error("❌ Error creando PO:", err);
+      alert("Error al crear PO");
     }
   };
-
-  const eliminar = async () => {
-    if (!confirm("¿Seguro que quieres eliminar este PO?")) return;
-    try {
-      const res = await fetch(`/api/po/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Error al eliminar");
-      alert("PO eliminado");
-      router.push("/");
-    } catch (err) {
-      console.error("❌ Error al eliminar:", err);
-      alert("Error al eliminar");
-    }
-  };
-
-  if (loading) return <div>Cargando...</div>;
-  if (!po) return <div>No se encontró el PO</div>;
-
-  // ✅ Formateo español
-  const formatNumber = (n: number) =>
-    new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 }).format(n || 0);
-
-  const formatMoney = (n: number) => {
-    const symbol = po.currency === "EUR" ? "€ " : "$ ";
-    return (
-      symbol +
-      new Intl.NumberFormat("es-ES", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(n || 0)
-    );
-  };
-
-  // Totales dinámicos
-  const totalPairs =
-    po.lineas_pedido?.reduce((acc: number, l: any) => acc + (l.qty || 0), 0) || 0;
-  const totalAmount =
-    po.lineas_pedido?.reduce(
-      (acc: number, l: any) => acc + (l.qty || 0) * (l.price || 0),
-      0
-    ) || 0;
 
   return (
     <div className="p-4 space-y-4">
-      <h1 className="text-xl font-bold">✏️ Editar PO {po.po}</h1>
+      <h1 className="text-xl font-bold">➕ Crear nuevo PO</h1>
 
       {/* Cabecera */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
@@ -105,7 +109,7 @@ export default function EditarPO() {
           <label key={key}>
             {label}
             <input
-              type={(type as string) || "text"}
+              type={type || "text"}
               value={(po as any)[key] || ""}
               onChange={(e) => setPO({ ...po, [key!]: e.target.value })}
               className="border w-full px-2 py-1"
@@ -117,9 +121,7 @@ export default function EditarPO() {
           Estado Insp.
           <select
             value={po.estado_inspeccion || ""}
-            onChange={(e) =>
-              setPO({ ...po, estado_inspeccion: e.target.value })
-            }
+            onChange={(e) => setPO({ ...po, estado_inspeccion: e.target.value })}
             className="border w-full px-2 py-1"
           >
             <option value="">-- Seleccionar --</option>
@@ -133,7 +135,7 @@ export default function EditarPO() {
           Moneda
           <select
             value={po.currency || "USD"}
-            onChange={(e) => setPO({ ...po, currency: e.target.value })}
+            onChange={(e) => setPO({ ...po, currency: e.target.value as "USD" | "EUR" })}
             className="border w-full px-2 py-1"
           >
             <option value="USD">USD ($)</option>
@@ -142,10 +144,11 @@ export default function EditarPO() {
         </label>
       </div>
 
-      {/* Líneas de pedido */}
+      {/* Líneas */}
       <div>
         <h2 className="text-md font-bold mb-2">📦 Líneas de pedido</h2>
-        {po.lineas_pedido?.map((l: any, i: number) => (
+
+        {(po.lineas_pedido ?? []).map((l, i) => (
           <div key={i} className="mb-6 border p-2 rounded bg-gray-50">
             <table className="table-auto text-xs w-full border">
               <thead className="bg-gray-200">
@@ -166,38 +169,33 @@ export default function EditarPO() {
                   <th></th>
                 </tr>
               </thead>
+
               <tbody>
                 <tr>
-                  {[
-                    ["reference", "text"],
-                    ["style", "text"],
-                    ["color", "text"],
-                    ["size_run", "text"],
-                    ["category", "text"],
-                    ["channel", "text"],
-                  ].map(([field, type]) => (
-                    <td key={field}>
-                      <input
-                        type={type}
-                        value={l[field] || ""}
-                        onChange={(e) => {
-                          const copy = [...po.lineas_pedido];
-                          copy[i][field] = e.target.value;
-                          setPO({ ...po, lineas_pedido: copy });
-                        }}
-                        className="border px-1 w-full"
-                      />
-                    </td>
-                  ))}
+                  {(["reference", "style", "color", "size_run", "category", "channel"] as const).map(
+                    (k) => (
+                      <td key={k}>
+                        <input
+                          value={(l as any)[k] || ""}
+                          onChange={(e) => {
+                            const copy = [...(po.lineas_pedido ?? [])];
+                            (copy[i] as any)[k] = e.target.value;
+                            setPO({ ...po, lineas_pedido: copy });
+                          }}
+                          className="border px-1 w-full"
+                        />
+                      </td>
+                    )
+                  )}
 
                   {/* Qty */}
                   <td>
                     <input
                       type="number"
-                      value={l.qty || ""}
+                      value={l.qty ?? ""}
                       onChange={(e) => {
-                        const copy = [...po.lineas_pedido];
-                        copy[i].qty = parseInt(e.target.value) || 0;
+                        const copy = [...(po.lineas_pedido ?? [])];
+                        copy[i].qty = parseFloat(e.target.value) || 0;
                         setPO({ ...po, lineas_pedido: copy });
                       }}
                       className="border px-1 w-full text-right"
@@ -206,49 +204,50 @@ export default function EditarPO() {
 
                   {/* Price */}
                   <td>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={l.price || ""}
-                      onChange={(e) => {
-                        const copy = [...po.lineas_pedido];
-                        copy[i].price = parseFloat(e.target.value) || 0;
-                        setPO({ ...po, lineas_pedido: copy });
-                      }}
-                      className="border px-1 w-full text-right"
-                    />
+                    <div className="flex items-center border px-1 rounded w-full">
+                      <span className="text-gray-500 mr-1">
+                        {po.currency === "EUR" ? "€" : "$"}
+                      </span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={l.price ?? ""}
+                        onChange={(e) => {
+                          const copy = [...(po.lineas_pedido ?? [])];
+                          copy[i].price = parseFloat(e.target.value) || 0;
+                          setPO({ ...po, lineas_pedido: copy });
+                        }}
+                        className="w-full text-right outline-none"
+                      />
+                    </div>
                   </td>
 
                   {/* Total */}
-                  <td>
-                    <input
-                      readOnly
-                      value={formatMoney((l.qty || 0) * (l.price || 0))}
-                      className="border px-1 w-full text-right font-semibold bg-gray-100"
-                    />
+                  <td className="border text-right font-semibold px-2 whitespace-nowrap">
+                    {fmt((l.qty || 0) * (l.price || 0))}
                   </td>
 
-                  {["trial_upper", "trial_lasting", "lasting", "finish_date"].map(
-                    (f) => (
-                      <td key={f}>
-                        <input
-                          type="date"
-                          value={l[f] || ""}
-                          onChange={(e) => {
-                            const copy = [...po.lineas_pedido];
-                            copy[i][f] = e.target.value;
-                            setPO({ ...po, lineas_pedido: copy });
-                          }}
-                          className="border px-1 w-full"
-                        />
-                      </td>
-                    )
-                  )}
+                  {/* Fechas */}
+                  {(["trial_upper", "trial_lasting", "lasting", "finish_date"] as const).map((k) => (
+                    <td key={k}>
+                      <input
+                        type="date"
+                        value={(l as any)[k] || ""}
+                        onChange={(e) => {
+                          const copy = [...(po.lineas_pedido ?? [])];
+                          (copy[i] as any)[k] = e.target.value;
+                          setPO({ ...po, lineas_pedido: copy });
+                        }}
+                        className="border px-1 w-full"
+                      />
+                    </td>
+                  ))}
+
                   <td>
                     <button
                       className="text-red-500"
                       onClick={() => {
-                        const copy = [...po.lineas_pedido];
+                        const copy = [...(po.lineas_pedido ?? [])];
                         copy.splice(i, 1);
                         setPO({ ...po, lineas_pedido: copy });
                       }}
@@ -274,14 +273,14 @@ export default function EditarPO() {
                 </tr>
               </thead>
               <tbody>
-                {l.muestras?.map((m: any, mi: number) => (
-                  <tr key={mi} className="border-t">
+                {(l.muestras ?? []).map((m, mi) => (
+                  <tr key={mi}>
                     <td>
                       <select
                         value={m.tipo_muestra || ""}
                         onChange={(e) => {
-                          const copy = [...po.lineas_pedido];
-                          copy[i].muestras[mi].tipo_muestra = e.target.value;
+                          const copy = [...(po.lineas_pedido ?? [])];
+                          (copy[i].muestras ??= [])[mi].tipo_muestra = e.target.value;
                           setPO({ ...po, lineas_pedido: copy });
                         }}
                         className="border px-1 w-full"
@@ -293,7 +292,6 @@ export default function EditarPO() {
                         <option value="PPS">PPS</option>
                         <option value="Testing Samples">Testing Samples</option>
                         <option value="Shipping Samples">Shipping Samples</option>
-                        <option value="N/N">N/N</option>
                       </select>
                     </td>
                     <td>
@@ -301,8 +299,8 @@ export default function EditarPO() {
                         type="date"
                         value={m.fecha_muestra || ""}
                         onChange={(e) => {
-                          const copy = [...po.lineas_pedido];
-                          copy[i].muestras[mi].fecha_muestra = e.target.value;
+                          const copy = [...(po.lineas_pedido ?? [])];
+                          (copy[i].muestras ??= [])[mi].fecha_muestra = e.target.value;
                           setPO({ ...po, lineas_pedido: copy });
                         }}
                         className="border px-1 w-full"
@@ -312,8 +310,8 @@ export default function EditarPO() {
                       <select
                         value={m.estado_muestra || ""}
                         onChange={(e) => {
-                          const copy = [...po.lineas_pedido];
-                          copy[i].muestras[mi].estado_muestra = e.target.value;
+                          const copy = [...(po.lineas_pedido ?? [])];
+                          (copy[i].muestras ??= [])[mi].estado_muestra = e.target.value;
                           setPO({ ...po, lineas_pedido: copy });
                         }}
                         className="border px-1 w-full"
@@ -327,11 +325,10 @@ export default function EditarPO() {
                     </td>
                     <td>
                       <input
-                        type="text"
                         value={m.round || ""}
                         onChange={(e) => {
-                          const copy = [...po.lineas_pedido];
-                          copy[i].muestras[mi].round = e.target.value;
+                          const copy = [...(po.lineas_pedido ?? [])];
+                          (copy[i].muestras ??= [])[mi].round = e.target.value;
                           setPO({ ...po, lineas_pedido: copy });
                         }}
                         className="border px-1 w-full"
@@ -339,11 +336,10 @@ export default function EditarPO() {
                     </td>
                     <td>
                       <input
-                        type="text"
                         value={m.notas || ""}
                         onChange={(e) => {
-                          const copy = [...po.lineas_pedido];
-                          copy[i].muestras[mi].notas = e.target.value;
+                          const copy = [...(po.lineas_pedido ?? [])];
+                          (copy[i].muestras ??= [])[mi].notas = e.target.value;
                           setPO({ ...po, lineas_pedido: copy });
                         }}
                         className="border px-1 w-full"
@@ -353,8 +349,8 @@ export default function EditarPO() {
                       <button
                         className="text-red-500"
                         onClick={() => {
-                          const copy = [...po.lineas_pedido];
-                          copy[i].muestras.splice(mi, 1);
+                          const copy = [...(po.lineas_pedido ?? [])];
+                          (copy[i].muestras ??= []).splice(mi, 1);
                           setPO({ ...po, lineas_pedido: copy });
                         }}
                       >
@@ -367,8 +363,8 @@ export default function EditarPO() {
             </table>
             <button
               onClick={() => {
-                const copy = [...po.lineas_pedido];
-                copy[i].muestras.push({
+                const copy = [...(po.lineas_pedido ?? [])];
+                (copy[i].muestras ??= []).push({
                   tipo_muestra: "",
                   fecha_muestra: "",
                   estado_muestra: "",
@@ -383,23 +379,11 @@ export default function EditarPO() {
             </button>
           </div>
         ))}
+
         <button
           onClick={() => {
-            const copy = [...(po.lineas_pedido || [])];
-            copy.push({
-              reference: "",
-              style: "",
-              color: "",
-              size_run: "",
-              qty: 0,
-              price: 0,
-              amount: 0,
-              trial_upper: "",
-              trial_lasting: "",
-              lasting: "",
-              finish_date: "",
-              muestras: [],
-            });
+            const copy = [...(po.lineas_pedido ?? [])];
+            copy.push({ qty: 0, price: 0, muestras: [] });
             setPO({ ...po, lineas_pedido: copy });
           }}
           className="mt-2 border px-2 py-1 text-xs rounded bg-gray-50"
@@ -410,29 +394,16 @@ export default function EditarPO() {
 
       {/* Totales */}
       <div className="p-3 bg-gray-100 rounded border text-sm font-semibold">
-        📊 Total Pares: {formatNumber(totalPairs)} · Total Importe:{" "}
-        {formatMoney(totalAmount)}
+        📊 Total Pares: {totalPairs.toLocaleString("es-ES")} · Total Importe: {fmt(totalAmount)}
       </div>
 
       {/* Botones */}
       <div className="flex gap-2">
-        <button
-          onClick={guardar}
-          className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
-        >
+        <button onClick={guardar} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">
           💾 Guardar
         </button>
-        <button
-          onClick={() => router.push(`/po/${id}`)}
-          className="bg-gray-300 px-3 py-1 rounded text-sm"
-        >
+        <button onClick={() => router.push("/")} className="bg-gray-300 px-3 py-1 rounded text-sm">
           ← Cancelar
-        </button>
-        <button
-          onClick={eliminar}
-          className="bg-red-600 text-white px-3 py-1 rounded text-sm"
-        >
-          🗑 Eliminar PO
         </button>
       </div>
     </div>

@@ -3,12 +3,57 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+type TMuestra = {
+  id?: string;
+  tipo_muestra?: string;
+  fecha_muestra?: string;
+  estado_muestra?: string;
+  round?: string;
+  notas?: string;
+};
+
+type TLinea = {
+  id?: string;
+  reference?: string;
+  style?: string;
+  color?: string;
+  size_run?: string;
+  category?: string;
+  channel?: string;
+  qty?: number;
+  price?: number;
+  trial_upper?: string;
+  trial_lasting?: string;
+  lasting?: string;
+  finish_date?: string;
+  muestras?: TMuestra[];
+};
+
+type TPO = {
+  id?: string;
+  season?: string;
+  po?: string;
+  customer?: string;
+  supplier?: string;
+  factory?: string;
+  proforma_invoice?: string;
+  po_date?: string;
+  etd_pi?: string;
+  booking?: string;
+  closing?: string;
+  shipping_date?: string;
+  inspection?: string;
+  estado_inspeccion?: string;
+  currency?: "USD" | "EUR";
+  lineas_pedido?: TLinea[];
+};
+
 export default function VerPO() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const router = useRouter();
 
-  const [po, setPO] = useState<any>(null);
+  const [po, setPO] = useState<TPO | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,120 +71,137 @@ export default function VerPO() {
     if (id) fetchPO();
   }, [id]);
 
-  if (loading) return <div>Cargando...</div>;
-  if (!po) return <div>No se encontró el PO</div>;
+  const fmt = (v: number) =>
+    (po?.currency === "EUR" ? "€ " : "$ ") +
+    v.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // 🔹 Formateo de moneda
-  const formatCurrency = (value: number) => {
-    if (po.currency === "EUR") {
-      return `€ ${value.toFixed(2)}`;
-    }
-    return `$ ${value.toFixed(2)}`;
-  };
+  if (loading) return <div className="p-4">Cargando...</div>;
+  if (!po) return <div className="p-4">No se encontró el PO</div>;
 
-  // 🔹 Totales
-  const totalQty = po.lineas_pedido?.reduce((sum: number, l: any) => sum + (l.qty || 0), 0) || 0;
+  const totalPairs =
+    po.lineas_pedido?.reduce((a, l) => a + (l.qty || 0), 0) ?? 0;
   const totalAmount =
-    po.lineas_pedido?.reduce((sum: number, l: any) => sum + (l.qty || 0) * (l.price || 0), 0) || 0;
+    po.lineas_pedido?.reduce(
+      (a, l) => a + (l.qty || 0) * (l.price || 0),
+      0
+    ) ?? 0;
 
   return (
-    <div className="p-4 space-y-4">
-      <h1 className="text-xl font-bold">📄 Detalles del PO {po.po}</h1>
+    <div className="p-6 space-y-6 text-sm">
+      <h1 className="text-xl font-bold">📄 PO {po.po}</h1>
 
-      {/* 🔹 Cabecera */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+      {/* CABECERA */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 border p-4 rounded bg-gray-50">
+        <p><strong>Season:</strong> {po.season}</p>
         <p><strong>Customer:</strong> {po.customer}</p>
         <p><strong>Supplier:</strong> {po.supplier}</p>
+
         <p><strong>Factory:</strong> {po.factory}</p>
-        <p><strong>Category:</strong> {po.category}</p>
         <p><strong>P.I:</strong> {po.proforma_invoice}</p>
-        <p><strong>PI Date:</strong> {po.po_date}</p>
+        <p><strong>PO Date:</strong> {po.po_date}</p>
+
         <p><strong>ETD PI:</strong> {po.etd_pi}</p>
         <p><strong>Booking:</strong> {po.booking}</p>
         <p><strong>Closing:</strong> {po.closing}</p>
+
         <p><strong>Shipping:</strong> {po.shipping_date}</p>
         <p><strong>Inspection:</strong> {po.inspection}</p>
         <p><strong>Estado Insp.:</strong> {po.estado_inspeccion}</p>
-        <p><strong>Moneda:</strong> {po.currency || "USD"}</p>
+
+        <p><strong>Moneda:</strong> {po.currency}</p>
       </div>
 
-      {/* 🔹 Líneas de pedido */}
+      {/* LÍNEAS DE PEDIDO */}
       <div>
-        <h2 className="text-md font-bold mb-2">📦 Líneas de pedido</h2>
-        {po.lineas_pedido?.map((l: any, i: number) => (
-          <div key={i} className="mb-6 border p-2 rounded bg-gray-50">
-            <table className="table-auto text-xs w-full border text-center">
-              <thead className="bg-gray-200">
+        <h2 className="text-lg font-semibold mb-2 flex items-center gap-1">
+          📦 Líneas de pedido
+        </h2>
+
+        {po.lineas_pedido?.map((l, i) => (
+          <div key={i} className="border rounded-lg p-3 mb-4 bg-white shadow-sm">
+            <table className="w-full text-xs border-collapse">
+              <thead className="bg-gray-100 border-b text-center font-semibold">
                 <tr>
-                  <th>Ref</th>
-                  <th>Style</th>
-                  <th>Color</th>
-                  <th>Size</th>
-                  <th>Qty</th>
-                  <th>Price</th>
-                  <th>Total</th>
-                  <th>Trial U</th>
-                  <th>Trial L</th>
-                  <th>Lasting</th>
-                  <th>Finish</th>
+                  <th className="border px-2 py-1">Ref</th>
+                  <th className="border px-2 py-1">Style</th>
+                  <th className="border px-2 py-1">Color</th>
+                  <th className="border px-2 py-1">Size</th>
+                  <th className="border px-2 py-1">Category</th>
+                  <th className="border px-2 py-1">Channel</th>
+                  <th className="border px-2 py-1 text-right">Qty</th>
+                  <th className="border px-2 py-1 text-right">Price</th>
+                  <th className="border px-2 py-1 text-right">Total</th>
+                  <th className="border px-2 py-1">Trial U</th>
+                  <th className="border px-2 py-1">Trial L</th>
+                  <th className="border px-2 py-1">Lasting</th>
+                  <th className="border px-2 py-1">Finish</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="text-center">
                 <tr>
-                  <td>{l.reference}</td>
-                  <td>{l.style}</td>
-                  <td>{l.color}</td>
-                  <td>{l.size_run}</td>
-                  <td>{l.qty}</td>
-                  <td>{formatCurrency(l.price || 0)}</td>
-                  <td className="font-semibold">{formatCurrency((l.qty || 0) * (l.price || 0))}</td>
-                  <td>{l.trial_upper}</td>
-                  <td>{l.trial_lasting}</td>
-                  <td>{l.lasting}</td>
-                  <td>{l.finish_date}</td>
+                  <td className="border px-2 py-1">{l.reference}</td>
+                  <td className="border px-2 py-1">{l.style}</td>
+                  <td className="border px-2 py-1">{l.color}</td>
+                  <td className="border px-2 py-1">{l.size_run}</td>
+                  <td className="border px-2 py-1">{l.category}</td>
+                  <td className="border px-2 py-1">{l.channel}</td>
+                  <td className="border px-2 py-1 text-right">
+                    {l.qty?.toLocaleString("es-ES")}
+                  </td>
+                  <td className="border px-2 py-1 text-right">
+                    {fmt(l.price || 0)}
+                  </td>
+                  <td className="border px-2 py-1 text-right font-semibold">
+                    {fmt((l.qty || 0) * (l.price || 0))}
+                  </td>
+                  <td className="border px-2 py-1">{l.trial_upper}</td>
+                  <td className="border px-2 py-1">{l.trial_lasting}</td>
+                  <td className="border px-2 py-1">{l.lasting}</td>
+                  <td className="border px-2 py-1">{l.finish_date}</td>
                 </tr>
               </tbody>
             </table>
 
-            {/* 🔹 Muestras */}
+            {/* MUESTRAS */}
             {l.muestras && l.muestras.length > 0 && (
-              <>
-                <h3 className="font-semibold mt-2">🧪 Muestras de {l.reference}</h3>
-                <table className="table-auto text-xs w-full border text-center">
-                  <thead className="bg-gray-100">
+              <div className="mt-3">
+                <h3 className="font-semibold mb-1 flex items-center gap-1">
+                  🧪 Muestras de {l.reference}
+                </h3>
+                <table className="w-full text-xs border-collapse">
+                  <thead className="bg-gray-100 border-b text-center font-semibold">
                     <tr>
-                      <th>Tipo</th>
-                      <th>Fecha</th>
-                      <th>Estado</th>
-                      <th>Round</th>
-                      <th>Notas</th>
+                      <th className="border px-2 py-1">Tipo</th>
+                      <th className="border px-2 py-1">Fecha</th>
+                      <th className="border px-2 py-1">Estado</th>
+                      <th className="border px-2 py-1">Round</th>
+                      <th className="border px-2 py-1">Notas</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {l.muestras.map((m: any, mi: number) => (
-                      <tr key={mi} className="border-t">
-                        <td>{m.tipo_muestra}</td>
-                        <td>{m.fecha_muestra}</td>
-                        <td>{m.estado_muestra}</td>
-                        <td>{m.round}</td>
-                        <td>{m.notas}</td>
+                  <tbody className="text-center">
+                    {l.muestras.map((m, mi) => (
+                      <tr key={mi}>
+                        <td className="border px-2 py-1">{m.tipo_muestra}</td>
+                        <td className="border px-2 py-1">{m.fecha_muestra}</td>
+                        <td className="border px-2 py-1">{m.estado_muestra}</td>
+                        <td className="border px-2 py-1">{m.round}</td>
+                        <td className="border px-2 py-1">{m.notas}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </>
+              </div>
             )}
           </div>
         ))}
 
-        {/* 🔹 Resumen Totales */}
-        <div className="border p-3 rounded bg-gray-100 text-sm mt-4">
-          <p><strong>👟 Total Pares:</strong> {totalQty}</p>
-          <p><strong>💰 Total Importe:</strong> {formatCurrency(totalAmount)}</p>
+        {/* Totales */}
+        <div className="p-3 bg-gray-100 rounded border text-sm font-semibold text-right">
+          📊 Total Pares: {totalPairs.toLocaleString("es-ES")} · Total Importe: {fmt(totalAmount)}
         </div>
       </div>
 
-      {/* 🔹 Botones */}
+      {/* Botones */}
       <div className="flex gap-2">
         <button
           onClick={() => router.push(`/po/${id}/editar`)}
