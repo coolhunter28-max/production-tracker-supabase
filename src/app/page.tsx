@@ -1,5 +1,4 @@
 ﻿// src/app/page.tsx
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -29,7 +28,6 @@ export default function DashboardPage() {
   });
   const [alertasNoLeidasCount, setAlertasNoLeidasCount] = useState(0);
   const [generandoAlertas, setGenerandoAlertas] = useState(false);
-  const [verificandoFechas, setVerificandoFechas] = useState(false);
   const [mensajeAlertas, setMensajeAlertas] = useState('');
 
   useEffect(() => {
@@ -67,17 +65,15 @@ export default function DashboardPage() {
     setMensajeAlertas('');
     
     try {
-      const response = await fetch('/api/generar-alertas', {
-        method: 'POST',
-      });
+      const response = await fetch('/api/generar-alertas', { method: 'POST' });
       const data = await response.json();
       
       if (data.success) {
-        setMensajeAlertas(data.message);
-        const noLeidas = data.alertas.filter((alerta: any) => !alerta.leida);
+        setMensajeAlertas('✅ Alertas generadas correctamente.');
+        const noLeidas = data.alertas?.filter((a: any) => !a.leida) || [];
         setAlertasNoLeidasCount(noLeidas.length);
       } else {
-        setMensajeAlertas(data.message || 'Error al generar alertas');
+        setMensajeAlertas('⚠️ No se generaron nuevas alertas.');
       }
     } catch (error) {
       console.error('Error al generar alertas:', error);
@@ -87,55 +83,18 @@ export default function DashboardPage() {
     }
   };
 
-  const handleVerificarFechas = async () => {
-    setVerificandoFechas(true);
-    setMensajeAlertas('');
-    
-    try {
-      const response = await fetch('/api/verificar-fechas-muestras');
-      const data = await response.json();
-      
-      if (data.success) {
-        const { stats, ejemplos } = data;
-        setMensajeAlertas(
-          `Total: ${stats.totalMuestras} | Con fecha real: ${stats.conFechaReal} | Con fecha teórica: ${stats.conFechaTeorica}`
-        );
-        console.log("Estadísticas:", stats);
-        console.log("Ejemplos:", ejemplos);
-      } else {
-        setMensajeAlertas(data.message || 'Error al verificar fechas');
-      }
-    } catch (error) {
-      console.error('Error al verificar fechas:', error);
-      setMensajeAlertas('Error de red al verificar fechas.');
-    } finally {
-      setVerificandoFechas(false);
-    }
-  };
-
   useEffect(() => {
     let result = pos;
     
     if (filters.customer !== 'todos') {
       result = result.filter(po => po.customer.toLowerCase().includes(filters.customer.toLowerCase()));
     }
-    
     if (filters.supplier !== 'todos') {
       result = result.filter(po => po.supplier.toLowerCase().includes(filters.supplier.toLowerCase()));
     }
-    
     if (filters.factory !== 'todos') {
       result = result.filter(po => po.factory.toLowerCase().includes(filters.factory.toLowerCase()));
     }
-    
-    if (filters.style !== 'todos') {
-      result = result.filter(po => true); // simplificado
-    }
-    
-    if (filters.status !== 'todos') {
-      result = result.filter(po => filters.status === 'activo');
-    }
-    
     if (filters.search) {
       result = result.filter(po => 
         po.po.toLowerCase().includes(filters.search.toLowerCase()) ||
@@ -144,7 +103,6 @@ export default function DashboardPage() {
         po.factory.toLowerCase().includes(filters.search.toLowerCase())
       );
     }
-    
     setFilteredPOs(result);
   }, [pos, filters]);
 
@@ -161,17 +119,19 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
+      {/* CABECERA */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Sistema de Producción</h1>
         <div className="flex space-x-2">
           <Link href="/po/nuevo/editar">
-  <Button variant="default">Nuevo PO</Button>
-</Link>
+            <Button variant="default">Nuevo PO</Button>
+          </Link>
           <Link href="/import">
             <Button variant="outline">Importar Datos</Button>
           </Link>
         </div>
       </div>
+
       <Tabs defaultValue="dashboard" className="space-y-4">
         <TabsList>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
@@ -185,22 +145,21 @@ export default function DashboardPage() {
           </TabsTrigger>
         </TabsList>
         
+        {/* DASHBOARD */}
         <TabsContent value="dashboard" className="space-y-4">
-          {/* Tarjetas resumen */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <Card><CardHeader className="pb-2"><CardTitle className="text-lg">Total POs</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{totalPOs}</div></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-lg">Customers</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{totalCustomers}</div></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-lg">Suppliers</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{totalSuppliers}</div></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-lg">Factories</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{totalFactories}</div></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-lg">POs Activos</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{activePOs}</div></CardContent></Card>
+            <Card><CardHeader><CardTitle>Total POs</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{totalPOs}</div></CardContent></Card>
+            <Card><CardHeader><CardTitle>Customers</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{totalCustomers}</div></CardContent></Card>
+            <Card><CardHeader><CardTitle>Suppliers</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{totalSuppliers}</div></CardContent></Card>
+            <Card><CardHeader><CardTitle>Factories</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{totalFactories}</div></CardContent></Card>
+            <Card><CardHeader><CardTitle>POs Activos</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{activePOs}</div></CardContent></Card>
           </div>
 
-          {/* Filtros */}
+          {/* FILTROS */}
           <Card>
             <CardHeader><CardTitle>Filtros</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                {/* Customer */}
                 <div>
                   <label className="block text-sm font-medium mb-1">Customer</label>
                   <Select value={filters.customer} onValueChange={(value) => setFilters({...filters, customer: value})}>
@@ -213,7 +172,6 @@ export default function DashboardPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                {/* Supplier */}
                 <div>
                   <label className="block text-sm font-medium mb-1">Supplier</label>
                   <Select value={filters.supplier} onValueChange={(value) => setFilters({...filters, supplier: value})}>
@@ -226,7 +184,6 @@ export default function DashboardPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                {/* Factory */}
                 <div>
                   <label className="block text-sm font-medium mb-1">Factory</label>
                   <Select value={filters.factory} onValueChange={(value) => setFilters({...filters, factory: value})}>
@@ -239,20 +196,7 @@ export default function DashboardPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                {/* Estado */}
-                <div>
-                  <label className="block text-sm font-medium mb-1">Estado</label>
-                  <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value})}>
-                    <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="activo">Activo</SelectItem>
-                      <SelectItem value="inactivo">Inactivo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {/* Buscar */}
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-sm font-medium mb-1">Buscar</label>
                   <Input
                     placeholder="PO, Customer, Supplier, Factory..."
@@ -264,11 +208,11 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Tabla POs */}
+          {/* TABLA DE POs */}
           <Card>
             <CardHeader>
               <CardTitle>Lista de Purchase Orders</CardTitle>
-              <CardDescription>Lista de todos los pedidos registrados en el sistema</CardDescription>
+              <CardDescription>Lista de todos los pedidos registrados</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -309,7 +253,7 @@ export default function DashboardPage() {
                     ) : (
                       <TableRow>
                         <TableCell colSpan={9} className="text-center py-4">
-                          No se encontraron purchase orders con los filtros seleccionados
+                          No se encontraron POs con los filtros seleccionados.
                         </TableCell>
                       </TableRow>
                     )}
@@ -319,25 +263,28 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </TabsContent>
-        
-        {/* Tab Alertas */}
+
+        {/* TAB ALERTAS */}
         <TabsContent value="alertas" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold">Sistema de Alertas</h2>
-            <div className="flex space-x-2">
-              <Button onClick={handleVerificarFechas} disabled={verificandoFechas} variant="outline">
-                {verificandoFechas ? 'Verificando...' : 'Verificar Fechas'}
-              </Button>
-              <Button onClick={handleGenerarAlertas} disabled={generandoAlertas} variant="outline">
-                {generandoAlertas ? 'Generando...' : 'Generar Alertas'}
-              </Button>
-            </div>
+            <Button onClick={handleGenerarAlertas} disabled={generandoAlertas} variant="outline">
+              {generandoAlertas ? 'Generando...' : 'Generar Alertas'}
+            </Button>
           </div>
+
           {mensajeAlertas && (
-            <div className={`p-3 rounded-md ${mensajeAlertas.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+            <div
+              className={`p-3 rounded-md ${
+                mensajeAlertas.includes('Error')
+                  ? 'bg-red-50 text-red-700'
+                  : 'bg-green-50 text-green-700'
+              }`}
+            >
               {mensajeAlertas}
             </div>
           )}
+
           <AlertasDashboard />
         </TabsContent>
       </Tabs>
