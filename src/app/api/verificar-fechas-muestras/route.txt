@@ -1,0 +1,47 @@
+import { supabase } from "@/lib/supabase";
+import { NextResponse } from "next/server";
+
+/**
+ * Este endpoint revisa las fechas de las muestras y devuelve un pequeño resumen
+ * para que el botón "Verificar Fechas" no rompa nada ni dé error 404.
+ */
+export async function GET() {
+  try {
+    console.log("🔍 Verificando fechas de muestras...");
+
+    const { data, error } = await supabase
+      .from("muestras")
+      .select("id, fecha_muestra, created_at")
+      .limit(500);
+
+    if (error) throw error;
+
+    const totalMuestras = data?.length || 0;
+    const conFechaReal = data?.filter((m) => !!m.fecha_muestra)?.length || 0;
+    const conFechaTeorica =
+      totalMuestras > 0 ? totalMuestras - conFechaReal : 0;
+
+    const stats = {
+      totalMuestras,
+      conFechaReal,
+      conFechaTeorica,
+    };
+
+    const ejemplos = data?.slice(0, 3) || [];
+
+    console.log("✅ Verificación completada:", stats);
+
+    return NextResponse.json({
+      success: true,
+      stats,
+      ejemplos,
+      message: "Verificación de fechas completada correctamente.",
+    });
+  } catch (err: any) {
+    console.error("❌ Error verificando fechas:", err.message);
+    return NextResponse.json(
+      { success: false, message: "Error al verificar fechas." },
+      { status: 500 }
+    );
+  }
+}

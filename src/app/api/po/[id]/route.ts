@@ -1,229 +1,135 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-// 🔹 GET /api/po/[id] → trae PO + líneas + muestras
+// ✅ Obtener un PO completo con líneas y muestras
 export async function GET(req: Request, { params }: { params: { id: string } }) {
-  try {
-    const { data: po, error } = await supabase
-      .from("pos")
-      .select(
-        `
+  const { data, error } = await supabase
+    .from("pos")
+    .select(`
+      *,
+      lineas_pedido (
         *,
-        lineas_pedido (
-          *,
-          muestras (*)
-        )
-      `
+        muestras (*)
       )
-      .eq("id", params.id)
-      .single();
+    `)
+    .eq("id", params.id)
+    .single();
 
-    if (error) throw error;
-    return NextResponse.json(po);
-  } catch (err: any) {
-    console.error("❌ Error GET PO:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  if (error) {
+    console.error("❌ Error obteniendo PO:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  return NextResponse.json(data);
 }
 
-// 🔹 PUT /api/po/[id] → actualiza PO, líneas y muestras sin borrar todo
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
-  try {
-    const po = await req.json();
+// ✅ Función auxiliar para limpiar los valores vacíos
+function cleanObject(obj: Record<string, any>) {
+  const cleaned: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === "") cleaned[key] = null;
+    else cleaned[key] = value;
+  }
+  return cleaned;
+}
 
-    // Normalizar fechas vacías a null
-    const dateFields = [
-      "po_date",
-      "etd_pi",
-      "booking",
-      "closing",
-      "shipping_date",
-      "inspection",
-    ];
-    for (const f of dateFields) {
-      if (po[f] === "") po[f] = null;
+// ✅ Actualizar PO, líneas y muestras
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  const body = await req.json();
+
+  try {
+    // 1️⃣ Limpiar el PO principal
+    const poData: Record<string, any> = cleanObject({
+      season: body.season,
+      po: body.po,
+      customer: body.customer,
+      supplier: body.supplier,
+      factory: body.factory,
+      po_date: body.po_date,
+      etd_pi: body.etd_pi,
+      booking: body.booking,
+      closing: body.closing,
+      shipping_date: body.shipping_date,
+      inspection: body.inspection,
+      estado_inspeccion: body.estado_inspeccion,
+      currency: body.currency || "USD",
+    });
+
+    if ("proforma_invoice" in body) {
+      poData.proforma_invoice = body.proforma_invoice || null;
     }
 
-    // 1️⃣ Actualizar cabecera
     const { error: poError } = await supabase
       .from("pos")
-      .update({
-        season: po.season,
-        po: po.po,
-        customer: po.customer,
-        supplier: po.supplier,
-        factory: po.factory,
-        pi: po.proforma_invoice,
-        po_date: po.po_date,
-        etd_pi: po.etd_pi,
-        booking: po.booking,
-        closing: po.closing,
-        shipping_date: po.shipping_date,
-        inspection: po.inspection,
-        estado_inspeccion: po.estado_inspeccion,
-        currency: po.currency,
-        channel: po.channel,
-      })
+      .update(poData)
       .eq("id", params.id);
 
     if (poError) throw poError;
 
-    // 2️⃣ Obtener líneas actuales de la BD
-    const { data: lineasActuales } = await supabase
-      .from("lineas_pedido")
-      .select("id")
-      .eq("po_id", params.id);
+    // 2️⃣ Actualizar las líneas de pedido
+    if (Array.isArray(body.lineas_pedido)) {
+      for (const linea of body.lineas_pedido) {
+        const { id: lineaId, muestras, ...lineaData } = linea;
+        const cleanLinea = cleanObject(lineaData);
 
-    const lineasIdsActuales = new Set(lineasActuales?.map((l) => l.id) || []);
-    const lineasIdsNuevos = new Set(
-      (po.lineas_pedido || []).filter((l: any) => l.id).map((l: any) => l.id)
-    );
+        let lineaIdReal = lineaId;
 
-    // 3️⃣ Borrar las líneas que ya no existen
-    const lineasAEliminar = [...lineasIdsActuales].filter(
-      (id) => !lineasIdsNuevos.has(id)
-    );
-    if (lineasAEliminar.length > 0) {
-      await supabase.from("muestras").delete().in("linea_pedido_id", lineasAEliminar);
-      await supabase.from("lineas_pedido").delete().in("id", lineasAEliminar);
-    }
-
-    // 4️⃣ Insertar/Actualizar líneas
-    for (const linea of po.lineas_pedido || []) {
-      let lineaId = linea.id;
-
-      if (!lineaId) {
-        // Nueva línea
-        const { data: insertada, error: insertError } = await supabase
-          .from("lineas_pedido")
-          .insert({
-            po_id: params.id,
-            reference: linea.reference,
-            style: linea.style,
-            color: linea.color,
-            size_run: linea.size_run,
-            category: linea.category,
-            channel: linea.channel,
-            qty: linea.qty,
-            price: linea.price,
-            amount: linea.amount,
-            trial_upper: linea.trial_upper || null,
-            trial_lasting: linea.trial_lasting || null,
-            lasting: linea.lasting || null,
-            finish_date: linea.finish_date || null,
-          })
-          .select("id")
-          .single();
-
-        if (insertError) throw insertError;
-        lineaId = insertada.id;
-      } else {
-        // Actualizar línea existente
-        const { error: updateError } = await supabase
-          .from("lineas_pedido")
-          .update({
-            reference: linea.reference,
-            style: linea.style,
-            color: linea.color,
-            size_run: linea.size_run,
-            category: linea.category,
-            channel: linea.channel,
-            qty: linea.qty,
-            price: linea.price,
-            amount: linea.amount,
-            trial_upper: linea.trial_upper || null,
-            trial_lasting: linea.trial_lasting || null,
-            lasting: linea.lasting || null,
-            finish_date: linea.finish_date || null,
-          })
-          .eq("id", lineaId);
-
-        if (updateError) throw updateError;
-      }
-
-      // 🔹 Manejar muestras
-      if (lineaId) {
-        const { data: muestrasActuales } = await supabase
-          .from("muestras")
-          .select("id")
-          .eq("linea_pedido_id", lineaId);
-
-        const muestrasIdsActuales = new Set(muestrasActuales?.map((m) => m.id) || []);
-        const muestrasIdsNuevos = new Set(
-          (linea.muestras || []).filter((m: any) => m.id).map((m: any) => m.id)
-        );
-
-        // Borrar muestras eliminadas
-        const muestrasAEliminar = [...muestrasIdsActuales].filter(
-          (id) => !muestrasIdsNuevos.has(id)
-        );
-        if (muestrasAEliminar.length > 0) {
-          await supabase.from("muestras").delete().in("id", muestrasAEliminar);
+        if (lineaId) {
+          const { error: updateError } = await supabase
+            .from("lineas_pedido")
+            .update(cleanLinea)
+            .eq("id", lineaId);
+          if (updateError) throw updateError;
+        } else {
+          const { data: inserted, error: insertError } = await supabase
+            .from("lineas_pedido")
+            .insert({ ...cleanLinea, po_id: params.id })
+            .select()
+            .single();
+          if (insertError) throw insertError;
+          lineaIdReal = inserted.id;
         }
 
-        // Insertar/Actualizar muestras
-        for (const muestra of linea.muestras || []) {
-          if (!muestra.id) {
-            // Insertar nueva
-            const { error: insertError } = await supabase.from("muestras").insert({
-              linea_pedido_id: lineaId,
-              tipo_muestra: muestra.tipo_muestra,
-              fecha_muestra: muestra.fecha_muestra || null,
-              estado_muestra: muestra.estado_muestra,
-              round: muestra.round,
-              notas: muestra.notas,
-              fecha_teorica: muestra.fecha_teorica || null,
-            });
-            if (insertError) throw insertError;
-          } else {
-            // Actualizar existente
-            const { error: updateError } = await supabase
-              .from("muestras")
-              .update({
-                tipo_muestra: muestra.tipo_muestra,
-                fecha_muestra: muestra.fecha_muestra || null,
-                estado_muestra: muestra.estado_muestra,
-                round: muestra.round,
-                notas: muestra.notas,
-                fecha_teorica: muestra.fecha_teorica || null,
-              })
-              .eq("id", muestra.id);
-            if (updateError) throw updateError;
+        // 3️⃣ Actualizar muestras asociadas
+        if (Array.isArray(muestras)) {
+          for (const m of muestras) {
+            const { id: muestraId, ...muestraData } = m;
+            const cleanMuestra = cleanObject(muestraData);
+
+            if (muestraId) {
+              const { error: updateMuestraError } = await supabase
+                .from("muestras")
+                .update(cleanMuestra)
+                .eq("id", muestraId);
+              if (updateMuestraError) throw updateMuestraError;
+            } else {
+              const { error: insertMuestraError } = await supabase
+                .from("muestras")
+                .insert({ ...cleanMuestra, linea_pedido_id: lineaIdReal });
+              if (insertMuestraError) throw insertMuestraError;
+            }
           }
         }
       }
     }
 
+    console.log("✅ PO actualizado correctamente");
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error("❌ Error PUT PO:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (error: any) {
+    console.error("❌ Error actualizando PO:", error);
+    return NextResponse.json(
+      { message: error.message || "Error actualizando PO", details: error },
+      { status: 500 }
+    );
   }
 }
 
-// 🔹 DELETE /api/po/[id]
+// ✅ Eliminar un PO
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
-  try {
-    // Borrar muestras primero
-    await supabase
-      .from("muestras")
-      .delete()
-      .in(
-        "linea_pedido_id",
-        (
-          await supabase.from("lineas_pedido").select("id").eq("po_id", params.id)
-        ).data?.map((l) => l.id) || []
-      );
-
-    // Borrar líneas
-    await supabase.from("lineas_pedido").delete().eq("po_id", params.id);
-
-    // Borrar PO
-    await supabase.from("pos").delete().eq("id", params.id);
-
-    return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error("❌ Error DELETE PO:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  const { error } = await supabase.from("pos").delete().eq("id", params.id);
+  if (error) {
+    console.error("❌ Error eliminando PO:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  return NextResponse.json({ success: true });
 }
