@@ -4,13 +4,30 @@
 import { useState, useEffect } from 'react';
 import { PO, LineaPedido } from '@/types';
 import { createPO, updatePO } from '@/services/pos';
-import { fetchLineasByPOId, createLineaPedido, updateLineaPedido, deleteLineaPedido } from '@/services/lineasPedido';
+import {
+  fetchLineasByPOId,
+  createLineaPedido,
+  updateLineaPedido,
+  deleteLineaPedido,
+} from '@/services/lineasPedido';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Trash2, Plus, Edit } from 'lucide-react';
 
@@ -52,7 +69,7 @@ export function POForm({ po, onSuccess, onCancel }: POFormProps) {
     channel: po?.channel || '',
     booking: po?.booking || '',
     closing: po?.closing || '',
-    shipping_date: po?.shipping_date || ''
+    shipping_date: po?.shipping_date || '',
   });
 
   const [lineas, setLineas] = useState<LineaPedido[]>([]);
@@ -61,9 +78,7 @@ export function POForm({ po, onSuccess, onCancel }: POFormProps) {
   const [editingLinea, setEditingLinea] = useState<LineaFormData | null>(null);
 
   useEffect(() => {
-    if (po) {
-      loadLineas();
-    }
+    if (po) loadLineas();
   }, [po]);
 
   const loadLineas = async () => {
@@ -77,7 +92,7 @@ export function POForm({ po, onSuccess, onCancel }: POFormProps) {
   };
 
   const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,11 +102,9 @@ export function POForm({ po, onSuccess, onCancel }: POFormProps) {
     try {
       let poId;
       if (po) {
-        // Actualizar PO existente
         const updatedPO = await updatePO(po.id!, formData);
         poId = updatedPO.id;
       } else {
-        // Crear nuevo PO
         const newPO = await createPO(formData);
         poId = newPO.id;
       }
@@ -109,28 +122,26 @@ export function POForm({ po, onSuccess, onCancel }: POFormProps) {
     try {
       const processedData = {
         po_id: po?.id!,
-        reference: lineaData.reference || null,
+        reference: lineaData.reference || undefined,
         style: lineaData.style,
         color: lineaData.color,
-        size_run: lineaData.size_run || null,
+        size_run: lineaData.size_run || undefined,
         qty: parseInt(lineaData.qty) || 0,
-        category: lineaData.category || null,
-        price: lineaData.price ? parseFloat(lineaData.price) : null,
-        amount: lineaData.amount ? parseFloat(lineaData.amount) : null,
-        pi_bsg: lineaData.pi_bsg || null,
-        price_selling: lineaData.price_selling ? parseFloat(lineaData.price_selling) : null,
-        amount_selling: lineaData.amount_selling ? parseFloat(lineaData.amount_selling) : null,
-        trial_upper: lineaData.trial_upper || null,
-        trial_lasting: lineaData.trial_lasting || null,
-        lasting: lineaData.lasting || null,
-        finish_date: lineaData.finish_date || null,
+        category: lineaData.category || undefined,
+        price: lineaData.price ? parseFloat(lineaData.price) : undefined,
+        amount: lineaData.amount ? parseFloat(lineaData.amount) : undefined,
+        pi_bsg: lineaData.pi_bsg || undefined,
+        price_selling: lineaData.price_selling ? parseFloat(lineaData.price_selling) : undefined,
+        amount_selling: lineaData.amount_selling ? parseFloat(lineaData.amount_selling) : undefined,
+        trial_upper: lineaData.trial_upper || undefined,
+        trial_lasting: lineaData.trial_lasting || undefined,
+        lasting: lineaData.lasting || undefined,
+        finish_date: lineaData.finish_date || undefined,
       };
 
       if (lineaData.id) {
-        // Actualizar línea existente
         await updateLineaPedido(lineaData.id, processedData);
       } else {
-        // Crear nueva línea
         await createLineaPedido(processedData);
       }
 
@@ -189,111 +200,32 @@ export function POForm({ po, onSuccess, onCancel }: POFormProps) {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="po">PO *</Label>
-                <Input
-                  id="po"
-                  value={formData.po}
-                  onChange={(e) => handleChange('po', e.target.value)}
-                  required
-                  disabled={!!po} // No permitir editar PO en existentes
-                />
-              </div>
-              <div>
-                <Label htmlFor="supplier">Supplier *</Label>
-                <Input
-                  id="supplier"
-                  value={formData.supplier}
-                  onChange={(e) => handleChange('supplier', e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="season">Season *</Label>
-                <Input
-                  id="season"
-                  value={formData.season}
-                  onChange={(e) => handleChange('season', e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="customer">Customer *</Label>
-                <Input
-                  id="customer"
-                  value={formData.customer}
-                  onChange={(e) => handleChange('customer', e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="factory">Factory *</Label>
-                <Input
-                  id="factory"
-                  value={formData.factory}
-                  onChange={(e) => handleChange('factory', e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="po_date">PO Date</Label>
-                <Input
-                  id="po_date"
-                  type="date"
-                  value={formData.po_date}
-                  onChange={(e) => handleChange('po_date', e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="etd_pi">ETD PI</Label>
-                <Input
-                  id="etd_pi"
-                  type="date"
-                  value={formData.etd_pi}
-                  onChange={(e) => handleChange('etd_pi', e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="pi">PI</Label>
-                <Input
-                  id="pi"
-                  value={formData.pi}
-                  onChange={(e) => handleChange('pi', e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="channel">Channel</Label>
-                <Input
-                  id="channel"
-                  value={formData.channel}
-                  onChange={(e) => handleChange('channel', e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="booking">Booking</Label>
-                <Input
-                  id="booking"
-                  value={formData.booking}
-                  onChange={(e) => handleChange('booking', e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="closing">Closing</Label>
-                <Input
-                  id="closing"
-                  value={formData.closing}
-                  onChange={(e) => handleChange('closing', e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="shipping_date">Shipping Date</Label>
-                <Input
-                  id="shipping_date"
-                  type="date"
-                  value={formData.shipping_date}
-                  onChange={(e) => handleChange('shipping_date', e.target.value)}
-                />
-              </div>
+              {[
+                ['po', 'PO *'],
+                ['supplier', 'Supplier *'],
+                ['season', 'Season *'],
+                ['customer', 'Customer *'],
+                ['factory', 'Factory *'],
+                ['po_date', 'PO Date', 'date'],
+                ['etd_pi', 'ETD PI', 'date'],
+                ['pi', 'PI'],
+                ['channel', 'Channel'],
+                ['booking', 'Booking'],
+                ['closing', 'Closing'],
+                ['shipping_date', 'Shipping Date', 'date'],
+              ].map(([key, label, type]) => (
+                <div key={key}>
+                  <Label htmlFor={key}>{label}</Label>
+                  <Input
+                    id={key}
+                    type={type || 'text'}
+                    value={(formData as any)[key]}
+                    onChange={(e) => handleChange(key, e.target.value)}
+                    required={label.includes('*')}
+                    disabled={key === 'po' && !!po}
+                  />
+                </div>
+              ))}
             </div>
 
             <div className="flex justify-end space-x-2">
@@ -327,9 +259,7 @@ export function POForm({ po, onSuccess, onCancel }: POFormProps) {
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>
-                      {editingLinea ? 'Editar Línea' : 'Nueva Línea'}
-                    </DialogTitle>
+                    <DialogTitle>{editingLinea ? 'Editar Línea' : 'Nueva Línea'}</DialogTitle>
                     <DialogDescription>
                       Ingresa los detalles de la línea de pedido
                     </DialogDescription>
@@ -348,8 +278,8 @@ export function POForm({ po, onSuccess, onCancel }: POFormProps) {
           </CardHeader>
           <CardContent>
             {lineas.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-500">No hay líneas registradas</p>
+              <div className="text-center py-8 text-gray-500">
+                No hay líneas registradas
               </div>
             ) : (
               <Table>
@@ -430,7 +360,7 @@ function LineaForm({ initialData, onSave, onCancel }: LineaFormProps) {
   });
 
   const handleChange = (field: keyof LineaFormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -441,120 +371,38 @@ function LineaForm({ initialData, onSave, onCancel }: LineaFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="style">Style *</Label>
-          <Input
-            id="style"
-            value={formData.style}
-            onChange={(e) => handleChange('style', e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="color">Color *</Label>
-          <Input
-            id="color"
-            value={formData.color}
-            onChange={(e) => handleChange('color', e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="reference">Reference</Label>
-          <Input
-            id="reference"
-            value={formData.reference}
-            onChange={(e) => handleChange('reference', e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="size_run">Size Run</Label>
-          <Input
-            id="size_run"
-            value={formData.size_run}
-            onChange={(e) => handleChange('size_run', e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="qty">Quantity *</Label>
-          <Input
-            id="qty"
-            type="number"
-            value={formData.qty}
-            onChange={(e) => handleChange('qty', e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="category">Category</Label>
-          <Input
-            id="category"
-            value={formData.category}
-            onChange={(e) => handleChange('category', e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="price">Price</Label>
-          <Input
-            id="price"
-            type="number"
-            step="0.01"
-            value={formData.price}
-            onChange={(e) => handleChange('price', e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="amount">Amount</Label>
-          <Input
-            id="amount"
-            type="number"
-            step="0.01"
-            value={formData.amount}
-            onChange={(e) => handleChange('amount', e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="finish_date">Finish Date</Label>
-          <Input
-            id="finish_date"
-            type="date"
-            value={formData.finish_date}
-            onChange={(e) => handleChange('finish_date', e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="trial_upper">Trial Upper</Label>
-          <Input
-            id="trial_upper"
-            value={formData.trial_upper}
-            onChange={(e) => handleChange('trial_upper', e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="trial_lasting">Trial Lasting</Label>
-          <Input
-            id="trial_lasting"
-            value={formData.trial_lasting}
-            onChange={(e) => handleChange('trial_lasting', e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="lasting">Lasting</Label>
-          <Input
-            id="lasting"
-            value={formData.lasting}
-            onChange={(e) => handleChange('lasting', e.target.value)}
-          />
-        </div>
+        {[
+          ['style', 'Style *'],
+          ['color', 'Color *'],
+          ['reference', 'Reference'],
+          ['size_run', 'Size Run'],
+          ['qty', 'Quantity *', 'number'],
+          ['category', 'Category'],
+          ['price', 'Price', 'number'],
+          ['amount', 'Amount', 'number'],
+          ['finish_date', 'Finish Date', 'date'],
+          ['trial_upper', 'Trial Upper'],
+          ['trial_lasting', 'Trial Lasting'],
+          ['lasting', 'Lasting'],
+        ].map(([key, label, type]) => (
+          <div key={key}>
+            <Label htmlFor={key}>{label}</Label>
+            <Input
+              id={key}
+              type={type || 'text'}
+              value={(formData as any)[key]}
+              onChange={(e) => handleChange(key as keyof LineaFormData, e.target.value)}
+              required={label.includes('*')}
+            />
+          </div>
+        ))}
       </div>
 
       <div className="flex justify-end space-x-2">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit">
-          {initialData ? 'Actualizar' : 'Crear'}
-        </Button>
+        <Button type="submit">{initialData ? 'Actualizar' : 'Crear'}</Button>
       </div>
     </form>
   );

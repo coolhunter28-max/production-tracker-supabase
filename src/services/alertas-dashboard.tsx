@@ -1,11 +1,24 @@
-// src/components/alertas/alertas-dashboard.tsx
+// src/services/alertas-dashboard.tsx
 import React, { useState, useEffect } from 'react';
 import { alertasService } from '@/services/alertas';
 import { Alerta } from '@/types/alertas';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 
 const AlertasDashboard: React.FC = () => {
@@ -31,30 +44,39 @@ const AlertasDashboard: React.FC = () => {
   const handleMarcarLeida = async (id: string) => {
     try {
       await alertasService.marcarComoLeida(id);
-      setAlertas(alertas.map(alerta =>
-        alerta.id === id ? { ...alerta, leida: true } : alerta
-      ));
+      setAlertas((prev) =>
+        prev.map((alerta) =>
+          alerta.id === id ? { ...alerta, leida: true } : alerta
+        )
+      );
     } catch (error) {
       console.error('Error al marcar alerta como leída:', error);
     }
   };
 
-  const alertasFiltradas = alertas.filter(alerta => {
+  // ✅ Manejo seguro de búsqueda
+  const alertasFiltradas = alertas.filter((alerta) => {
     if (!busqueda) return true;
+    const term = busqueda.toLowerCase();
     return (
-      alerta.po.toLowerCase().includes(busqueda.toLowerCase()) ||
-      alerta.subtipo.toLowerCase().includes(busqueda.toLowerCase()) ||
-      alerta.mensaje.toLowerCase().includes(busqueda.toLowerCase())
+      (alerta.po_id?.toLowerCase().includes(term) ?? false) ||
+      alerta.subtipo.toLowerCase().includes(term) ||
+      alerta.mensaje.toLowerCase().includes(term)
     );
   });
 
   const getSeveridadColor = (severidad: string) => {
-    switch (severidad) {
-      case 'critica': return 'bg-red-500';
-      case 'alta': return 'bg-red-400';
-      case 'media': return 'bg-yellow-400';
-      case 'baja': return 'bg-green-400';
-      default: return 'bg-gray-400';
+    switch (severidad.toLowerCase()) {
+      case 'critica':
+        return 'bg-red-500';
+      case 'alta':
+        return 'bg-red-400';
+      case 'media':
+        return 'bg-yellow-400';
+      case 'baja':
+        return 'bg-green-400';
+      default:
+        return 'bg-gray-400';
     }
   };
 
@@ -69,6 +91,7 @@ const AlertasDashboard: React.FC = () => {
             Gestiona y monitorea todas las alertas generadas por el sistema
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           <div className="mb-6">
             <Input
@@ -92,30 +115,39 @@ const AlertasDashboard: React.FC = () => {
                 <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {alertasFiltradas.map((alerta) => (
-                <TableRow key={alerta.id} className={alerta.leida ? 'opacity-60' : ''}>
+                <TableRow
+                  key={alerta.id}
+                  className={alerta.leida ? 'opacity-60' : ''}
+                >
                   <TableCell className="font-medium">{alerta.tipo}</TableCell>
                   <TableCell>{alerta.subtipo}</TableCell>
-                  <TableCell className="font-medium">{alerta.po}</TableCell>
+
+                  {/* ✅ Mostrar PO si existe */}
+                  <TableCell className="font-medium">
+                    {alerta.po_id ?? '-'}
+                  </TableCell>
+
                   <TableCell>{alerta.mensaje}</TableCell>
                   <TableCell>
                     <Badge className={getSeveridadColor(alerta.severidad)}>
                       {alerta.severidad}
                     </Badge>
                   </TableCell>
-                  <TableCell>{alerta.diasRestantes}</TableCell>
+
+                  <TableCell>{alerta.dias_restantes ?? '-'}</TableCell>
+
                   <TableCell>
-                    <Badge variant={alerta.leida ? "outline" : "default"}>
+                    <Badge variant={alerta.leida ? 'outline' : 'default'}>
                       {alerta.leida ? 'Leída' : 'No leída'}
                     </Badge>
                   </TableCell>
+
                   <TableCell>
-                    {!alerta.leida && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleMarcarLeida(alerta.id)}
-                      >
+                    {!alerta.leida && alerta.id && (
+                      <Button size="sm" onClick={() => handleMarcarLeida(alerta.id!)}>
                         Marcar como leída
                       </Button>
                     )}

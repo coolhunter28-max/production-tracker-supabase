@@ -21,7 +21,7 @@ export function MuestraForm({ lineaId, onSuccess }: MuestraFormProps) {
     tipo_muestra: '',
     round: '1',
     fecha_muestra: '',
-    estado_muestra: 'pendiente' as 'enviada' | 'recibida' | 'aprobada' | 'rechazada',
+    estado_muestra: 'pendiente' as 'pendiente' | 'enviada' | 'recibida' | 'aprobada' | 'rechazada',
     notas: ''
   });
   const [loading, setLoading] = useState(false);
@@ -35,9 +35,10 @@ export function MuestraForm({ lineaId, onSuccess }: MuestraFormProps) {
         linea_pedido_id: lineaId,
         tipo_muestra: formData.tipo_muestra,
         round: parseInt(formData.round),
-        fecha_muestra: formData.fecha_muestra || null,
+        // ✅ Corregido: usar undefined en lugar de null
+        fecha_muestra: formData.fecha_muestra || undefined,
         estado_muestra: formData.estado_muestra,
-        notas: formData.notas || null
+        notas: formData.notas || undefined
       });
 
       setFormData({
@@ -75,9 +76,11 @@ export function MuestraForm({ lineaId, onSuccess }: MuestraFormProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="tipo_muestra">Tipo de Muestra *</Label>
-            <Select 
-              value={formData.tipo_muestra} 
-              onValueChange={(value) => setFormData(prev => ({ ...prev, tipo_muestra: value }))}
+            <Select
+              value={formData.tipo_muestra}
+              onValueChange={(value) =>
+                setFormData((prev) => ({ ...prev, tipo_muestra: value }))
+              }
               required
             >
               <SelectTrigger>
@@ -94,6 +97,7 @@ export function MuestraForm({ lineaId, onSuccess }: MuestraFormProps) {
               </SelectContent>
             </Select>
           </div>
+
           <div>
             <Label htmlFor="round">Round *</Label>
             <Input
@@ -101,24 +105,38 @@ export function MuestraForm({ lineaId, onSuccess }: MuestraFormProps) {
               type="number"
               min="1"
               value={formData.round}
-              onChange={(e) => setFormData(prev => ({ ...prev, round: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, round: e.target.value }))
+              }
               required
             />
           </div>
+
           <div>
             <Label htmlFor="fecha_muestra">Fecha Muestra</Label>
             <Input
               id="fecha_muestra"
               type="date"
               value={formData.fecha_muestra}
-              onChange={(e) => setFormData(prev => ({ ...prev, fecha_muestra: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  fecha_muestra: e.target.value
+                }))
+              }
             />
           </div>
+
           <div>
             <Label htmlFor="estado_muestra">Estado *</Label>
-            <Select 
-              value={formData.estado_muestra} 
-              onValueChange={(value) => setFormData(prev => ({ ...prev, estado_muestra: value as any }))}
+            <Select
+              value={formData.estado_muestra}
+              onValueChange={(value) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  estado_muestra: value as any
+                }))
+              }
               required
             >
               <SelectTrigger>
@@ -133,17 +151,25 @@ export function MuestraForm({ lineaId, onSuccess }: MuestraFormProps) {
               </SelectContent>
             </Select>
           </div>
+
           <div>
             <Label htmlFor="notas">Notas</Label>
             <Input
               id="notas"
               value={formData.notas}
-              onChange={(e) => setFormData(prev => ({ ...prev, notas: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, notas: e.target.value }))
+              }
               placeholder="Notas adicionales sobre la muestra"
             />
           </div>
+
           <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowDialog(false)}
+            >
               Cancelar
             </Button>
             <Button type="submit" disabled={loading || !formData.tipo_muestra}>

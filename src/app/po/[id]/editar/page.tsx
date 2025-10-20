@@ -19,10 +19,15 @@ export default function EditarPO() {
         const res = await fetch(`/api/po/${id}`);
         const data = await res.json();
 
+        // ✅ CORRECCIÓN: condición revisada para evitar error TS
         const linesWithData = data?.lineas_pedido
           ?.map((l: any, i: number) =>
             Object.values(l).some(
-              (v) => v !== null && v !== "" && v !== 0 && v !== []
+              (v) =>
+                v !== null &&
+                v !== "" &&
+                v !== 0 &&
+                (!Array.isArray(v) || v.length > 0)
             )
               ? i
               : null

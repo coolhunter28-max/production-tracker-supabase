@@ -5,14 +5,16 @@ import { useParams, useRouter } from "next/navigation";
 
 export default function VerPO() {
   const params = useParams<{ id: string }>();
+  const id = params?.id || ""; // ✅ evitamos el posible null
   const router = useRouter();
   const [po, setPO] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchPO = async () => {
+      if (!id) return; // ✅ no ejecutar si el id aún no está disponible
       try {
-        const res = await fetch(`/api/po/${params.id}`);
+        const res = await fetch(`/api/po/${id}`);
         const data = await res.json();
         setPO(data);
       } catch (err) {
@@ -21,8 +23,8 @@ export default function VerPO() {
         setLoading(false);
       }
     };
-    if (params.id) fetchPO();
-  }, [params.id]);
+    fetchPO();
+  }, [id]);
 
   if (loading) return <div className="p-6 text-gray-600">Cargando pedido...</div>;
   if (!po) return <div className="p-6 text-red-500">No se encontró el pedido.</div>;
@@ -52,7 +54,7 @@ export default function VerPO() {
           📄 PO {po.po || "(sin número)"}
         </h1>
         <button
-          onClick={() => router.push(`/po/${params.id}/editar`)}
+          onClick={() => router.push(`/po/${id}/editar`)} // ✅ usa id en vez de params.id
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow text-sm font-semibold"
         >
           ✏️ Editar PO

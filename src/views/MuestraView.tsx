@@ -1,22 +1,21 @@
-// src/views/MuestraView.tsx (actualizado)
+// src/views/MuestraView.tsx
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'next/navigation';
 import { getMuestraById } from '../services/muestras';
-import AprobacionForm from '../components/AprobacionForm';
 import HistorialAprobaciones from '../components/HistorialAprobaciones';
 import { Muestra } from '../types';
 
 const MuestraView: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
   const [muestra, setMuestra] = useState<Muestra | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchMuestra = async () => {
       if (!id) return;
-      
       try {
-        const data = await getMuestraById(parseInt(id));
+        const data = await getMuestraById(id);
         setMuestra(data);
       } catch (error) {
         console.error('Error al cargar muestra:', error);
@@ -24,7 +23,6 @@ const MuestraView: React.FC = () => {
         setLoading(false);
       }
     };
-
     fetchMuestra();
   }, [id]);
 
@@ -33,15 +31,12 @@ const MuestraView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* ... (contenido existente) */}
-      
-      {/* Nueva sección de aprobaciones */}
       <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold text-gray-800 mb-4">Gestión de Aprobaciones</h2>
-        <AprobacionForm 
-          muestraId={muestra.id} 
-          onSaved={() => {/* Recargar datos si es necesario */}} 
-        />
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">
+          Gestión de Aprobaciones
+        </h2>
+
+        {/* 🔹 Solo mostramos el historial por ahora */}
         <HistorialAprobaciones muestraId={muestra.id} />
       </div>
     </div>

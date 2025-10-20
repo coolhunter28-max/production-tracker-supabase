@@ -55,16 +55,21 @@ export function PedidosContent() {
 
   const getEstadoBadge = (estado: string) => {
     switch (estado) {
-      case 'pendiente': return <Badge variant="secondary">Pendiente</Badge>
-      case 'en_produccion': return <Badge className="bg-blue-500">En Producción</Badge>
-      case 'completado': return <Badge className="bg-green-500">Completado</Badge>
-      case 'cancelado': return <Badge variant="destructive">Cancelado</Badge>
-      default: return <Badge>{estado}</Badge>
+      case 'pendiente':
+        return <Badge variant="secondary">Pendiente</Badge>
+      case 'en_produccion':
+        return <Badge className="bg-blue-500 text-white">En Producción</Badge>
+      case 'completado':
+        return <Badge className="bg-green-500 text-white">Completado</Badge>
+      case 'cancelado':
+        return <Badge variant="destructive">Cancelado</Badge>
+      default:
+        return <Badge>{estado}</Badge>
     }
   }
 
   // Filtrar pedidos según búsqueda y estado
-  const filteredPedidos = pedidos.filter(pedido => {
+  const filteredPedidos = pedidos.filter((pedido) => {
     const matchesSearch =
       searchTerm === '' ||
       pedido.cliente?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -72,7 +77,8 @@ export function PedidosContent() {
       pedido.last?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       pedido.outsole?.toLowerCase().includes(searchTerm.toLowerCase())
 
-    const matchesEstado = estadoFilter === 'todos' || pedido.estado === estadoFilter
+    const matchesEstado =
+      estadoFilter === 'todos' || pedido.estado === estadoFilter
 
     return matchesSearch && matchesEstado
   })
@@ -123,9 +129,11 @@ export function PedidosContent() {
           {loading ? (
             <p className="text-center py-4">Cargando pedidos...</p>
           ) : filteredPedidos.length === 0 ? (
-            <p className="text-center py-4">No se encontraron pedidos con los filtros seleccionados</p>
+            <p className="text-center py-4">
+              No se encontraron pedidos con los filtros seleccionados
+            </p>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -150,12 +158,15 @@ export function PedidosContent() {
                       <TableCell>{pedido.last}</TableCell>
                       <TableCell>{pedido.outsole}</TableCell>
                       <TableCell>{pedido.cantidad}</TableCell>
-                      <TableCell>{new Date(pedido.fecha_entrega).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        {new Date(pedido.fecha_entrega).toLocaleDateString()}
+                      </TableCell>
                       <TableCell>{getEstadoBadge(pedido.estado)}</TableCell>
                       <TableCell>
                         <Badge
                           variant={
-                            pedido.prioridad === 'alta' || pedido.prioridad === 'urgente'
+                            pedido.prioridad === 'alta' ||
+                            pedido.prioridad === 'urgente'
                               ? 'destructive'
                               : 'outline'
                           }
@@ -165,11 +176,21 @@ export function PedidosContent() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {/* 🔹 Botón Ver redirige a /po/[id] */}
-                          `/po/${pedido.id
-                          <Button variant="ghost" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          {/* 🔹 Ver detalle del pedido */}
+                          <Link href={`/po/${pedido.id}`}>
+                            <Button variant="ghost" size="sm">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </Link>
+
+                          {/* 🔹 Editar pedido */}
+                          <Link href={`/po/${pedido.id}/editar`}>
+                            <Button variant="ghost" size="sm">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </Link>
+
+                          {/* 🔹 Eliminar pedido */}
                           <Button
                             variant="ghost"
                             size="sm"
