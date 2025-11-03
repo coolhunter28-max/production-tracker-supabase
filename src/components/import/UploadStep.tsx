@@ -12,7 +12,7 @@ export default function UploadStep({ onNext }: UploadStepProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
 
@@ -22,17 +22,26 @@ export default function UploadStep({ onNext }: UploadStepProps) {
     reader.onload = (evt) => {
       const content = evt.target?.result as string;
       setFileContent(content);
+      console.log("📂 Archivo leído correctamente:", f.name);
+      console.log("📄 Primeros 200 caracteres:", content.slice(0, 200));
     };
     reader.readAsText(f);
-  }
+  };
 
-  function handleContinue() {
-    if (selectedFile && fileContent) {
-      onNext(selectedFile, fileContent);
-    } else {
+  const handleContinue = () => {
+    if (!selectedFile) {
       alert("Por favor, selecciona un archivo CSV antes de continuar.");
+      return;
     }
-  }
+
+    if (!fileContent || fileContent.trim() === "") {
+      alert("El archivo todavía no se ha leído completamente. Espera un segundo y vuelve a intentar.");
+      return;
+    }
+
+    console.log("➡️ Pasando archivo al paso 2:", selectedFile.name);
+    onNext(selectedFile, fileContent);
+  };
 
   return (
     <div className="max-w-md mx-auto text-center space-y-6">

@@ -1,210 +1,247 @@
 import Papa from "papaparse";
 
-// ---------------- utilidades de normalización ----------------
-
-const cleanKey = (k: string) =>
-  k ? String(k).trim().toLowerCase().replace(/\s+|[_\-\.]/g, "") : "";
-
-function getAny(row: Record<string, any>, labels: string[]) {
-  const keys = Object.keys(row);
-  for (const label of labels) {
-    const found = keys.find((k) => cleanKey(k) === cleanKey(label));
-    if (found) return row[found];
+export function parseCSVText(csvText: string) {
+  const { data, errors } = Papa.parse(csvText, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (h) => (h || "").trim(),
+  });
+  if (errors?.length) {
+    console.warn("⚠️ Errores PapaParse:", errors);
   }
-  return "";
+  return Array.isArray(data) ? data : [];
 }
 
-// ---- formato europeo ----
+function cleanStr(v: any) {
+  if (v === undefined || v === null) return "";
+  if (typeof v !== "string") return String(v);
+  return v.trim();
+}
 
-/** Cantidades enteras (e.g. "2.000" -> 2000) */
-const parseQtyEU = (val: any): number => {
-  if (val === null || val === undefined) return 0;
-  const onlyDigits = String(val).replace(/[^\d]/g, "");
-  if (!onlyDigits) return 0;
-  return parseInt(onlyDigits, 10) || 0;
+function toNumber(v: any) {
+  if (v === undefined || v === null || v === "") return undefined;
+  // Admite formatos como “1.234,56” o “1234.56” o “1,234.56”
+  const normalized = String(v)
+    .replace(/\s+/g, "")
+    .replace(/[^0-9,.-]/g, "") // elimina símbolos de moneda
+    .replace(/\.(?=\d{3,})/g, "") // quita puntos de miles
+    .replace(",", "."); // convierte coma decimal a punto
+  const n = parseFloat(normalized);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+export function parseDate(value: any): string | null {
+  const v = cleanStr(value);
+  if (!v) return null;
+  const dmy = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
+  const ymd = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/;
+  let y = "", m = "", d = "";
+  if (dmy.test(v)) {
+    const [, dd, mm, yyyy] = v.match(dmy)!;
+    y = yyyy; m = mm.padStart(2, "0"); d = dd.padStart(2, "0");
+  } else if (ymd.test(v)) {
+    const [, yyyy, mm, dd] = v.match(ymd)!;
+    y = yyyy; m = mm.padStart(2, "0"); d = dd.padStart(2, "0");
+  } else {
+    return v;
+  }
+  return `${y}-${m}-${d}`;
+}
+
+type FieldAliases = Record<string, string[]>;
+
+const MAP: FieldAliases = {
+  po: ["PO"],
+  customer: ["CUSTOMER"],
+  factory: ["FACTORY"],
+  supplier: ["SUPPLIER"],
+  season: ["SEASON"],
+  category: ["CATEGORY"],
+  channel: ["CHANNEL"],
+  pi: ["PI", "PI BSG"],
+  po_date: ["PO DATE"],
+  etd_pi: ["ETD PI"],
+  booking: ["Booking"],
+  closing: ["Closing"],
+  shipping_date: ["Shipping Date", "Shipping"],
+
+  reference: ["REFERENCE"],
+  style: ["STYLE"],
+  color: ["COLOR"],
+  qty: ["QTY", "QUANTITY"],
+
+  // 🔧 Añadidos todos los alias posibles
+  price: ["PRICE", "PRICE USD", "UNIT PRICE", "PVP", "PRECIO"],
+  amount: ["AMOUNT", "TOTAL AMOUNT", "IMPORTE", "AMOUNT USD"],
+
+  cfm_date: ["CFMs"],
+  counter_date: ["Counter Sample"],
+  fitting_date: ["Fitting"],
+  pps_date: ["PPS"],
+  testing_date: ["Testing Samples"],
+  shipping_sample_date: ["Shipping Samples"],
+  inspection_date: ["Inspection"],
+  trial_upper_date: ["Trial Upper"],
+  trial_lasting_date: ["Trial Lasting"],
+  lasting_date: ["Lasting"],
+  finish_date: ["FINISH DATE"],
+
+  cfm_round: ["CFMs Round"],
+  counter_round: ["Counter Sample Round"],
+  fitting_round: ["Fitting Round"],
+  pps_round: ["PPS Round"],
+  testing_round: ["Testing Samples Round"],
+  shipping_sample_round: ["Shipping Samples Round"],
+  inspection_round: ["Inspection Round"],
+
+  cfm_status: ["CFMs Status"],
+  counter_status: ["Counter Sample Status"],
+  fitting_status: ["Fitting Status"],
+  pps_status: ["PPS Status"],
+  testing_status: ["Testing Samples Status"],
+  shipping_sample_status: ["Shipping Samples Status"],
+  trial_upper_status: ["Trial Upper Status"],
+  trial_lasting_status: ["Trial Lasting Status"],
+  lasting_status: ["Lasting Status"],
+  finish_date_status: ["Finish Date Status"],
+  inspection_status: ["Inspection Status"],
+  shipping_status: ["Shipping Status"],
 };
 
-/** Dinero con coma decimal y símbolos (e.g. "$18,45" -> 18.45; "$36.900,00" -> 36900) */
-const parseMoneyEU = (val: any): number => {
-  if (val === null || val === undefined || val === "") return 0;
-  const s = String(val)
-    .replace(/[^\d,.\-]/g, "") // deja dígitos, coma, punto, signo
-    .replace(/\./g, "")        // quita miles
-    .replace(",", ".");        // coma -> punto
-  const n = parseFloat(s);
-  return Number.isFinite(n) ? n : 0;
-};
-
-export const parseDate = (val: any): string | null => {
-  if (!val) return null;
-  const s = String(val).trim();
-  // dd/mm/yyyy | dd-mm-yyyy | dd.mm.yyyy | yyyy-mm-dd
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (iso) return s;
-  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
-  if (!m) return null;
-  let [_, d, mo, y] = m;
-  if (y.length === 2) y = (parseInt(y, 10) >= 70 ? "19" : "20") + y;
-  const yyyy = y.padStart(4, "0");
-  const mm = mo.padStart(2, "0");
-  const dd = d.padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-// ---------------- lógica de muestras ----------------
-
-/** Normaliza usando columnas "Round" (N/N | Round X) + "Fecha" (columna del tipo sin "Status") */
-function normalizeFromRoundAndDate(roundVal: any, dateVal: any) {
-  const roundTxt = String(roundVal || "").trim();
-  const date = parseDate(dateVal);
-
-  if (roundTxt.toUpperCase() === "N/N") {
-    return { needed: false };
+function get(row: any, aliases: string[]): any {
+  for (const a of aliases) {
+    if (row[a] !== undefined && row[a] !== null && row[a] !== "") {
+      return row[a];
+    }
   }
-
-  const rx = roundTxt.match(/round\s*(\d+)/i);
-  const round = rx ? parseInt(rx[1], 10) : null;
-
-  if (!roundTxt && !date) return { needed: false };
-
-  if (date) {
-    return { needed: true, round: round || 1, date };
-  }
-
-  return { needed: true, round: round || 1, date: null };
+  return undefined;
 }
 
-/** Para tipos sin columna Round clara (Trial Upper / Trial Lasting / Lasting / Finish Date) */
-function normalizeByStatusOrDate(statusVal: any, dateVal: any) {
-  const statusTxt = String(statusVal || "").trim();
-  const date = parseDate(dateVal) || parseDate(statusTxt);
-
-  if (!statusTxt && !date) return { needed: false };
-  if (statusTxt.toUpperCase() === "N/N") return { needed: false };
-
-  if (date) return { needed: true, date };
-
-  return { needed: true, date: null };
+export interface SampleStatus {
+  needed: boolean;
+  round?: number | null;
+  date?: string | null;
 }
 
-// ---------------- NORMALIZADOR PRINCIPAL ----------------
+export interface LineData {
+  style: string;
+  color: string;
+  reference: string;
+  qty: number;
+  price: number;
+  amount?: number;
 
-export function parseCSVText(fileContent: string) {
-  const parsed = Papa.parse(fileContent, { header: true, skipEmptyLines: true });
-  const normalized = (parsed.data as any[]).map((row) => normalizeRow(row));
-  return groupRowsByPO(normalized);
+  cfm?: SampleStatus;
+  counter_sample?: SampleStatus;
+  fitting?: SampleStatus;
+  pps?: SampleStatus;
+  testing_sample?: SampleStatus;
+  shipping_sample?: SampleStatus;
+  inspection?: SampleStatus;
+
+  trial_upper?: SampleStatus;
+  trial_lasting?: SampleStatus;
+  lasting?: SampleStatus;
+  finish_date?: SampleStatus;
 }
 
-function normalizeRow(row: Record<string, any>) {
-  // --- CABECERA ---
-  const po = getAny(row, ["PO"]);
-  const supplier = getAny(row, ["SUPPLIER"]);
-  const factory = getAny(row, ["FACTORY"]);
-  const customer = getAny(row, ["CUSTOMER"]);
-  const season = getAny(row, ["SEASON"]);
-  const category = getAny(row, ["CATEGORY"]);
-  const channel = getAny(row, ["CHANNEL"]);
-  const currency = getAny(row, ["CURRENCY"]) || "USD";
+export interface POHeader {
+  po?: string;
+  supplier?: string;
+  factory?: string;
+  customer?: string;
+  season?: string;
+  category?: string;
+  channel?: string;
+  po_date?: string | null;
+  etd_pi?: string | null;
+  booking?: string | null;
+  closing?: string | null;
+  shipping_date?: string | null;
+  currency?: string;
+  pi?: string;
+  estado_inspeccion?: string;
+}
 
-  const poDate = parseDate(getAny(row, ["PO DATE"]));
-  const etdPi = parseDate(getAny(row, ["ETD PI"]));
-  const booking = parseDate(getAny(row, ["BOOKING"]));
-  const shipping = parseDate(getAny(row, ["SHIPPING DATE", "SHIPPING"]));
-  const closing = parseDate(getAny(row, ["CLOSING"]));
-  const pi = getAny(row, ["PI", "PI BSG", "PROFORMA", "PI NUMBER"]);
-  const estadoInsp = getAny(row, ["INSPECTION STATUS"]);
+export interface POGroup {
+  header?: POHeader;
+  lines?: LineData[];
+}
 
-  // --- LÍNEA ---
-  const reference = getAny(row, ["REFERENCE"]);
-  const style = getAny(row, ["STYLE"]);
-  const color = getAny(row, ["COLOR"]);
-  const qty = parseQtyEU(getAny(row, ["QTY"]));
-  const price = parseMoneyEU(getAny(row, ["PRICE"]));
-  const rawAmount = parseMoneyEU(getAny(row, ["AMOUNT"]));
-  const amount = rawAmount || +(qty * price).toFixed(2);
+function neededFromStatus(s: any): boolean {
+  const v = cleanStr(s).toUpperCase();
+  return v === "N/N" || v === "NO NEED" ? false : true;
+}
 
-  // --- MUESTRAS ---
-  const samples = {
-    cfm: normalizeFromRoundAndDate(getAny(row, ["CFMs ROUND"]), getAny(row, ["CFMs"])),
-    counter_sample: normalizeFromRoundAndDate(
-      getAny(row, ["COUNTER SAMPLE ROUND"]),
-      getAny(row, ["COUNTER SAMPLE"])
-    ),
-    fitting: normalizeFromRoundAndDate(
-      getAny(row, ["FITTING ROUND"]),
-      getAny(row, ["FITTING"])
-    ),
-    pps: normalizeFromRoundAndDate(getAny(row, ["PPS ROUND"]), getAny(row, ["PPS"])),
-    testing_sample: normalizeFromRoundAndDate(
-      getAny(row, ["TESTING SAMPLES ROUND"]),
-      getAny(row, ["TESTING SAMPLES"])
-    ),
-    shipping_sample: normalizeFromRoundAndDate(
-      getAny(row, ["SHIPPING SAMPLES ROUND"]),
-      getAny(row, ["SHIPPING SAMPLES"])
-    ),
-    inspection: normalizeFromRoundAndDate(
-      getAny(row, ["INSPECTION ROUND"]),
-      getAny(row, ["INSPECTION"])
-    ),
-    trial_upper: normalizeByStatusOrDate(
-      getAny(row, ["TRIAL UPPER STATUS"]),
-      getAny(row, ["TRIAL UPPER"])
-    ),
-    trial_lasting: normalizeByStatusOrDate(
-      getAny(row, ["TRIAL LASTING STATUS"]),
-      getAny(row, ["TRIAL LASTING"])
-    ),
-    lasting: normalizeByStatusOrDate(
-      getAny(row, ["LASTING STATUS"]),
-      getAny(row, ["LASTING"])
-    ),
-    finish_date: normalizeByStatusOrDate(
-      getAny(row, ["FINISH DATE STATUS"]),
-      getAny(row, ["FINISH DATE"])
-    ),
-  };
+function sample(row: any, dateKey: keyof FieldAliases, roundKey?: keyof FieldAliases, statusKey?: keyof FieldAliases): SampleStatus | undefined {
+  const dateRaw = get(row, MAP[dateKey] || []);
+  const hasAny = dateRaw !== undefined || (roundKey && get(row, MAP[roundKey] || []) !== undefined) || (statusKey && get(row, MAP[statusKey] || []) !== undefined);
+  if (!hasAny) return undefined;
+
+  const roundRaw = roundKey ? get(row, MAP[roundKey] || []) : undefined;
+  const statusRaw = statusKey ? get(row, MAP[statusKey] || []) : undefined;
 
   return {
-    header: {
-      po,
-      supplier,
-      factory,
-      customer,
-      season,
-      category,
-      channel,
-      currency,
-      po_date: poDate,
-      etd_pi: etdPi,
-      booking,
-      shipping_date: shipping,
-      closing,
-      pi,
-      estado_inspeccion: estadoInsp,
-    },
-    line: {
-      reference,
-      style,
-      color,
-      qty,
-      price,
-      amount,
-      ...samples,
-    },
+    needed: neededFromStatus(statusRaw),
+    round: toNumber(roundRaw) ?? null,
+    date: parseDate(dateRaw) ?? null,
   };
 }
 
-// ---------------- AGRUPADOR POR PO ----------------
+export function groupRowsByPO(rows: any[]): POGroup[] {
+  const byPO = new Map<string, POGroup>();
 
-function groupRowsByPO(rows: any[]) {
-  const groups: Record<string, { header: any; lines: any[] }> = {};
+  for (const row of rows) {
+    const po = cleanStr(get(row, MAP.po) ?? "");
+    if (!po) continue;
 
-  for (const { header, line } of rows) {
-    const key = header.po || "UNKNOWN";
-    if (!groups[key]) groups[key] = { header, lines: [] };
-    groups[key].lines.push(line);
+    if (!byPO.has(po)) {
+      const header: POHeader = {
+        po,
+        customer: cleanStr(get(row, MAP.customer) ?? ""),
+        factory: cleanStr(get(row, MAP.factory) ?? ""),
+        supplier: cleanStr(get(row, MAP.supplier) ?? ""),
+        season: cleanStr(get(row, MAP.season) ?? ""),
+        category: cleanStr(get(row, MAP.category) ?? ""),
+        channel: cleanStr(get(row, MAP.channel) ?? ""),
+        pi: cleanStr(get(row, MAP.pi) ?? ""),
+        po_date: parseDate(get(row, MAP.po_date)),
+        etd_pi: parseDate(get(row, MAP.etd_pi)),
+        booking: parseDate(get(row, MAP.booking)),
+        closing: parseDate(get(row, MAP.closing)),
+        shipping_date: parseDate(get(row, MAP.shipping_date)),
+        currency: "USD",
+        estado_inspeccion: "-",
+      };
+      byPO.set(po, { header, lines: [] });
+    }
+
+    const grp = byPO.get(po)!;
+
+    const line: LineData = {
+      reference: cleanStr(get(row, MAP.reference) ?? ""),
+      style: cleanStr(get(row, MAP.style) ?? ""),
+      color: cleanStr(get(row, MAP.color) ?? ""),
+      qty: toNumber(get(row, MAP.qty)) ?? 0,
+      price: toNumber(get(row, MAP.price)) ?? 0,
+      amount: toNumber(get(row, MAP.amount)) ?? undefined,
+
+      cfm: sample(row, "cfm_date", "cfm_round", "cfm_status"),
+      counter_sample: sample(row, "counter_date", "counter_round", "counter_status"),
+      fitting: sample(row, "fitting_date", "fitting_round", "fitting_status"),
+      pps: sample(row, "pps_date", "pps_round", "pps_status"),
+      testing_sample: sample(row, "testing_date", "testing_round", "testing_status"),
+      shipping_sample: sample(row, "shipping_sample_date", "shipping_sample_round", "shipping_sample_status"),
+      inspection: sample(row, "inspection_date", "inspection_round", "inspection_status"),
+
+      trial_upper: sample(row, "trial_upper_date", undefined, "trial_upper_status"),
+      trial_lasting: sample(row, "trial_lasting_date", undefined, "trial_lasting_status"),
+      lasting: sample(row, "lasting_date", undefined, "lasting_status"),
+      finish_date: sample(row, "finish_date", undefined, "finish_date_status"),
+    };
+
+    grp.lines!.push(line);
   }
 
-  return Object.values(groups);
+  return Array.from(byPO.values());
 }
