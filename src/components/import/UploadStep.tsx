@@ -12,36 +12,47 @@ export default function UploadStep({ onNext }: UploadStepProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    setSelectedFile(f);
+    setSelectedFile(file);
 
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const content = evt.target?.result as string;
-      setFileContent(content);
-      console.log("📂 Archivo leído correctamente:", f.name);
-      console.log("📄 Primeros 200 caracteres:", content.slice(0, 200));
+      const text = evt.target?.result as string;
+      if (text && text.length > 0) {
+        console.log("✅ Archivo leído correctamente. Longitud:", text.length);
+        setFileContent(text);
+      } else {
+        console.error("⚠️ El archivo está vacío o no se pudo leer.");
+      }
     };
-    reader.readAsText(f);
-  };
+    reader.onerror = () => {
+      console.error("❌ Error al leer el archivo CSV.");
+    };
+    reader.readAsText(file, "UTF-8"); // Aseguramos codificación correcta
+  }
 
-  const handleContinue = () => {
+  function handleContinue() {
     if (!selectedFile) {
       alert("Por favor, selecciona un archivo CSV antes de continuar.");
       return;
     }
 
     if (!fileContent || fileContent.trim() === "") {
-      alert("El archivo todavía no se ha leído completamente. Espera un segundo y vuelve a intentar.");
+      alert("El archivo no se ha leído correctamente. Intenta cargarlo otra vez.");
       return;
     }
 
-    console.log("➡️ Pasando archivo al paso 2:", selectedFile.name);
+    console.log("🚀 Enviando archivo a Validar:", {
+      name: selectedFile.name,
+      size: selectedFile.size,
+      contentLength: fileContent.length,
+    });
+
     onNext(selectedFile, fileContent);
-  };
+  }
 
   return (
     <div className="max-w-md mx-auto text-center space-y-6">

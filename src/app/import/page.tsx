@@ -9,6 +9,7 @@ import ConfirmStep from "@/components/import/ConfirmStep";
 export default function ImportPage() {
   // === Estados globales ===
   const [step, setStep] = useState(1);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | undefined>();
   const [csvContent, setCsvContent] = useState<string>("");
   const [groupedPOs, setGroupedPOs] = useState<any[]>([]);
@@ -16,6 +17,7 @@ export default function ImportPage() {
   // === Paso 1: Upload ===
   const handleFileUpload = (file: File, content: string) => {
     console.log("✅ Archivo recibido:", file.name);
+    setSelectedFile(file);
     setFileName(file.name);
     setCsvContent(content);
     setStep(2);
@@ -30,13 +32,16 @@ export default function ImportPage() {
 
   // === Paso 3: Preview ===
   const handlePreviewNext = () => {
+    console.log("➡️ Avanzando a Confirmación");
     setStep(4);
   };
 
   // === Paso 4: Confirm ===
   const handleFinish = () => {
     alert("✅ Importación finalizada correctamente.");
+    // 🔄 Reset completo del flujo
     setStep(1);
+    setSelectedFile(null);
     setFileName(undefined);
     setCsvContent("");
     setGroupedPOs([]);
@@ -84,7 +89,8 @@ export default function ImportPage() {
 
       {step === 2 && (
         <ValidateStep
-          csvContent={csvContent}
+          file={selectedFile}
+          content={csvContent}
           onBack={() => setStep(1)}
           onNext={handleValidated}
         />

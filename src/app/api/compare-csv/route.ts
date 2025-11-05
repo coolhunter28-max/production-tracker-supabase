@@ -2,36 +2,35 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-console.log("🚀 API /api/compare-csv iniciada...");
+console.log("🚀 /api/compare-csv iniciado...");
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 🧩 Función auxiliar para comparar campos simples
+// 🧩 Comparador de campos simples
 function compareField(current: any, incoming: any) {
   if (current == null && (incoming == null || incoming === "")) return false;
   if (current === incoming) return false;
   return true;
 }
 
-// 🧩 Comparar muestras por tipo
+// 🧩 Comparar muestras
 function compareSamples(dbSamples: any[], csvLine: any) {
   const result: any[] = [];
   const sampleTypes = [
     "cfm",
     "pps",
-    "testing",
-    "shipping",
-    "trial_upper",
-    "trial_lasting",
-    "lasting",
-    "finish_date",
+    "testing_sample",
+    "shipping_sample",
+    "inspection",
   ];
 
-  sampleTypes.forEach((type) => {
-    const dbSample = dbSamples.find((s) => s.tipo_muestra.toLowerCase() === type.toLowerCase());
+  for (const type of sampleTypes) {
+    const dbSample = dbSamples.find(
+      (s) => s.tipo_muestra?.toLowerCase() === type.toLowerCase()
+    );
     const csvSample = csvLine[type];
     const dbDate = dbSample?.fecha_muestra || null;
     const csvDate = csvSample?.date || null;
@@ -43,7 +42,7 @@ function compareSamples(dbSamples: any[], csvLine: any) {
         despues: csvDate,
       });
     }
-  });
+  }
 
   return result;
 }
@@ -56,9 +55,9 @@ export async function POST(req: Request) {
       throw new Error("Datos de pedidos no válidos o vacíos.");
     }
 
-    console.log(`🧾 Comparando archivo ${fileName} con ${groupedPOs.length} POs...`);
+    console.log(`🧾 Comparando archivo ${fileName} con ${groupedPOs.length} POs del CSV...`);
 
-    // 1️⃣ Obtener todos los POs existentes desde Supabase
+    // 1️⃣ Obtener todos los POs + líneas + muestras
     const { data: dbPOs, error: dbError } = await supabase
       .from("pos")
       .select(`
@@ -74,9 +73,9 @@ export async function POST(req: Request) {
         closing,
         shipping_date,
         currency,
-        inspection,
         estado_inspeccion,
         pi,
+        channel,
         lineas_pedido (
           id,
           reference,
@@ -97,7 +96,7 @@ export async function POST(req: Request) {
         )
       `);
 
-    if (dbError) throw new Error(`Error obteniendo POs de Supabase: ${dbError.message}`);
+    if (dbError) throw new Error(`Error obteniendo datos de Supabase: ${dbError.message}`);
 
     const dbMap = new Map(dbPOs.map((po) => [po.po, po]));
 
@@ -106,7 +105,7 @@ export async function POST(req: Request) {
     let sinCambios = 0;
     const detalle: any[] = [];
 
-    // 2️⃣ Recorrer todos los POs del CSV
+    // 2️⃣ Comparar cada PO del CSV
     for (const po of groupedPOs) {
       const header = po.header;
       const lines = po.lines || [];
@@ -130,19 +129,18 @@ export async function POST(req: Request) {
         "closing",
         "shipping_date",
         "currency",
-        "inspection",
         "estado_inspeccion",
         "pi",
+        "channel",
       ];
 
-      fieldsToCompare.forEach((field) => {
-        if (compareField(existingPO[field], header[field])) {
-          headerChanges.push(`${field}: ${existingPO[field]} → ${header[field]}`);
+      fieldsToCompare.forEach((f) => {
+        if (compareField(existingPO[f], header[f])) {
+          headerChanges.push(`${f}: ${existingPO[f]} → ${header[f]}`);
         }
       });
 
       const lineChanges: any[] = [];
-
       for (const csvLine of lines) {
         const dbLine = existingPO.lineas_pedido.find(
           (l: any) =>
@@ -194,16 +192,8 @@ export async function POST(req: Request) {
       }
     }
 
-    const resumen = {
-      nuevos,
-      modificados,
-      sinCambios,
-      detalle,
-    };
-
-    console.log(
-      `📊 Comparación finalizada: ${nuevos} nuevos, ${modificados} modificados, ${sinCambios} sin cambios`
-    );
+    const resumen = { nuevos, modificados, sinCambios, detalle };
+    console.log(`📊 Comparación finalizada: ${nuevos} nuevos, ${modificados} modificados, ${sinCambios} sin cambios`);
 
     return NextResponse.json(resumen);
   } catch (err: any) {

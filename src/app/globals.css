@@ -67,3 +67,64 @@
     @apply bg-background text-foreground;
   }
 }
+/* === Estilo refinado para tablas de Preview === */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th, td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+thead th {
+  background-color: #f9fafb;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+tbody tr:hover {
+  background-color: #f3f4f6;
+}
+
+tbody td {
+  border-bottom: 1px solid #f1f1f1;
+}
+
+/* Scroll horizontal elegante */
+.overflow-x-auto {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f9fafb;
+}
+
+.overflow-x-auto::-webkit-scrollbar {
+  height: 8px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 10px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: #f9fafb;
+}
+
+/* Alinear correctamente las celdas numéricas */
+td.text-right, th.text-right {
+  text-align: right;
+}
+
+td.text-center, th.text-center {
+  text-align: center;
+}
+
+/* Suavizar sombras y bordes */
+table {
+  border-radius: 12px;
+  overflow: hidden;
+}

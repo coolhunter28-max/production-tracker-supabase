@@ -18,7 +18,6 @@ interface LineData {
   price: number;
   amount?: number;
 
-  // Muestras completas
   cfm?: SampleStatus;
   counter_sample?: SampleStatus;
   fitting?: SampleStatus;
@@ -26,13 +25,9 @@ interface LineData {
   testing_sample?: SampleStatus;
   shipping_sample?: SampleStatus;
   inspection?: SampleStatus;
-
-  // Trials / Lasting
   trial_upper?: SampleStatus;
   trial_lasting?: SampleStatus;
   lasting?: SampleStatus;
-
-  // Finish date
   finish_date?: SampleStatus;
 }
 
@@ -66,22 +61,7 @@ interface PreviewStepProps {
 }
 
 export default function PreviewStep({ data, onBack, onNext }: PreviewStepProps) {
-  // 🧠 Validación y depuración
-  if (!data || !Array.isArray(data)) {
-    console.error("❌ PreviewStep: data no es un array válido:", data);
-    return (
-      <div className="text-center py-12">
-        <p className="text-red-600 mb-4">
-          Error: los datos de previsualización no son válidos.
-        </p>
-        <Button onClick={onBack} variant="outline">
-          ← Volver
-        </Button>
-      </div>
-    );
-  }
-
-  if (data.length === 0) {
+  if (!data || !Array.isArray(data) || data.length === 0) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-600 mb-4">No hay datos para previsualizar.</p>
@@ -92,8 +72,7 @@ export default function PreviewStep({ data, onBack, onNext }: PreviewStepProps) 
     );
   }
 
-  // === Helpers ===
-  const formatUSD_EU = (num: number | undefined) => {
+  const formatMoney = (num?: number) => {
     if (num === undefined || isNaN(num)) return "-";
     return `$${num.toLocaleString("es-ES", {
       minimumFractionDigits: 2,
@@ -113,17 +92,6 @@ export default function PreviewStep({ data, onBack, onNext }: PreviewStepProps) 
     return formatDate(sample.date);
   };
 
-  // ✅ CORRECCIÓN 1:
-  // Si por alguna razón las cabeceras o líneas llegan con campos vacíos, forzamos fallback
-  const safe = (val: any) => (val !== null && val !== undefined && val !== "" ? val : "-");
-
-  // ✅ CORRECCIÓN 2:
-  // Aseguramos que cada línea tenga valores numéricos correctos (qty, price)
-  const parseNum = (val: any) => {
-    const n = parseFloat(val);
-    return isNaN(n) ? 0 : n;
-  };
-
   return (
     <div className="space-y-8">
       <h2 className="text-2xl font-semibold text-center">
@@ -137,10 +105,9 @@ export default function PreviewStep({ data, onBack, onNext }: PreviewStepProps) 
       {data.map((po, idx) => {
         const header = po.header || {};
         const lines = Array.isArray(po.lines) ? po.lines : [];
-
-        const totalQty = lines.reduce((sum, l) => sum + parseNum(l.qty), 0);
+        const totalQty = lines.reduce((sum, l) => sum + (l.qty || 0), 0);
         const totalAmount = lines.reduce(
-          (sum, l) => sum + parseNum(l.qty) * parseNum(l.price),
+          (sum, l) => sum + (l.qty || 0) * (l.price || 0),
           0
         );
 
@@ -153,33 +120,39 @@ export default function PreviewStep({ data, onBack, onNext }: PreviewStepProps) 
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
               <div>
                 <p className="font-semibold text-lg">
-                  PO: {safe(header.po)}
+                  PO: {header.po || "-"}
                 </p>
                 <p className="text-sm text-gray-600">
-                  {safe(header.supplier)} / {safe(header.customer)} /{" "}
-                  {safe(header.factory)}
+                  {header.supplier || "-"} / {header.customer || "-"} /{" "}
+                  {header.factory || "-"}
                 </p>
               </div>
               <div className="text-right text-sm text-gray-700">
                 <p>
                   {totalQty.toLocaleString("es-ES")} unidades —{" "}
-                  {formatUSD_EU(totalAmount)}
+                  {formatMoney(totalAmount)}
                 </p>
               </div>
             </div>
 
-            <p className="text-sm text-gray-500">
-              Season: {safe(header.season)} | Category: {safe(header.category)} | Channel: {safe(header.channel)}
+            <p className="text-sm text-gray-500 leading-relaxed">
+              Season: {header.season || "-"} | Category:{" "}
+              {header.category || "-"} | Channel: {header.channel || "-"}
               <br />
-              PO Date: {formatDate(header.po_date)} | ETD PI: {formatDate(header.etd_pi)} | Booking: {formatDate(header.booking)} | Shipping: {formatDate(header.shipping_date)} | Closing: {formatDate(header.closing)}
+              PO Date: {formatDate(header.po_date)} | ETD PI:{" "}
+              {formatDate(header.etd_pi)} | Booking:{" "}
+              {formatDate(header.booking)} | Shipping:{" "}
+              {formatDate(header.shipping_date)} | Closing:{" "}
+              {formatDate(header.closing)}
               <br />
-              PI: {safe(header.pi)} | Currency: {header.currency || "USD"} | Estado Insp.: {safe(header.estado_inspeccion)}
+              PI: {header.pi || "-"} | Currency: {header.currency || "USD"} |
+              Estado Insp.: {header.estado_inspeccion || "-"}
             </p>
 
             {/* === TABLA === */}
             <div className="overflow-x-auto mt-3">
-              <table className="min-w-full text-sm border-t border-gray-200">
-                <thead className="bg-gray-100 text-gray-700">
+              <table className="min-w-max text-sm border-t border-gray-200">
+                <thead className="bg-gray-50 text-gray-700">
                   <tr>
                     <th className="p-2 text-left">Style</th>
                     <th className="p-2 text-left">Color</th>
@@ -202,23 +175,27 @@ export default function PreviewStep({ data, onBack, onNext }: PreviewStepProps) 
                 </thead>
                 <tbody>
                   {lines.map((line, i) => {
-                    const calcAmount = parseNum(line.qty) * parseNum(line.price);
+                    const calcAmount = (line.qty || 0) * (line.price || 0);
                     return (
                       <tr
                         key={i}
                         className="border-b border-gray-100 hover:bg-gray-50"
                       >
-                        <td className="p-2">{safe(line.style)}</td>
-                        <td className="p-2">{safe(line.color)}</td>
-                        <td className="p-2">{safe(line.reference)}</td>
+                        <td className="p-2 whitespace-nowrap text-ellipsis max-w-[120px]">
+                          {line.style || "-"}
+                        </td>
+                        <td className="p-2 whitespace-nowrap text-ellipsis max-w-[120px]">
+                          {line.color || "-"}
+                        </td>
+                        <td className="p-2">{line.reference || "-"}</td>
                         <td className="p-2 text-right">
-                          {parseNum(line.qty).toLocaleString("es-ES")}
+                          {line.qty?.toLocaleString("es-ES") || "-"}
                         </td>
                         <td className="p-2 text-right">
-                          {formatUSD_EU(parseNum(line.price))}
+                          {formatMoney(line.price)}
                         </td>
                         <td className="p-2 text-right">
-                          {formatUSD_EU(line.amount ?? calcAmount)}
+                          {formatMoney(line.amount ?? calcAmount)}
                         </td>
                         <td className="p-2 text-center">
                           {formatSampleCell(line.cfm)}
