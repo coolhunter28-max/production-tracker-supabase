@@ -9,17 +9,16 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 🧩 Comparador de campos simples
-function compareField(current: any, incoming: any) {
+/** Comparador simple */
+function changed(current: any, incoming: any) {
   if (current == null && (incoming == null || incoming === "")) return false;
-  if (current === incoming) return false;
-  return true;
+  return String(current ?? "").trim() !== String(incoming ?? "").trim();
 }
 
-// 🧩 Comparar muestras
+/** Comparar muestras */
 function compareSamples(dbSamples: any[], csvLine: any) {
-  const result: any[] = [];
-  const sampleTypes = [
+  const diffs: { campo: string; old: any; new: any }[] = [];
+  const tipos = [
     "cfm",
     "pps",
     "testing_sample",
@@ -27,98 +26,73 @@ function compareSamples(dbSamples: any[], csvLine: any) {
     "inspection",
   ];
 
-  for (const type of sampleTypes) {
-    const dbSample = dbSamples.find(
-      (s) => s.tipo_muestra?.toLowerCase() === type.toLowerCase()
+  for (const tipo of tipos) {
+    const db = dbSamples.find(
+      (s) => s.tipo_muestra?.toLowerCase() === tipo.toLowerCase()
     );
-    const csvSample = csvLine[type];
-    const dbDate = dbSample?.fecha_muestra || null;
-    const csvDate = csvSample?.date || null;
-
-    if (compareField(dbDate, csvDate)) {
-      result.push({
-        tipo: type.toUpperCase(),
-        antes: dbDate,
-        despues: csvDate,
+    const csv = csvLine[tipo];
+    const dbDate = db?.fecha_muestra || null;
+    const csvDate = csv?.date || csv?.fecha_muestra || csv || null;
+    if (changed(dbDate, csvDate)) {
+      diffs.push({
+        campo: tipo.toUpperCase(),
+        old: dbDate || "-",
+        new: csvDate || "-",
       });
     }
   }
-
-  return result;
+  return diffs;
 }
 
 export async function POST(req: Request) {
   try {
     const { groupedPOs, fileName } = await req.json();
+    if (!groupedPOs || !Array.isArray(groupedPOs))
+      throw new Error("Datos de pedidos no válidos.");
 
-    if (!groupedPOs || !Array.isArray(groupedPOs)) {
-      throw new Error("Datos de pedidos no válidos o vacíos.");
-    }
+    console.log(`🧾 Comparando archivo ${fileName} (${groupedPOs.length} POs)...`);
 
-    console.log(`🧾 Comparando archivo ${fileName} con ${groupedPOs.length} POs del CSV...`);
-
-    // 1️⃣ Obtener todos los POs + líneas + muestras
+    // === Obtener todos los POs con líneas y muestras ===
     const { data: dbPOs, error: dbError } = await supabase
       .from("pos")
       .select(`
-        id,
-        po,
-        supplier,
-        factory,
-        customer,
-        season,
-        po_date,
-        etd_pi,
-        booking,
-        closing,
-        shipping_date,
-        currency,
-        estado_inspeccion,
-        pi,
-        channel,
+        id, po, supplier, factory, customer, season, po_date,
+        etd_pi, booking, closing, shipping_date, currency,
+        estado_inspeccion, pi, channel,
         lineas_pedido (
-          id,
-          reference,
-          style,
-          color,
-          qty,
-          price,
-          amount,
-          category,
-          trial_upper,
-          trial_lasting,
-          lasting,
-          finish_date,
-          muestras (
-            tipo_muestra,
-            fecha_muestra
-          )
+          id, reference, style, color, qty, price, amount,
+          category, trial_upper, trial_lasting, lasting, finish_date,
+          muestras ( tipo_muestra, fecha_muestra )
         )
       `);
 
-    if (dbError) throw new Error(`Error obteniendo datos de Supabase: ${dbError.message}`);
+    if (dbError) throw new Error(`Error en Supabase: ${dbError.message}`);
 
-    const dbMap = new Map(dbPOs.map((po) => [po.po, po]));
+    const dbMap = new Map(dbPOs.map((p) => [p.po, p]));
 
     let nuevos = 0;
     let modificados = 0;
     let sinCambios = 0;
-    const detalle: any[] = [];
+    const detalles: Record<string, any> = {};
 
-    // 2️⃣ Comparar cada PO del CSV
     for (const po of groupedPOs) {
       const header = po.header;
       const lines = po.lines || [];
+      const dbPO = dbMap.get(header.po);
 
-      const existingPO = dbMap.get(header.po);
-      if (!existingPO) {
+      // === Caso 1: Nuevo PO ===
+      if (!dbPO) {
         nuevos++;
-        detalle.push({ po: header.po, tipo: "nuevo", cambios: ["PO nuevo no existente en DB"] });
+        detalles[header.po] = {
+          status: "nuevo",
+          cambios: [{ campo: "PO nuevo", old: "-", new: "Nuevo registro" }],
+        };
         continue;
       }
 
-      const headerChanges: string[] = [];
-      const fieldsToCompare = [
+      // === Comparar cabecera ===
+      const cambios: { campo: string; old: any; new: any }[] = [];
+      const camposHeader = [
         "supplier",
         "factory",
         "customer",
@@ -133,74 +107,81 @@ export async function POST(req: Request) {
         "pi",
         "channel",
       ];
-
-      fieldsToCompare.forEach((f) => {
-        if (compareField(existingPO[f], header[f])) {
-          headerChanges.push(`${f}: ${existingPO[f]} → ${header[f]}`);
+      for (const f of camposHeader) {
+        if (changed(dbPO[f], header[f])) {
+          cambios.push({
+            campo: f,
+            old: dbPO[f] || "-",
+            new: header[f] || "-",
+          });
         }
-      });
+      }
 
-      const lineChanges: any[] = [];
-      for (const csvLine of lines) {
-        const dbLine = existingPO.lineas_pedido.find(
+      // === Comparar líneas ===
+      for (const line of lines) {
+        const dbLine = dbPO.lineas_pedido.find(
           (l: any) =>
-            l.reference === csvLine.reference &&
-            l.style === csvLine.style &&
-            l.color === csvLine.color
+            l.reference === line.reference &&
+            l.style === line.style &&
+            l.color === line.color
         );
 
         if (!dbLine) {
-          lineChanges.push({
-            linea: `${csvLine.reference} / ${csvLine.style}`,
-            cambios: ["Línea nueva no existente en DB"],
+          cambios.push({
+            campo: `Línea nueva → ${line.reference}/${line.color}`,
+            old: "-",
+            new: "Nueva línea",
           });
           continue;
         }
 
-        const diffs: string[] = [];
-
-        if (compareField(dbLine.qty, csvLine.qty))
-          diffs.push(`qty: ${dbLine.qty} → ${csvLine.qty}`);
-        if (compareField(dbLine.price, csvLine.price))
-          diffs.push(`price: ${dbLine.price} → ${csvLine.price}`);
-        if (compareField(dbLine.amount, csvLine.amount))
-          diffs.push(`amount: ${dbLine.amount} → ${csvLine.amount}`);
-
-        const sampleDiffs = compareSamples(dbLine.muestras || [], csvLine);
-        sampleDiffs.forEach((s) =>
-          diffs.push(`${s.tipo}: ${s.antes || "-"} → ${s.despues || "-"}`)
-        );
-
-        if (diffs.length > 0) {
-          lineChanges.push({
-            linea: `${csvLine.reference} / ${csvLine.color}`,
-            cambios: diffs,
-          });
+        const camposLinea = [
+          "qty",
+          "price",
+          "amount",
+          "trial_upper",
+          "trial_lasting",
+          "lasting",
+          "finish_date",
+        ];
+        for (const f of camposLinea) {
+          if (changed(dbLine[f], line[f])) {
+            cambios.push({
+              campo: `${line.reference} → ${f}`,
+              old: dbLine[f] || "-",
+              new: line[f] || "-",
+            });
+          }
         }
+
+        // === Muestras ===
+        const sampleDiffs = compareSamples(dbLine.muestras || [], line);
+        sampleDiffs.forEach((s) =>
+          cambios.push({
+            campo: `${line.reference} → ${s.campo}`,
+            old: s.old,
+            new: s.new,
+          })
+        );
       }
 
-      if (headerChanges.length > 0 || lineChanges.length > 0) {
+      if (cambios.length > 0) {
         modificados++;
-        detalle.push({
-          po: header.po,
-          tipo: "modificado",
-          headerChanges,
-          lineChanges,
-        });
+        detalles[header.po] = { status: "modificado", cambios };
       } else {
         sinCambios++;
+        detalles[header.po] = { status: "sin_cambios" };
       }
     }
 
-    const resumen = { nuevos, modificados, sinCambios, detalle };
-    console.log(`📊 Comparación finalizada: ${nuevos} nuevos, ${modificados} modificados, ${sinCambios} sin cambios`);
+    const resumen = { nuevos, modificados, sinCambios, detalles };
+    console.log(
+      `📊 Resultado: ${nuevos} nuevos, ${modificados} modificados, ${sinCambios} sin cambios`
+    );
 
     return NextResponse.json(resumen);
   } catch (err: any) {
     console.error("❌ Error en /api/compare-csv:", err.message);
-    return NextResponse.json(
-      { error: err.message || "Error desconocido" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

@@ -2,52 +2,57 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
 type SampleStatus = {
-  needed: boolean;
+  needed?: boolean;
   status?: string | null;
   round?: string | null;
   date?: string | null;
+  notes?: string | null;
 };
 
 type LineData = {
   reference: string;
   style: string;
   color: string;
+  size_run?: string | null;
+  category?: string | null;
+  channel?: string | null;
   qty: number;
   price: number;
   amount?: number;
+  trial_upper?: string | null;
+  trial_lasting?: string | null;
+  lasting?: string | null;
+  finish_date?: string | null;
 
-  // muestras (solo estas van en `muestras`)
-  cfm?: SampleStatus;
-  counter_sample?: SampleStatus;
-  fitting?: SampleStatus;
-  pps?: SampleStatus;
-  testing_sample?: SampleStatus;
-  shipping_sample?: SampleStatus;
-  inspection?: SampleStatus;
-
-  // Fechas de proceso (no muestras)
-  trial_upper?: SampleStatus;
-  trial_lasting?: SampleStatus;
-  lasting?: SampleStatus;
-  finish_date?: SampleStatus;
+  cfm?: SampleStatus | string | null;
+  counter_sample?: SampleStatus | string | null;
+  fitting?: SampleStatus | string | null;
+  pps?: SampleStatus | string | null;
+  testing_sample?: SampleStatus | string | null;
+  shipping_sample?: SampleStatus | string | null;
+  inspection?: SampleStatus | string | null;
 };
 
 type POHeader = {
-  po?: string;
-  supplier?: string;
-  factory?: string;
-  customer?: string;
-  season?: string;
-  channel?: string;
+  po: string;
+  supplier?: string | null;
+  factory?: string | null;
+  customer?: string | null;
+  season?: string | null;
   po_date?: string | null;
   etd_pi?: string | null;
   booking?: string | null;
   closing?: string | null;
   shipping_date?: string | null;
-  currency?: string;
-  pi?: string;
-  estado_inspeccion?: string;
+  currency?: string | null;
+  pi?: string | null;
+  estado_inspeccion?: string | null;
 };
 
 type POGroup = {
@@ -55,64 +60,29 @@ type POGroup = {
   lines: LineData[];
 };
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-const SAMPLE_TYPES: Array<keyof LineData> = [
-  "cfm",
-  "counter_sample",
-  "fitting",
-  "pps",
-  "testing_sample",
-  "shipping_sample",
-  "inspection",
-];
-
 export async function POST(req: Request) {
   try {
-    const { groupedPOs, fileName } = await req.json();
+    const { groupedPOs, fileName, compareResult } = await req.json();
 
-    console.log("🚀 Iniciando importación CSV");
-    console.log("🧾 Archivo:", fileName);
-    console.log("📦 Total POs:", groupedPOs?.length || 0);
+    console.log("🚀 Iniciando importación desde CSV:", fileName);
+    let ok = 0;
+    let err = 0;
 
-    if (!Array.isArray(groupedPOs) || groupedPOs.length === 0) {
-      return NextResponse.json({ error: "Archivo vacío o mal formateado." }, { status: 400 });
+    // 📊 Mostrar resumen de comparación si existe
+    if (compareResult?.resumen) {
+      console.log("📊 Resumen previo:");
+      console.table({
+        Nuevos: compareResult.resumen.nuevos || 0,
+        Modificados: compareResult.resumen.modificados || 0,
+        SinCambios: compareResult.resumen.sinCambios || 0,
+      });
     }
 
-    let okPOs = 0;
-    let errPOs = 0;
-
     for (const poGroup of groupedPOs as POGroup[]) {
-      const header = poGroup.header;
-      const lines = Array.isArray(poGroup.lines) ? poGroup.lines : [];
+      const { header, lines } = poGroup;
+      const estadoPO = compareResult?.detalles?.[header.po]?.status || "nuevo";
 
-      if (!header?.po) {
-        console.warn("⚠️ PO sin número, ignorado.");
-        errPOs++;
-        continue;
-      }
-
-      // === 1️⃣ UPSERT PO ===
-      const poData = {
-        po: header.po,
-        supplier: header.supplier ?? null,
-        factory: header.factory ?? null,
-        customer: header.customer ?? null,
-        season: header.season ?? null,
-        po_date: header.po_date ?? null,
-        etd_pi: header.etd_pi ?? null,
-        booking: header.booking ?? null,
-        closing: header.closing ?? null,
-        shipping_date: header.shipping_date ?? null,
-        currency: header.currency ?? "USD",
-        pi: header.pi ?? null,
-        estado_inspeccion: header.estado_inspeccion ?? "-",
-        channel: header.channel ?? null,
-      };
-
+      // 1️⃣ Buscar o crear el PO
       const { data: existing, error: findErr } = await supabase
         .from("pos")
         .select("id")
@@ -120,122 +90,194 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (findErr) {
-        console.error("❌ Error buscando PO:", findErr);
-        errPOs++;
+        console.error("❌ Buscar PO:", findErr);
+        err++;
         continue;
       }
 
-      let poId: string | null = null;
+      let poId: string;
 
       if (existing?.id) {
+        const cleanHeader = Object.fromEntries(
+          Object.entries(header).filter(
+            ([k, v]) =>
+              v !== null &&
+              v !== "" &&
+              !["category", "channel", "size_run"].includes(k)
+          )
+        );
+
         const { error: updErr } = await supabase
           .from("pos")
-          .update(poData)
+          .update(cleanHeader)
           .eq("id", existing.id);
+
         if (updErr) {
-          console.error("❌ Error actualizando PO:", updErr);
-          errPOs++;
+          console.error("❌ Actualizar PO:", updErr);
+          err++;
           continue;
         }
+
         poId = existing.id;
       } else {
+        const insertHeader = Object.fromEntries(
+          Object.entries(header).filter(
+            ([k, v]) =>
+              v !== null &&
+              v !== "" &&
+              !["category", "channel", "size_run"].includes(k)
+          )
+        );
+
         const { data: inserted, error: insErr } = await supabase
           .from("pos")
-          .insert(poData)
+          .insert(insertHeader)
           .select("id")
           .maybeSingle();
+
         if (insErr || !inserted) {
-          console.error("❌ Error insertando PO:", insErr);
-          errPOs++;
+          console.error("❌ Insertar PO:", insErr);
+          err++;
           continue;
         }
+
         poId = inserted.id;
       }
 
-      if (!poId) continue;
+      // 2️⃣ Borrar líneas y muestras antiguas si es modificado
+      if (estadoPO === "modificado") {
+        const { data: oldLines } = await supabase
+          .from("lineas_pedido")
+          .select("id")
+          .eq("po_id", poId);
 
-      // === 2️⃣ Borrar e insertar líneas ===
-      await supabase.from("lineas_pedido").delete().eq("po_id", poId);
+        if (oldLines?.length) {
+          const lineIds = oldLines.map((l) => l.id);
+          await supabase.from("muestras").delete().in("linea_pedido_id", lineIds);
+          await supabase.from("lineas_pedido").delete().in("id", lineIds);
+        }
+      }
 
+      // 3️⃣ Insertar nuevas líneas
       const { data: insertedLines, error: lineErr } = await supabase
         .from("lineas_pedido")
         .insert(
           lines.map((l) => ({
             po_id: poId,
-            reference: l.reference ?? null,
-            style: l.style ?? null,
-            color: l.color ?? null,
-            qty: l.qty ?? 0,
-            price: l.price ?? 0,
-            amount: (l.amount ?? (l.qty || 0) * (l.price || 0)) ?? 0,
+            reference: l.reference,
+            style: l.style,
+            color: l.color,
+            size_run: l.size_run,
+            category: l.category,
+            channel: l.channel,
+            qty: l.qty,
+            price: l.price,
+            amount: l.amount,
+            trial_upper: l.trial_upper,
+            trial_lasting: l.trial_lasting,
+            lasting: l.lasting,
+            finish_date: l.finish_date,
           }))
         )
-        .select("id");
+        .select("id, reference, style, color");
 
-      if (lineErr) {
-        console.error("❌ Error insertando líneas:", lineErr);
-        errPOs++;
+      if (lineErr || !insertedLines) {
+        console.error("⚠️ Error insertando líneas:", lineErr);
+        err++;
         continue;
       }
 
-      const lineIds = insertedLines?.map((l) => l.id) || [];
+      // 4️⃣ Insertar muestras (sin po_id)
+      const samplesToInsert: any[] = [];
+      const sampleTypes = [
+        "cfm",
+        "counter_sample",
+        "fitting",
+        "pps",
+        "testing_sample",
+        "shipping_sample",
+        "inspection",
+      ];
 
-      // === 3️⃣ Insertar muestras ===
-      for (let i = 0; i < lines.length; i++) {
-        const linea = lines[i];
-        const lineaId = lineIds[i];
-        if (!lineaId) continue;
+      for (const insertedLine of insertedLines) {
+        const line = lines.find(
+          (l) =>
+            l.reference === insertedLine.reference &&
+            l.style === insertedLine.style &&
+            l.color === insertedLine.color
+        );
+        if (!line) continue;
 
-        const samplesToInsert: {
-          linea_pedido_id: string;
-          tipo_muestra: string;
-          round: string;
-          status: string | null;
-          fecha_teorica: string | null;
-          fecha_muestra: string | null; // ✅ nombre correcto
-        }[] = [];
-
-        for (const key of SAMPLE_TYPES) {
-          const s = linea[key] as SampleStatus | undefined;
+        for (const type of sampleTypes) {
+          const s = (line as any)[type];
           if (!s) continue;
 
-          const round = String(s.round ?? "N/N");
-          const fechaMuestra = s.date ?? null;
-          const status =
-            s.status ??
-            (s.needed === false
-              ? "No need"
-              : fechaMuestra
-              ? "Confirmed"
-              : "In progress");
+          let fecha = null;
+          let estado = "pendiente";
+          let round = "N/A";
+          let notas = null;
 
-          samplesToInsert.push({
-            linea_pedido_id: lineaId,
-            tipo_muestra: key.toUpperCase(),
-            round,
-            status,
-            fecha_teorica: null,
-            fecha_muestra: fechaMuestra,
-          });
-        }
+          if (typeof s === "string") {
+            fecha = s;
+          } else {
+            fecha = s.date || null;
+            estado = s.status || "pendiente";
+            round = s.round || "N/A";
+            notas = s.notes || null;
+          }
 
-        if (samplesToInsert.length > 0) {
-          const { error: smpErr } = await supabase.from("muestras").insert(samplesToInsert);
-          if (smpErr) console.error("❌ Error insertando muestras:", smpErr);
+          if (fecha) {
+            samplesToInsert.push({
+              linea_pedido_id: insertedLine.id,
+              tipo_muestra: type.toUpperCase(),
+              fecha_muestra: fecha,
+              estado_muestra: estado,
+              round,
+              notas,
+            });
+          }
         }
       }
 
-      okPOs++;
-      console.log(`✅ PO ${header.po} procesado correctamente`);
+      if (samplesToInsert.length > 0) {
+        const { error: insErr } = await supabase
+          .from("muestras")
+          .insert(samplesToInsert);
+        if (insErr) console.error("⚠️ Error insertando muestras:", insErr);
+      }
+
+      // 5️⃣ Actualizar total de muestras
+      const { count } = await supabase
+        .from("muestras")
+        .select("*", { count: "exact", head: true })
+        .in(
+          "linea_pedido_id",
+          (await supabase
+            .from("lineas_pedido")
+            .select("id")
+            .eq("po_id", poId)).data?.map((l) => l.id) || []
+        );
+
+      await supabase
+        .from("pos")
+        .update({ total_muestras: count || 0 })
+        .eq("id", poId);
+
+      ok++;
     }
 
-    return NextResponse.json({
-      resumen: `Importación finalizada — ${okPOs} OK, ${errPOs} con error`,
-      okPOs,
-      errPOs,
+    // 6️⃣ Registrar importación
+    await supabase.from("importaciones").insert({
+      nombre_archivo: fileName,
+      cantidad_registros: groupedPOs.length,
+      estado: err > 0 ? "parcial" : "completado",
+      datos: { ok, err },
     });
-  } catch (err: any) {
-    console.error("❌ Error general:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+
+    console.log(`✅ Importación completada: ${ok} OK, ${err} errores.`);
+    return NextResponse.json({ resumen: { ok, err } });
+  } catch (error: any) {
+    console.error("❌ Error general en importación:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
