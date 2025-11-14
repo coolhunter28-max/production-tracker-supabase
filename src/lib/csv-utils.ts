@@ -1,4 +1,3 @@
-// src/lib/csv-utils.ts
 import Papa from "papaparse";
 
 /** 1) Parseo CSV base (detecta delimitador coma o punto y coma) */
@@ -35,17 +34,19 @@ function parseMoney(v: any): number {
     const intPart = s.slice(0, lastSep).replace(/[.,]/g, "");
     const decPart = s.slice(lastSep + 1);
     return Number(`${intPart}.${decPart}`) || 0;
-    }
+  }
   if (hasComma) {
     const parts = s.split(",");
     const last = parts[parts.length - 1];
-    if (last.length === 2) return Number(`${parts.slice(0, -1).join("")}.${last}`) || 0;
+    if (last.length === 2)
+      return Number(`${parts.slice(0, -1).join("")}.${last}`) || 0;
     return Number(parts.join("")) || 0;
   }
   if (hasDot) {
     const parts = s.split(".");
     const last = parts[parts.length - 1];
-    if (last.length === 2) return Number(`${parts.slice(0, -1).join("")}.${last}`) || 0;
+    if (last.length === 2)
+      return Number(`${parts.slice(0, -1).join("")}.${last}`) || 0;
     return Number(parts.join("")) || 0;
   }
   return Number(s) || 0;
@@ -61,27 +62,49 @@ function parseQty(v: any): number {
 
 /* ============================
    FECHAS INTELIGENTES
-   - Soporta:
-     • yyyy-mm-dd / dd-mm-yyyy / dd/mm/yyyy
-     • dd-mmm (sin año) p.ej. "19-Dec", "27-feb"
-     • dd/mm (sin año) o dd-mm (sin año)
-   - Añade año si falta usando fallback del propio PO:
-     ETD PI → Shipping → Booking → Closing → PO Date
    ============================ */
 
 const MONTHS: Record<string, number> = {
-  jan: 1, january: 1, ene: 1, enero: 1,
-  feb: 2, february: 2, febrero: 2,
-  mar: 3, march: 3, marzo: 3,
-  apr: 4, april: 4, abr: 4, abril: 4,
-  may: 5, mayo: 5,
-  jun: 6, june: 6, junio: 6,
-  jul: 7, july: 7, julio: 7,
-  aug: 8, august: 8, ago: 8, agosto: 8,
-  sep: 9, sept: 9, september: 9, septiembre: 9,
-  oct: 10, october: 10, octubre: 10,
-  nov: 11, november: 11, noviembre: 11,
-  dec: 12, december: 12, dic: 12, diciembre: 12,
+  jan: 1,
+  january: 1,
+  ene: 1,
+  enero: 1,
+  feb: 2,
+  february: 2,
+  febrero: 2,
+  mar: 3,
+  march: 3,
+  marzo: 3,
+  apr: 4,
+  april: 4,
+  abr: 4,
+  abril: 4,
+  may: 5,
+  mayo: 5,
+  jun: 6,
+  june: 6,
+  junio: 6,
+  jul: 7,
+  july: 7,
+  julio: 7,
+  aug: 8,
+  august: 8,
+  ago: 8,
+  agosto: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  septiembre: 9,
+  oct: 10,
+  october: 10,
+  octubre: 10,
+  nov: 11,
+  november: 11,
+  noviembre: 11,
+  dec: 12,
+  december: 12,
+  dic: 12,
+  diciembre: 12,
 };
 
 function pad2(n: number | string) {
@@ -102,7 +125,7 @@ function parseDateSmart(value: any, fallbackYear?: number | null): string | null
   m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (m) return `${m[3]}-${pad2(m[2])}-${pad2(m[1])}`;
 
-  // dd-mmm(-yy)?  (ES/EN, 3+ letras)
+  // dd-mmm(-yy)?
   m = v.match(/^(\d{1,2})[\/\-]\s*([A-Za-z]{3,})\s*(?:[\/\-](\d{2,4}))?$/);
   if (m) {
     const dd = Number(m[1]);
@@ -128,7 +151,6 @@ function parseDateSmart(value: any, fallbackYear?: number | null): string | null
     return `${year}-${pad2(mm)}-${pad2(dd)}`;
   }
 
-  // No reconocido -> null (para no inventar 2001)
   return null;
 }
 
@@ -149,7 +171,7 @@ const MAP: FieldAliases = {
   category: ["CATEGORY"],
   channel: ["CHANNEL"],
   size_run: ["SIZE RUN", "SIZE", "SIZERUN"],
-  pi: ["PI", "P.I.", "PI BSG"],
+  pi: ["PI"],
 
   po_date: ["PO DATE"],
   etd_pi: ["ETD PI"],
@@ -164,16 +186,26 @@ const MAP: FieldAliases = {
   price: ["PRICE", "PRICE USD", "UNIT PRICE"],
   amount: ["AMOUNT", "TOTAL AMOUNT", "IMPORTE"],
 
-  // Muestras (fechas)
+  // ===== Muestras: ROUND + FECHA =====
+  cfm_round: ["CFMs Round", "CFM Round"],
   cfm_date: ["CFMs", "CFM"],
-  counter_date: ["Counter Sample", "Counter"],
-  fitting_date: ["Fitting"],
-  pps_date: ["PPS"],
-  testing_date: ["Testing Samples", "Testing"],
-  shipping_sample_date: ["Shipping Samples", "Shipping Sample"],
-  inspection_date: ["Inspection", "Final Inspection"],
 
-  // Procesos
+  counter_round: ["Counter Sample Round"],
+  counter_date: ["Counter Sample"],
+
+  fitting_round: ["Fitting Round"],
+  fitting_date: ["Fitting"],
+
+  pps_round: ["PPS Round"],
+  pps_date: ["PPS"],
+
+  testing_round: ["Testing Samples Round"],
+  testing_date: ["Testing Samples", "Testing"],
+
+  shipping_round: ["Shipping Samples Round"],
+  shipping_sample_date: ["Shipping Samples", "Shipping Sample"],
+
+  // Procesos producción
   trial_upper_date: ["Trial Upper"],
   trial_lasting_date: ["Trial Lasting"],
   lasting_date: ["Lasting"],
@@ -215,14 +247,23 @@ export interface POLine {
   price: number;
   amount?: number;
 
+  // Fechas de muestra
   cfm?: string | null;
   counter_sample?: string | null;
   fitting?: string | null;
   pps?: string | null;
   testing_sample?: string | null;
   shipping_sample?: string | null;
-  inspection?: string | null;
 
+  // Round original del Excel (Round 1, N/N, etc.)
+  cfm_round?: string | null;
+  counter_round?: string | null;
+  fitting_round?: string | null;
+  pps_round?: string | null;
+  testing_round?: string | null;
+  shipping_round?: string | null;
+
+  // Procesos
   trial_upper?: string | null;
   trial_lasting?: string | null;
   lasting?: string | null;
@@ -253,7 +294,7 @@ export interface POGroup {
   lines: POLine[];
 }
 
-/** Agrupar por PO (con fechas inteligentes) */
+/** Agrupar por PO (con fechas inteligentes + info de muestras) */
 export function groupRowsByPO(rows: any[]): POGroup[] {
   const byPO = new Map<string, POGroup>();
 
@@ -302,18 +343,34 @@ export function groupRowsByPO(rows: any[]): POGroup[] {
       price,
       amount,
 
-      // Muestras (admiten formatos sin año)
+      // Muestras: fecha + round original
       cfm: parseDateSmart(get(row, MAP.cfm_date), fallbackYear),
-      counter_sample: parseDateSmart(get(row, MAP.counter_date), fallbackYear),
-      fitting: parseDateSmart(get(row, MAP.fitting_date), fallbackYear),
-      pps: parseDateSmart(get(row, MAP.pps_date), fallbackYear),
-      testing_sample: parseDateSmart(get(row, MAP.testing_date), fallbackYear),
-      shipping_sample: parseDateSmart(get(row, MAP.shipping_sample_date), fallbackYear),
-      inspection: parseDateSmart(get(row, MAP.inspection_date), fallbackYear),
+      cfm_round: cleanStr(get(row, MAP.cfm_round) ?? "") || null,
 
-      // Procesos (admiten formatos sin año)
+      counter_sample: parseDateSmart(get(row, MAP.counter_date), fallbackYear),
+      counter_round: cleanStr(get(row, MAP.counter_round) ?? "") || null,
+
+      fitting: parseDateSmart(get(row, MAP.fitting_date), fallbackYear),
+      fitting_round: cleanStr(get(row, MAP.fitting_round) ?? "") || null,
+
+      pps: parseDateSmart(get(row, MAP.pps_date), fallbackYear),
+      pps_round: cleanStr(get(row, MAP.pps_round) ?? "") || null,
+
+      testing_sample: parseDateSmart(get(row, MAP.testing_date), fallbackYear),
+      testing_round: cleanStr(get(row, MAP.testing_round) ?? "") || null,
+
+      shipping_sample: parseDateSmart(
+        get(row, MAP.shipping_sample_date),
+        fallbackYear
+      ),
+      shipping_round: cleanStr(get(row, MAP.shipping_round) ?? "") || null,
+
+      // Procesos producción
       trial_upper: parseDateSmart(get(row, MAP.trial_upper_date), fallbackYear),
-      trial_lasting: parseDateSmart(get(row, MAP.trial_lasting_date), fallbackYear),
+      trial_lasting: parseDateSmart(
+        get(row, MAP.trial_lasting_date),
+        fallbackYear
+      ),
       lasting: parseDateSmart(get(row, MAP.lasting_date), fallbackYear),
       finish_date: parseDateSmart(get(row, MAP.finish_date), fallbackYear),
     };
@@ -324,8 +381,10 @@ export function groupRowsByPO(rows: any[]): POGroup[] {
   return Array.from(byPO.values());
 }
 
-/* ==== Compat alias para otras partes del código ==== */
-export function parseMoneyES(v: any): number | null { return parseMoney(v) || null; }
+/* ==== Compat helpers ==== */
+export function parseMoneyES(v: any): number | null {
+  return parseMoney(v) || null;
+}
 export function parseIntES(v: any): number | null {
   if (v == null || v === "") return null;
   const s = String(v).replace(/[^\d-]/g, "");

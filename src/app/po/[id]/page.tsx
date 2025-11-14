@@ -5,14 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 
 export default function VerPO() {
   const params = useParams<{ id: string }>();
-  const id = params?.id || ""; // ✅ evitamos el posible null
+  const id = params?.id || "";
   const router = useRouter();
   const [po, setPO] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchPO = async () => {
-      if (!id) return; // ✅ no ejecutar si el id aún no está disponible
+      if (!id) return;
       try {
         const res = await fetch(`/api/po/${id}`);
         const data = await res.json();
@@ -54,7 +54,7 @@ export default function VerPO() {
           📄 PO {po.po || "(sin número)"}
         </h1>
         <button
-          onClick={() => router.push(`/po/${id}/editar`)} // ✅ usa id en vez de params.id
+          onClick={() => router.push(`/po/${id}/editar`)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow text-sm font-semibold"
         >
           ✏️ Editar PO
@@ -70,7 +70,8 @@ export default function VerPO() {
           ["Shipping", po.shipping_date],
           ["Moneda", po.currency],
           ["Customer", po.customer],
-          ["P.I", po.proforma_invoice],
+          // 👇 AHORA SE USA po.pi
+          ["P.I", po.pi],
           ["Booking", po.booking],
           ["Inspection", po.inspection],
           ["Supplier", po.supplier],
@@ -85,7 +86,7 @@ export default function VerPO() {
         ))}
       </div>
 
-      {/* LÍNEAS DE PEDIDO */}
+      {/* LÍNEAS */}
       <div className="bg-white rounded-xl shadow p-5 border border-gray-200">
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
           📦 Líneas de pedido
@@ -125,7 +126,9 @@ export default function VerPO() {
                   <td className="px-2 py-1">{l.size_run}</td>
                   <td className="px-2 py-1">{l.category}</td>
                   <td className="px-2 py-1">{l.channel}</td>
-                  <td className="px-2 py-1 text-center font-medium">{formatNumber(l.qty)}</td>
+                  <td className="px-2 py-1 text-center font-medium">
+                    {formatNumber(l.qty)}
+                  </td>
                   <td className="px-2 py-1 text-center">{formatMoney(l.price)}</td>
                   <td className="px-2 py-1 text-center font-semibold text-gray-700">
                     {formatMoney((l.qty || 0) * (l.price || 0))}
@@ -141,7 +144,7 @@ export default function VerPO() {
         </div>
       </div>
 
-      {/* MUESTRAS agrupadas */}
+      {/* MUESTRAS */}
       <div className="bg-white rounded-xl shadow p-5 border border-gray-200">
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">🧪 Muestras</h2>
 
@@ -172,18 +175,12 @@ export default function VerPO() {
                           <tr key={mi} className="border-t hover:bg-gray-100">
                             <td className="px-2 py-1">{m.tipo_muestra}</td>
                             <td className="px-2 py-1 text-center">{m.fecha_muestra}</td>
-                            <td
-                              className={`px-2 py-1 text-center font-medium ${
-                                m.estado_muestra === "Aprobado"
-                                  ? "text-green-600"
-                                  : m.estado_muestra === "Rechazado"
-                                  ? "text-red-600"
-                                  : "text-gray-700"
-                              }`}
-                            >
-                              {m.estado_muestra}
+                            <td className="px-2 py-1 text-center">
+                              {m.estado_muestra || "pendiente"}
                             </td>
-                            <td className="px-2 py-1 text-center">{m.round || "-"}</td>
+                            <td className="px-2 py-1 text-center">
+                              {m.round || "N/A"}
+                            </td>
                             <td className="px-2 py-1">{m.notas || "-"}</td>
                           </tr>
                         ))}

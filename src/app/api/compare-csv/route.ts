@@ -1,4 +1,3 @@
-// src/app/api/compare-csv/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -9,30 +8,65 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-/** Comparador simple */
+/* ============================================================
+   1) Helpers
+   ============================================================ */
+
 function changed(current: any, incoming: any) {
   if (current == null && (incoming == null || incoming === "")) return false;
   return String(current ?? "").trim() !== String(incoming ?? "").trim();
 }
 
-/** Comparar muestras */
+function extractCSVDate(csvField: any): string | null {
+  if (!csvField) return null;
+  if (typeof csvField === "string") return csvField;
+  if (typeof csvField === "object" && csvField.date) return csvField.date;
+  return null;
+}
+
+// Mapea tipo interno ("cfm", "pps", etc.) a nombres posibles en BD
+function matchesSampleType(dbTipo: string | null | undefined, key: string): boolean {
+  if (!dbTipo) return false;
+  const t = dbTipo.toLowerCase();
+
+  switch (key) {
+    case "cfm":
+      return t.includes("cfm");
+    case "counter_sample":
+      return t.includes("counter");
+    case "fitting":
+      return t.includes("fitting");
+    case "pps":
+      return t.includes("pps");
+    case "testing_sample":
+      return t.includes("testing");
+    case "shipping_sample":
+      return t.includes("shipping");
+    default:
+      return false;
+  }
+}
+
+/** Compara muestras de una línea */
 function compareSamples(dbSamples: any[], csvLine: any) {
   const diffs: { campo: string; old: any; new: any }[] = [];
   const tipos = [
     "cfm",
+    "counter_sample",
+    "fitting",
     "pps",
     "testing_sample",
     "shipping_sample",
-    "inspection",
   ];
 
   for (const tipo of tipos) {
-    const db = dbSamples.find(
-      (s) => s.tipo_muestra?.toLowerCase() === tipo.toLowerCase()
+    const db = dbSamples.find((s) =>
+      matchesSampleType(s.tipo_muestra, tipo)
     );
-    const csv = csvLine[tipo];
+
     const dbDate = db?.fecha_muestra || null;
-    const csvDate = csv?.date || csv?.fecha_muestra || csv || null;
+    const csvDate = extractCSVDate(csvLine[tipo]);
+
     if (changed(dbDate, csvDate)) {
       diffs.push({
         campo: tipo.toUpperCase(),
@@ -41,8 +75,13 @@ function compareSamples(dbSamples: any[], csvLine: any) {
       });
     }
   }
+
   return diffs;
 }
+
+/* ============================================================
+   2) Handler principal
+   ============================================================ */
 
 export async function POST(req: Request) {
   try {
@@ -52,45 +91,43 @@ export async function POST(req: Request) {
 
     console.log(`🧾 Comparando archivo ${fileName} (${groupedPOs.length} POs)...`);
 
-    // === Obtener todos los POs con líneas y muestras ===
     const { data: dbPOs, error: dbError } = await supabase
       .from("pos")
       .select(`
-        id, po, supplier, factory, customer, season, po_date,
-        etd_pi, booking, closing, shipping_date, currency,
-        estado_inspeccion, pi, channel,
+        id, po, supplier, factory, customer, season,
+        po_date, etd_pi, booking, closing, shipping_date,
+        currency, estado_inspeccion, pi,
         lineas_pedido (
           id, reference, style, color, qty, price, amount,
-          category, trial_upper, trial_lasting, lasting, finish_date,
+          category, channel, size_run,
+          trial_upper, trial_lasting, lasting, finish_date,
           muestras ( tipo_muestra, fecha_muestra )
         )
       `);
 
     if (dbError) throw new Error(`Error en Supabase: ${dbError.message}`);
 
-    const dbMap = new Map(dbPOs.map((p) => [p.po, p]));
+    const dbMap = new Map(dbPOs.map((p: any) => [p.po, p]));
 
     let nuevos = 0;
     let modificados = 0;
     let sinCambios = 0;
     const detalles: Record<string, any> = {};
 
-    for (const po of groupedPOs) {
-      const header = po.header;
-      const lines = po.lines || [];
+    for (const poGroup of groupedPOs) {
+      const header = poGroup.header;
+      const lines = poGroup.lines || [];
       const dbPO = dbMap.get(header.po);
 
-      // === Caso 1: Nuevo PO ===
       if (!dbPO) {
         nuevos++;
         detalles[header.po] = {
           status: "nuevo",
-          cambios: [{ campo: "PO nuevo", old: "-", new: "Nuevo registro" }],
+          cambios: [{ campo: "PO", old: "-", new: "Nuevo registro" }],
         };
         continue;
       }
 
-      // === Comparar cabecera ===
       const cambios: { campo: string; old: any; new: any }[] = [];
       const camposHeader = [
         "supplier",
@@ -105,19 +142,18 @@ export async function POST(req: Request) {
         "currency",
         "estado_inspeccion",
         "pi",
-        "channel",
       ];
-      for (const f of camposHeader) {
-        if (changed(dbPO[f], header[f])) {
+
+      for (const campo of camposHeader) {
+        if (changed(dbPO[campo], header[campo])) {
           cambios.push({
-            campo: f,
-            old: dbPO[f] || "-",
-            new: header[f] || "-",
+            campo,
+            old: dbPO[campo] || "-",
+            new: header[campo] || "-",
           });
         }
       }
 
-      // === Comparar líneas ===
       for (const line of lines) {
         const dbLine = dbPO.lineas_pedido.find(
           (l: any) =>
@@ -128,7 +164,7 @@ export async function POST(req: Request) {
 
         if (!dbLine) {
           cambios.push({
-            campo: `Línea nueva → ${line.reference}/${line.color}`,
+            campo: `Línea nueva: ${line.reference}/${line.color}`,
             old: "-",
             new: "Nueva línea",
           });
@@ -144,24 +180,24 @@ export async function POST(req: Request) {
           "lasting",
           "finish_date",
         ];
-        for (const f of camposLinea) {
-          if (changed(dbLine[f], line[f])) {
+
+        for (const campo of camposLinea) {
+          if (changed(dbLine[campo], line[campo])) {
             cambios.push({
-              campo: `${line.reference} → ${f}`,
-              old: dbLine[f] || "-",
-              new: line[f] || "-",
+              campo: `${line.reference} → ${campo}`,
+              old: dbLine[campo] || "-",
+              new: line[campo] || "-",
             });
           }
         }
 
-        // === Muestras ===
         const sampleDiffs = compareSamples(dbLine.muestras || [], line);
-        sampleDiffs.forEach((s) =>
-          cambios.push({
+        cambios.push(
+          ...sampleDiffs.map((s) => ({
             campo: `${line.reference} → ${s.campo}`,
             old: s.old,
             new: s.new,
-          })
+          }))
         );
       }
 
@@ -174,9 +210,15 @@ export async function POST(req: Request) {
       }
     }
 
-    const resumen = { nuevos, modificados, sinCambios, detalles };
+    const resumen = {
+      nuevos,
+      modificados,
+      sinCambios,
+      detalles,
+    };
+
     console.log(
-      `📊 Resultado: ${nuevos} nuevos, ${modificados} modificados, ${sinCambios} sin cambios`
+      `📊 Resultado comparación: ${nuevos} nuevos, ${modificados} modificados, ${sinCambios} sin cambios`
     );
 
     return NextResponse.json(resumen);

@@ -4,16 +4,23 @@ import { supabase } from "@/lib/supabase";
 
 /**
  * POST /api/generar-alertas
- * Genera alertas de “muestra” para todas las muestras que:
- *  - NO están Confirmed
- *  - Y NO están marcadas como No Need
- * Usa fecha real si existe (es_estimada=false); si no, usa fecha_teorica (es_estimada=true).
- * Evita duplicados con upsert por muestra_id (UNIQUE).
+ *
+ * Genera alertas para:
+ *  1️⃣ Muestras (igual que la versión estable anterior, pero solo si faltan ≤7 días)
+ *  2️⃣ Producción real (Trials, Lasting, Finish) – margen 7 días
+ *  3️⃣ Cabecera PO (Booking, Closing, Shipping, ETD PI) – margen 7 o 14 días
  */
 export async function POST() {
   try {
-    // 1) Leemos muestras con su contexto (línea y PO) para componer el mensaje
-    const { data: muestras, error } = await supabase
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const alertasInsert: any[] = [];
+
+    // ===============================================================
+    // 1️⃣ MUESTRAS
+    // ===============================================================
+    const { data: muestras, error: errMuestras } = await supabase
       .from("muestras")
       .select(`
         id,
@@ -37,116 +44,192 @@ export async function POST() {
         )
       `);
 
-    if (error) {
-      console.error("❌ Error leyendo muestras:", error);
-      return NextResponse.json({ success: false, error: "Error leyendo muestras" }, { status: 500 });
-    }
+    if (errMuestras) throw errMuestras;
 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    // 2) Preparamos alertas SOLO para estados relevantes
-    const toInsert: any[] = [];
-
-    (muestras || []).forEach((m: any) => {
+    for (const m of muestras || []) {
       const est = String(m?.estado_muestra || "").trim();
 
-      // 🔒 Ignorar confirmadas y “No Need”
-      if (est === "Confirmed" || est === "No Need") return;
+      // ignorar confirmadas o No Need
+      if (["Confirmed", "No Need"].includes(est)) continue;
 
-      // Determinar fecha / estimación
       let fechaISO: string | null = null;
       let es_estimada = false;
 
       if (m?.fecha_muestra) {
-        // Fecha real existente → no estimada
         try {
           const d = new Date(m.fecha_muestra);
           fechaISO = d.toISOString().slice(0, 10);
-          es_estimada = false;
-        } catch {
-          fechaISO = null;
-        }
+        } catch {}
       }
 
       if (!fechaISO && m?.fecha_teorica) {
-        // Si no hay real, usar teórica (estimada)
         try {
           const d = new Date(m.fecha_teorica);
           fechaISO = d.toISOString().slice(0, 10);
           es_estimada = true;
-        } catch {
-          fechaISO = null;
-        }
+        } catch {}
       }
 
-      // Si no tenemos ninguna fecha, no generamos alerta (no tendríamos qué mostrar)
-      if (!fechaISO) return;
+      if (!fechaISO) continue;
 
-      // Severidad según retraso relativo a hoy
-      const d = new Date(fechaISO + "T00:00:00");
-      const diffDays = Math.round((d.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
-      const severidad =
-        diffDays < -7 ? "alta" : diffDays < 0 ? "media" : "baja";
+      const fecha = new Date(fechaISO + "T00:00:00");
+      const diff = Math.round((fecha.getTime() - hoy.getTime()) / 86400000);
+
+      // solo alertar si faltan <=7 días o está vencida
+      if (diff > 7) continue;
 
       const po = m?.lineas_pedido?.pos?.po || "";
-      const customer = m?.lineas_pedido?.pos?.customer || "";
       const ref = m?.lineas_pedido?.reference || "";
       const style = m?.lineas_pedido?.style || "";
       const color = m?.lineas_pedido?.color || "";
       const tipo = String(m?.tipo_muestra || "").trim();
-
-      // Mensaje (legible)
-      let msg: string;
       const parteLinea = [ref, style, color].filter(Boolean).join(" · ");
-      if (diffDays < 0) {
-        msg = `Muestra ${tipo}${parteLinea ? ` (${parteLinea})` : ""} con ${Math.abs(diffDays)} día(s) de retraso para PO ${po}.`;
-      } else if (diffDays === 0) {
-        msg = `Muestra ${tipo}${parteLinea ? ` (${parteLinea})` : ""} vence hoy para PO ${po}.`;
-      } else {
-        msg = `Muestra ${tipo}${parteLinea ? ` (${parteLinea})` : ""} vence en ${diffDays} día(s) para PO ${po}.`;
-      }
 
-      toInsert.push({
-        // Campos obligatorios
+      const msg =
+        diff < 0
+          ? `Muestra ${tipo}${parteLinea ? ` (${parteLinea})` : ""} con ${Math.abs(
+              diff
+            )} día(s) de retraso para PO ${po}.`
+          : diff === 0
+          ? `Muestra ${tipo}${parteLinea ? ` (${parteLinea})` : ""} vence hoy para PO ${po}.`
+          : `Muestra ${tipo}${parteLinea ? ` (${parteLinea})` : ""} vence en ${diff} día(s) para PO ${po}.`;
+
+      alertasInsert.push({
         tipo: "muestra",
         subtipo: tipo || null,
-        fecha: fechaISO, // DATE (solo yyyy-mm-dd)
-        severidad,
+        fecha: fechaISO,
+        severidad: diff < 0 ? "alta" : "baja",
         mensaje: msg,
         es_estimada,
         leida: false,
-
-        // Relaciones
         po_id: m?.lineas_pedido?.pos?.id || null,
         linea_pedido_id: m?.linea_pedido_id || m?.lineas_pedido?.id || null,
-
-        // Evita duplicados por muestra (la tabla alertas tiene UNIQUE en muestra_id)
         muestra_id: m?.id || null,
       });
-    });
-
-    if (!toInsert.length) {
-      return NextResponse.json({ success: true, count: 0, info: "No había muestras pendientes de alertar" });
     }
 
-    // 3) Upsert para no duplicar: onConflict por muestra_id (UNIQUE)
-    const { error: upErr, data: inserted } = await supabase
-      .from("alertas")
-      .upsert(toInsert, { onConflict: "muestra_id", ignoreDuplicates: true })
-      .select("id");
+    // ===============================================================
+    // 2️⃣ PRODUCCIÓN REAL (Trials / Lasting / Finish)
+    // ===============================================================
+    const { data: lineas, error: errLineas } = await supabase
+      .from("lineas_pedido")
+      .select(`
+        id,
+        po_id,
+        trial_upper,
+        trial_lasting,
+        lasting,
+        finish_date,
+        pos:pos(po)
+      `);
 
-    if (upErr) {
-      console.error("❌ Error insertando alertas:", upErr);
-      return NextResponse.json({ success: false, error: "Error insertando alertas" }, { status: 500 });
+    if (errLineas) throw errLineas;
+
+    for (const l of lineas || []) {
+      const fases = [
+        { key: "trial_upper", label: "Trial U" },
+        { key: "trial_lasting", label: "Trial L" },
+        { key: "lasting", label: "Lasting" },
+        { key: "finish_date", label: "Finish" },
+      ];
+
+      for (const f of fases) {
+        const fecha = l[f.key];
+        if (!fecha) continue;
+
+        const d = new Date(fecha);
+        const diff = Math.round((d.getTime() - hoy.getTime()) / 86400000);
+
+        // solo alertar si faltan <=7 días o vencidas
+        if (diff > 7) continue;
+
+        const po = l?.pos?.po || "";
+        const msg =
+          diff < 0
+            ? `${f.label} del PO ${po} con ${Math.abs(diff)} día(s) de retraso.`
+            : diff === 0
+            ? `${f.label} del PO ${po} es hoy.`
+            : `${f.label} del PO ${po} faltan ${diff} día(s).`;
+
+        alertasInsert.push({
+          tipo: "produccion",
+          subtipo: f.label,
+          fecha: d.toISOString().slice(0, 10),
+          severidad: diff < 0 ? "alta" : "baja",
+          mensaje: msg,
+          es_estimada: false,
+          leida: false,
+          po_id: l.po_id,
+          linea_pedido_id: l.id,
+          muestra_id: null,
+        });
+      }
+    }
+
+    // ===============================================================
+    // 3️⃣ CABECERA PO (Booking, Closing, Shipping, ETD PI)
+    // ===============================================================
+    const { data: pos, error: errPOs } = await supabase
+      .from("pos")
+      .select("id, po, booking, closing, shipping_date, etd_pi");
+
+    if (errPOs) throw errPOs;
+
+    for (const po of pos || []) {
+      const campos = [
+        { key: "booking", label: "Booking", margen: 7 },
+        { key: "closing", label: "Closing", margen: 7 },
+        { key: "shipping_date", label: "Shipping", margen: 7 },
+        { key: "etd_pi", label: "ETD PI", margen: 14 },
+      ];
+
+      for (const c of campos) {
+        const fecha = po[c.key];
+        if (!fecha) continue;
+
+        const d = new Date(fecha);
+        const diff = Math.round((d.getTime() - hoy.getTime()) / 86400000);
+        if (diff > c.margen) continue;
+
+        const msg =
+          diff < 0
+            ? `${c.label} del PO ${po.po} con ${Math.abs(diff)} día(s) de retraso.`
+            : diff === 0
+            ? `${c.label} del PO ${po.po} es hoy.`
+            : `${c.label} del PO ${po.po} faltan ${diff} día(s).`;
+
+        alertasInsert.push({
+          tipo: "ETD",
+          subtipo: c.label,
+          fecha: d.toISOString().slice(0, 10),
+          severidad: diff < 0 ? "alta" : "baja",
+          mensaje: msg,
+          es_estimada: false,
+          leida: false,
+          po_id: po.id,
+          linea_pedido_id: null,
+          muestra_id: null,
+        });
+      }
+    }
+
+    // ===============================================================
+    // INSERT / UPSERT
+    // ===============================================================
+    // Borramos alertas previas para evitar duplicados (puedes dejar solo las del tipo que quieras limpiar)
+    await supabase.from("alertas").delete().neq("tipo", "permanente");
+
+    if (alertasInsert.length > 0) {
+      await supabase.from("alertas").insert(alertasInsert);
     }
 
     return NextResponse.json({
       success: true,
-      count: inserted?.length ?? 0,
+      total: alertasInsert.length,
+      message: "Alertas generadas correctamente (muestras + producción + etd)",
     });
   } catch (e: any) {
-    console.error("❌ Error inesperado en generar-alertas:", e);
-    return NextResponse.json({ success: false, error: "Error inesperado" }, { status: 500 });
+    console.error("❌ Error en generar-alertas:", e);
+    return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }
 }
