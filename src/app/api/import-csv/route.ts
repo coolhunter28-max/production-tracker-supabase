@@ -1,3 +1,4 @@
+// src/app/api/import-csv/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -6,167 +7,329 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-/* ============================================================
-   🔵 HELPERS
-   ============================================================ */
+type SampleStatus = {
+  needed?: boolean;
+  status?: string | null;
+  round?: string | null;
+  date?: string | null;
+  notes?: string | null;
+};
 
-// Extrae solo número del Round → devuelve string o "N/A"
-function extractRound(v: any): string {
+type LineData = {
+  reference: string;
+  style: string;
+  color: string;
+  size_run?: string | null;
+  category?: string | null;
+  channel?: string | null;
+  qty: number;
+  price: number;
+  amount?: number;
+  trial_upper?: string | null;
+  trial_lasting?: string | null;
+  lasting?: string | null;
+  finish_date?: string | null;
+
+  // Fechas reales de las muestras (desde csv-utils)
+  cfm?: string | null;
+  counter_sample?: string | null;
+  fitting?: string | null;
+  pps?: string | null;
+  testing_sample?: string | null;
+  shipping_sample?: string | null;
+
+  // Round originales del Excel (Round 1, N/N, etc.)
+  cfm_round?: string | null;
+  counter_round?: string | null;
+  fitting_round?: string | null;
+  pps_round?: string | null;
+  testing_round?: string | null;
+  shipping_round?: string | null;
+};
+
+type POHeader = {
+  po: string;
+  supplier?: string | null;
+  factory?: string | null;
+  customer?: string | null;
+  season?: string | null;
+  category?: string | null;
+  channel?: string | null;
+  po_date?: string | null;
+  etd_pi?: string | null;
+  booking?: string | null;
+  closing?: string | null;
+  shipping_date?: string | null;
+  currency?: string | null;
+  pi?: string | null;
+  estado_inspeccion?: string | null;
+};
+
+type POGroup = {
+  header: POHeader;
+  lines: LineData[];
+};
+
+//
+// ======================================================
+//   🔵 HELPERS
+// ======================================================
+//
+
+// Extrae sólo el número de "Round 1", "ROUND2", etc.
+function extractRoundNumber(v: string | null | undefined): string {
   if (!v) return "N/A";
-  const match = String(v).match(/\d+/);
+  const s = String(v).trim();
+  if (!s || s.toUpperCase() === "N/N") return "N/A";
+  const match = s.match(/\d+/);
   return match ? match[0] : "N/A";
 }
 
-// Suma días a una fecha (YYYY-MM-DD)
-function addDays(base: string | null, days: number): string | null {
+// Devuelve true si el Round significa que la muestra SE NECESITA
+function isNeededRound(v: string | null | undefined): boolean {
+  if (!v) return false;
+  const s = String(v).trim().toUpperCase();
+  if (!s || s === "N/N" || s === "NO" || s === "NONE") return false;
+  return true;
+}
+
+// Suma días a una fecha YYYY-MM-DD
+function addDays(base: string, days: number): string | null {
   if (!base) return null;
-  const f = new Date(base);
-  f.setDate(f.getDate() + days);
-  return f.toISOString().substring(0, 10);
+  const d = new Date(base + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Resta días a una fecha YYYY-MM-DD
+function subDays(base: string, days: number): string | null {
+  return addDays(base, -days);
 }
 
 // Calcula fecha teórica según tipo de muestra
-function calcTeorica(tipo: string, poDate: string | null, finish: string | null): string | null {
-  if (!poDate && !finish) return null;
+function calcFechaTeorica(
+  tipo: string,
+  po_date: string | null | undefined,
+  finish_date: string | null | undefined
+): string | null {
+  const poD = po_date || null;
+  const finD = finish_date || null;
 
   switch (tipo) {
-    case "CFMs":
-      return addDays(poDate, 25);
-    case "CounterS":
-      return addDays(poDate, 10);
-    case "FittingS":
-      return addDays(poDate, 25);
+    case "CFMS":
+    case "CFM":
+      return poD ? addDays(poD, 25) : null;
+
+    case "COUNTERS":
+    case "COUNTER_SAMPLE":
+    case "COUNTER":
+      return poD ? addDays(poD, 10) : null;
+
+    case "FITTINGS":
+    case "FITTING":
+      return poD ? addDays(poD, 25) : null;
+
     case "PPS":
-      return addDays(poDate, 45);
-    case "TestingS":
-      return finish ? addDays(finish, -14) : null;
-    case "ShippingS":
-      return finish ? addDays(finish, -7) : null;
+      return poD ? addDays(poD, 45) : null;
+
+    case "TESTINGS":
+    case "TESTING_SAMPLE":
+    case "TESTING":
+      return finD ? subDays(finD, 14) : null;
+
+    case "SHIPPINGS":
+    case "SHIPPING_SAMPLE":
+    case "SHIPPING":
+      return finD ? subDays(finD, 7) : null;
+
     default:
       return null;
   }
 }
 
-// Normaliza muestra CSV → fecha real, round, fecha_teorica y estado
-function normalizeSample(csvRound: any, csvDate: any, tipo: string, poDate: any, finish: any) {
-  const necesita = csvRound && !String(csvRound).includes("N/N");
+// Decide estado inicial según fecha real / teórica
+function calcEstado(
+  fechaReal: string | null,
+  fechaTeorica: string | null
+): string {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
 
-  if (!necesita) return null;
-
-  const round = extractRound(csvRound);
-  const fecha_muestra = csvDate || null;
-  const fecha_teorica = fecha_muestra ? null : calcTeorica(tipo, poDate, finish);
-
-  let estado = "pendiente";
-
-  if (fecha_muestra) {
-    const hoy = new Date().toISOString().substring(0, 10);
-    estado = fecha_muestra < hoy ? "enviada" : "pendiente";
+  if (fechaReal) {
+    const d = new Date(fechaReal + "T00:00:00");
+    if (!isNaN(d.getTime()) && d.getTime() < hoy.getTime()) {
+      return "enviada";
+    }
+    return "pendiente";
   }
 
+  // Sin fecha real → siempre pendiente (aunque tenga teórica)
+  return "pendiente";
+}
+
+// Construye un registro de muestra listo para insertar en Supabase
+function buildSampleRecord(
+  tipo: string,
+  line: LineData,
+  header: POHeader
+) {
+  // Mapear tipo lógico a campos de la línea
+  let roundRaw: string | null | undefined = null;
+  let fechaReal: string | null = null;
+
+  switch (tipo) {
+    case "CFMS":
+      roundRaw = line.cfm_round ?? null;
+      fechaReal = line.cfm ?? null;
+      break;
+    case "COUNTERS":
+      roundRaw = line.counter_round ?? null;
+      fechaReal = line.counter_sample ?? null;
+      break;
+    case "FITTINGS":
+      roundRaw = line.fitting_round ?? null;
+      fechaReal = line.fitting ?? null;
+      break;
+    case "PPS":
+      roundRaw = line.pps_round ?? null;
+      fechaReal = line.pps ?? null;
+      break;
+    case "TESTINGS":
+      roundRaw = line.testing_round ?? null;
+      fechaReal = line.testing_sample ?? null;
+      break;
+    case "SHIPPINGS":
+      roundRaw = line.shipping_round ?? null;
+      fechaReal = line.shipping_sample ?? null;
+      break;
+    default:
+      roundRaw = null;
+      fechaReal = null;
+  }
+
+  // Si no se necesita la muestra (N/N o vacío) → no crear nada
+  if (!isNeededRound(roundRaw)) return null;
+
+  const round = extractRoundNumber(roundRaw);
+  const fecha_teorica = calcFechaTeorica(
+    tipo,
+    header.po_date ?? null,
+    line.finish_date ?? null
+  );
+  const estado_muestra = calcEstado(fechaReal, fecha_teorica);
+
+  // NOTA: fecha_muestra = fecha REAL del Excel (si la hay)
+  const fecha_muestra = fechaReal || null;
+
   return {
-    tipo_muestra: tipo,
-    fecha_muestra,
-    fecha_teorica,
-    round,
-    estado_muestra: estado,
-    notas: null,
+    tipo_muestra: tipo,          // ej. "CFMS", "PPS", "TESTINGS"
+    round,                       // solo el número o "N/A"
+    fecha_muestra,               // real
+    fecha_teorica,               // teórica según reglas
+    estado_muestra,              // "enviada" / "pendiente"
+    notas: null,                 // de momento sin notas
   };
 }
 
-/* ============================================================
-   🔵 HANDLER PRINCIPAL
-   ============================================================ */
+//
+// ======================================================
+//   🔵 IMPORTADOR PRINCIPAL
+// ======================================================
+//
 
 export async function POST(req: Request) {
   try {
-    const { groupedPOs, fileName } = await req.json();
+    const { groupedPOs, fileName, compareResult } = await req.json();
 
-    console.log("🚀 Iniciando importación:", fileName);
-    let ok = 0,
-      errores = 0;
+    console.log("🚀 Iniciando importación desde CSV:", fileName);
+    let ok = 0;
+    let errores = 0;
 
-    for (const poGroup of groupedPOs) {
+    for (const poGroup of groupedPOs as POGroup[]) {
       const { header, lines } = poGroup;
+      const estadoPO = compareResult?.detalles?.[header.po]?.status || "nuevo";
 
-      /* =====================================================
-         1️⃣ BUSCAR SI EL PO EXISTE
-      ===================================================== */
-      const { data: existing } = await supabase
+      // ------------------------------------------------------
+      // 1) Buscar / Crear PO (sin category/channel/size_run)
+      // ------------------------------------------------------
+      const { data: existing, error: findErr } = await supabase
         .from("pos")
         .select("id")
         .eq("po", header.po)
         .maybeSingle();
 
-      let poId = existing?.id ?? null;
+      if (findErr) {
+        console.error("❌ Buscar PO:", findErr);
+        errores++;
+        continue;
+      }
 
-      /* =====================================================
-         2️⃣ LIMPIAR HEADER → SOLO CAMPOS VALIDOS DE POS
-      ===================================================== */
-      const poData = {
-        po: header.po,
-        supplier: header.supplier || null,
-        factory: header.factory || null,
-        customer: header.customer || null,
-        season: header.season || null,
-        po_date: header.po_date || null,
-        etd_pi: header.etd_pi || null,
-        booking: header.booking || null,
-        closing: header.closing || null,
-        shipping_date: header.shipping_date || null,
-        currency: header.currency || "USD",
-        pi: header.pi || null,
-        estado_inspeccion: header.estado_inspeccion || null,
-      };
+      const skipFields = ["category", "channel", "size_run"];
 
-      /* =====================================================
-         3️⃣ INSERTAR / ACTUALIZAR PO
-      ===================================================== */
-      if (poId) {
+      let poId: string;
+
+      if (existing?.id) {
+        const cleanHeader = Object.fromEntries(
+          Object.entries(header).filter(
+            ([k, v]) => v !== null && v !== "" && !skipFields.includes(k)
+          )
+        );
+
         const { error: updErr } = await supabase
           .from("pos")
-          .update(poData)
-          .eq("id", poId);
+          .update(cleanHeader)
+          .eq("id", existing.id);
 
         if (updErr) {
+          console.error("❌ Actualizar PO:", updErr);
           errores++;
-          console.error("❌ Error ACTUALIZANDO PO:", updErr);
           continue;
         }
+
+        poId = existing.id;
       } else {
+        const insertHeader = Object.fromEntries(
+          Object.entries(header).filter(
+            ([k, v]) => v !== null && v !== "" && !skipFields.includes(k)
+          )
+        );
+
         const { data: inserted, error: insErr } = await supabase
           .from("pos")
-          .insert(poData)
+          .insert(insertHeader)
           .select("id")
-          .single();
+          .maybeSingle();
 
         if (insErr || !inserted) {
+          console.error("❌ Insertar PO:", insErr);
           errores++;
-          console.error("❌ Error INSERTANDO PO:", insErr);
           continue;
         }
 
         poId = inserted.id;
       }
 
-      /* =====================================================
-         4️⃣ BORRAR LÍNEAS Y MUESTRAS ANTIGUAS
-      ===================================================== */
-      const { data: oldLines } = await supabase
-        .from("lineas_pedido")
-        .select("id")
-        .eq("po_id", poId);
+      // ------------------------------------------------------
+      // 2) Si el PO es modificado → limpiar líneas y muestras
+      // ------------------------------------------------------
+      if (estadoPO === "modificado") {
+        const { data: oldLines } = await supabase
+          .from("lineas_pedido")
+          .select("id")
+          .eq("po_id", poId);
 
-      if (oldLines?.length) {
-        const ids = oldLines.map((l) => l.id);
-        await supabase.from("muestras").delete().in("linea_pedido_id", ids);
-        await supabase.from("lineas_pedido").delete().in("id", ids);
+        if (oldLines?.length) {
+          const lineIds = oldLines.map((l) => l.id);
+          await supabase.from("muestras").delete().in("linea_pedido_id", lineIds);
+          await supabase.from("lineas_pedido").delete().in("id", lineIds);
+        }
       }
 
-      /* =====================================================
-         5️⃣ INSERTAR LÍNEAS NUEVAS
-      ===================================================== */
-      const { data: insertedLines, error: insLinesErr } = await supabase
+      // ------------------------------------------------------
+      // 3) Insertar nuevas líneas
+      // ------------------------------------------------------
+      const { data: insertedLines, error: lineErr } = await supabase
         .from("lineas_pedido")
         .insert(
           lines.map((l) => ({
@@ -175,73 +338,107 @@ export async function POST(req: Request) {
             style: l.style,
             color: l.color,
             size_run: l.size_run,
+            category: l.category,
+            channel: l.channel,
             qty: l.qty,
             price: l.price,
             amount: l.amount,
-            category: l.category,
-            channel: l.channel,
             trial_upper: l.trial_upper,
             trial_lasting: l.trial_lasting,
             lasting: l.lasting,
             finish_date: l.finish_date,
           }))
         )
-        .select("id, reference, style, color, finish_date");
+        .select("id, reference, style, color, size_run");
 
-      if (insLinesErr) {
+      if (lineErr || !insertedLines) {
+        console.error("⚠️ Error insertando líneas:", lineErr);
         errores++;
-        console.error("❌ Error insertando líneas:", insLinesErr);
         continue;
       }
 
-      /* =====================================================
-         6️⃣ INSERTAR MUESTRAS (SOLO SI ROUND ≠ N/N)
-      ===================================================== */
-      const samplesInsert = [];
+      // ------------------------------------------------------
+      // 4) Construir e insertar muestras (con fecha teórica)
+      // ------------------------------------------------------
+      const tiposMuestra = [
+        "CFMS",
+        "COUNTERS",
+        "FITTINGS",
+        "PPS",
+        "TESTINGS",
+        "SHIPPINGS",
+      ] as const;
 
-      for (const line of insertedLines) {
-        const original = lines.find(
+      const samplesToInsert: any[] = [];
+
+      for (const insertedLine of insertedLines) {
+        const line = lines.find(
           (l) =>
-            l.reference === line.reference &&
-            l.style === line.style &&
-            l.color === line.color
+            l.reference === insertedLine.reference &&
+            l.style === insertedLine.style &&
+            l.color === insertedLine.color &&
+            (l.size_run ?? "") === (insertedLine.size_run ?? "")
         );
 
-        if (!original) continue;
+        if (!line) continue;
 
-        const tipos = [
-          ["CFMs", "cfm_round", "cfm_date"],
-          ["CounterS", "counter_round", "counter_date"],
-          ["FittingS", "fitting_round", "fitting_date"],
-          ["PPS", "pps_round", "pps_date"],
-          ["TestingS", "testing_round", "testing_date"],
-          ["ShippingS", "shipping_round", "shipping_date"],
-        ];
+        for (const tipo of tiposMuestra) {
+          const sampleRecord = buildSampleRecord(tipo, line, header);
+          if (!sampleRecord) continue;
 
-        for (const [tipo, colRound, colDate] of tipos) {
-          const muestra = normalizeSample(
-            original[colRound],
-            original[colDate],
-            tipo,
-            poData.po_date,
-            line.finish_date
-          );
-
-          if (muestra) {
-            samplesInsert.push({
-              ...muestra,
-              linea_pedido_id: line.id,
-            });
-          }
+          samplesToInsert.push({
+            ...sampleRecord,
+            linea_pedido_id: insertedLine.id,
+          });
         }
       }
 
-      if (samplesInsert.length > 0) {
-        await supabase.from("muestras").insert(samplesInsert);
+      if (samplesToInsert.length > 0) {
+        const { error: insErr } = await supabase
+          .from("muestras")
+          .insert(samplesToInsert);
+
+        if (insErr) {
+          console.error("⚠️ Error insertando muestras:", insErr);
+          errores++;
+        }
       }
+
+      // ------------------------------------------------------
+      // 5) Actualizar total de muestras del PO
+      // ------------------------------------------------------
+      const { count } = await supabase
+        .from("muestras")
+        .select("*", { count: "exact", head: true })
+        .in(
+          "linea_pedido_id",
+          (
+            await supabase
+              .from("lineas_pedido")
+              .select("id")
+              .eq("po_id", poId)
+          ).data?.map((l) => l.id) || []
+        );
+
+      await supabase
+        .from("pos")
+        .update({ total_muestras: count || 0 })
+        .eq("id", poId);
 
       ok++;
     }
+
+    // ------------------------------------------------------
+    // 6) Registrar importación
+    // ------------------------------------------------------
+    await supabase.from("importaciones").insert({
+      nombre_archivo: fileName,
+      cantidad_registros: groupedPOs.length,
+      estado: errores > 0 ? "parcial" : "completado",
+      datos: { ok, errores },
+    });
+
+    console.log(`✅ Importación completada → ${ok} POs OK, ${errores} con errores`);
 
     return NextResponse.json({
       mensaje: "Importación finalizada",
@@ -249,7 +446,7 @@ export async function POST(req: Request) {
       errores,
     });
   } catch (error: any) {
-    console.error("❌ ERROR IMPORT:", error);
+    console.error("❌ Error general en importación:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

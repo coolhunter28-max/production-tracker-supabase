@@ -26,11 +26,20 @@ export default function VerPO() {
     fetchPO();
   }, [id]);
 
-  if (loading) return <div className="p-6 text-gray-600">Cargando pedido...</div>;
-  if (!po) return <div className="p-6 text-red-500">No se encontró el pedido.</div>;
+  if (loading)
+    return <div className="p-6 text-gray-600">Cargando pedido...</div>;
+  if (!po)
+    return (
+      <div className="p-6 text-red-500">
+        No se encontró el pedido.
+      </div>
+    );
 
   const formatNumber = (n: number) =>
-    new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 }).format(n || 0);
+    new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 }).format(
+      n || 0
+    );
+
   const formatMoney = (n: number) =>
     (po.currency === "EUR" ? "€ " : "$ ") +
     new Intl.NumberFormat("es-ES", {
@@ -39,12 +48,46 @@ export default function VerPO() {
     }).format(n || 0);
 
   const totalPairs =
-    po.lineas_pedido?.reduce((acc: number, l: any) => acc + (l.qty || 0), 0) || 0;
+    po.lineas_pedido?.reduce(
+      (acc: number, l: any) => acc + (l.qty || 0),
+      0
+    ) || 0;
+
   const totalAmount =
     po.lineas_pedido?.reduce(
       (acc: number, l: any) => acc + (l.qty || 0) * (l.price || 0),
       0
     ) || 0;
+
+  // 📌 Punto A: decidir qué fecha mostramos para cada muestra
+  const formatSampleDate = (m: any) => {
+    if (m.fecha_muestra) {
+      return m.fecha_muestra; // fecha real
+    }
+    if (m.fecha_teorica) {
+      return `${m.fecha_teorica} (TEÓRICA)`; // solo teórica
+    }
+    return "-";
+  };
+
+  // Colores para estado_muestra (soporta estados viejos y nuevos)
+  const estadoClass = (estado: string | null | undefined) => {
+    const e = (estado || "").toLowerCase();
+
+    if (e === "enviada" || e === "confirmed" || e === "aprobado") {
+      return "text-green-600";
+    }
+    if (e === "rechazado" || e === "rejected") {
+      return "text-red-600";
+    }
+    if (e === "pendiente") {
+      return "text-orange-600";
+    }
+    if (e === "no need") {
+      return "text-gray-500";
+    }
+    return "text-gray-700";
+  };
 
   return (
     <div className="p-8 space-y-6 bg-gray-50 min-h-screen">
@@ -70,8 +113,7 @@ export default function VerPO() {
           ["Shipping", po.shipping_date],
           ["Moneda", po.currency],
           ["Customer", po.customer],
-          // 👇 AHORA SE USA po.pi
-          ["P.I", po.pi],
+          ["P.I", po.pi], // 👈 usamos pi, no proforma_invoice
           ["Booking", po.booking],
           ["Inspection", po.inspection],
           ["Supplier", po.supplier],
@@ -80,13 +122,15 @@ export default function VerPO() {
           ["Estado Insp.", po.estado_inspeccion],
         ].map(([label, value]) => (
           <div key={label} className="text-sm">
-            <span className="font-semibold text-gray-700">{label}:</span>{" "}
+            <span className="font-semibold text-gray-700">
+              {label}:
+            </span>{" "}
             <span className="text-gray-800">{value || "-"}</span>
           </div>
         ))}
       </div>
 
-      {/* LÍNEAS */}
+      {/* LÍNEAS DE PEDIDO */}
       <div className="bg-white rounded-xl shadow p-5 border border-gray-200">
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
           📦 Líneas de pedido
@@ -111,7 +155,10 @@ export default function VerPO() {
                   "Lasting",
                   "Finish",
                 ].map((h) => (
-                  <th key={h} className="px-2 py-1 border text-center">
+                  <th
+                    key={h}
+                    className="px-2 py-1 border text-center"
+                  >
                     {h}
                   </th>
                 ))}
@@ -120,7 +167,9 @@ export default function VerPO() {
             <tbody>
               {po.lineas_pedido?.map((l: any, i: number) => (
                 <tr key={i} className="border-t hover:bg-gray-50">
-                  <td className="px-2 py-1 text-left">{l.reference}</td>
+                  <td className="px-2 py-1 text-left">
+                    {l.reference}
+                  </td>
                   <td className="px-2 py-1">{l.style}</td>
                   <td className="px-2 py-1">{l.color}</td>
                   <td className="px-2 py-1">{l.size_run}</td>
@@ -129,14 +178,24 @@ export default function VerPO() {
                   <td className="px-2 py-1 text-center font-medium">
                     {formatNumber(l.qty)}
                   </td>
-                  <td className="px-2 py-1 text-center">{formatMoney(l.price)}</td>
+                  <td className="px-2 py-1 text-center">
+                    {formatMoney(l.price)}
+                  </td>
                   <td className="px-2 py-1 text-center font-semibold text-gray-700">
                     {formatMoney((l.qty || 0) * (l.price || 0))}
                   </td>
-                  <td className="px-2 py-1 text-center">{l.trial_upper || "-"}</td>
-                  <td className="px-2 py-1 text-center">{l.trial_lasting || "-"}</td>
-                  <td className="px-2 py-1 text-center">{l.lasting || "-"}</td>
-                  <td className="px-2 py-1 text-center">{l.finish_date || "-"}</td>
+                  <td className="px-2 py-1 text-center">
+                    {l.trial_upper || "-"}
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    {l.trial_lasting || "-"}
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    {l.lasting || "-"}
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    {l.finish_date || "-"}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -146,7 +205,9 @@ export default function VerPO() {
 
       {/* MUESTRAS */}
       <div className="bg-white rounded-xl shadow p-5 border border-gray-200">
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">🧪 Muestras</h2>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          🧪 Muestras
+        </h2>
 
         {po.lineas_pedido?.some((l: any) => l.muestras?.length) ? (
           <div className="space-y-4">
@@ -163,25 +224,48 @@ export default function VerPO() {
                     <table className="w-full text-sm border border-gray-200 rounded">
                       <thead className="bg-gray-100 text-gray-700">
                         <tr>
-                          <th className="px-2 py-1 border text-left">Tipo</th>
-                          <th className="px-2 py-1 border text-center">Fecha</th>
-                          <th className="px-2 py-1 border text-center">Estado</th>
-                          <th className="px-2 py-1 border text-center">Round</th>
-                          <th className="px-2 py-1 border text-left">Notas</th>
+                          <th className="px-2 py-1 border text-left">
+                            Tipo
+                          </th>
+                          <th className="px-2 py-1 border text-center">
+                            Fecha
+                          </th>
+                          <th className="px-2 py-1 border text-center">
+                            Estado
+                          </th>
+                          <th className="px-2 py-1 border text-center">
+                            Round
+                          </th>
+                          <th className="px-2 py-1 border text-left">
+                            Notas
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {l.muestras.map((m: any, mi: number) => (
-                          <tr key={mi} className="border-t hover:bg-gray-100">
-                            <td className="px-2 py-1">{m.tipo_muestra}</td>
-                            <td className="px-2 py-1 text-center">{m.fecha_muestra}</td>
-                            <td className="px-2 py-1 text-center">
-                              {m.estado_muestra || "pendiente"}
+                          <tr
+                            key={mi}
+                            className="border-t hover:bg-gray-100"
+                          >
+                            <td className="px-2 py-1">
+                              {m.tipo_muestra}
                             </td>
                             <td className="px-2 py-1 text-center">
-                              {m.round || "N/A"}
+                              {formatSampleDate(m)}
                             </td>
-                            <td className="px-2 py-1">{m.notas || "-"}</td>
+                            <td
+                              className={`px-2 py-1 text-center font-medium ${estadoClass(
+                                m.estado_muestra
+                              )}`}
+                            >
+                              {m.estado_muestra || "-"}
+                            </td>
+                            <td className="px-2 py-1 text-center">
+                              {m.round || "-"}
+                            </td>
+                            <td className="px-2 py-1">
+                              {m.notas || "-"}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
