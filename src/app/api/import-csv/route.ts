@@ -7,13 +7,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-type SampleStatus = {
-  needed?: boolean;
-  status?: string | null;
-  round?: string | null;
-  date?: string | null;
-  notes?: string | null;
-};
+// ======================================================
+//  TYPES
+// ======================================================
 
 type LineData = {
   reference: string;
@@ -30,7 +26,7 @@ type LineData = {
   lasting?: string | null;
   finish_date?: string | null;
 
-  // Fechas reales de las muestras (desde csv-utils)
+  // Fechas reales de muestras
   cfm?: string | null;
   counter_sample?: string | null;
   fitting?: string | null;
@@ -38,13 +34,27 @@ type LineData = {
   testing_sample?: string | null;
   shipping_sample?: string | null;
 
-  // Round originales del Excel (Round 1, N/N, etc.)
+  // Round originales
   cfm_round?: string | null;
   counter_round?: string | null;
   fitting_round?: string | null;
   pps_round?: string | null;
   testing_round?: string | null;
   shipping_round?: string | null;
+
+  // Approvals + fechas (vienen del csv-utils)
+  cfm_approval?: string | null;
+  cfm_approval_date?: string | null;
+  counter_approval?: string | null;
+  counter_approval_date?: string | null;
+  fitting_approval?: string | null;
+  fitting_approval_date?: string | null;
+  pps_approval?: string | null;
+  pps_approval_date?: string | null;
+  testing_approval?: string | null;
+  testing_approval_date?: string | null;
+  shipping_approval?: string | null;
+  shipping_approval_date?: string | null;
 };
 
 type POHeader = {
@@ -70,13 +80,10 @@ type POGroup = {
   lines: LineData[];
 };
 
-//
 // ======================================================
-//   🔵 HELPERS
+//  HELPERS GENERALES
 // ======================================================
-//
 
-// Extrae sólo el número de "Round 1", "ROUND2", etc.
 function extractRoundNumber(v: string | null | undefined): string {
   if (!v) return "N/A";
   const s = String(v).trim();
@@ -85,12 +92,10 @@ function extractRoundNumber(v: string | null | undefined): string {
   return match ? match[0] : "N/A";
 }
 
-// Devuelve true si el Round significa que la muestra SE NECESITA
 function isNeededRound(v: string | null | undefined): boolean {
   if (!v) return false;
   const s = String(v).trim().toUpperCase();
-  if (!s || s === "N/N" || s === "NO" || s === "NONE") return false;
-  return true;
+  return !(s === "" || s === "N/N" || s === "NO" || s === "NONE");
 }
 
 // Suma días a una fecha YYYY-MM-DD
@@ -102,113 +107,166 @@ function addDays(base: string, days: number): string | null {
   return d.toISOString().slice(0, 10);
 }
 
-// Resta días a una fecha YYYY-MM-DD
+// Resta días
 function subDays(base: string, days: number): string | null {
   return addDays(base, -days);
 }
 
-// Calcula fecha teórica según tipo de muestra
+// Fecha teórica de cada tipo de muestra
 function calcFechaTeorica(
   tipo: string,
   po_date: string | null | undefined,
   finish_date: string | null | undefined
 ): string | null {
-  const poD = po_date || null;
-  const finD = finish_date || null;
-
   switch (tipo) {
     case "CFMS":
-    case "CFM":
-      return poD ? addDays(poD, 25) : null;
-
+      return po_date ? addDays(po_date, 25) : null;
     case "COUNTERS":
-    case "COUNTER_SAMPLE":
-    case "COUNTER":
-      return poD ? addDays(poD, 10) : null;
-
+      return po_date ? addDays(po_date, 10) : null;
     case "FITTINGS":
-    case "FITTING":
-      return poD ? addDays(poD, 25) : null;
-
+      return po_date ? addDays(po_date, 25) : null;
     case "PPS":
-      return poD ? addDays(poD, 45) : null;
-
+      return po_date ? addDays(po_date, 45) : null;
     case "TESTINGS":
-    case "TESTING_SAMPLE":
-    case "TESTING":
-      return finD ? subDays(finD, 14) : null;
-
+      return finish_date ? subDays(finish_date, 14) : null;
     case "SHIPPINGS":
-    case "SHIPPING_SAMPLE":
-    case "SHIPPING":
-      return finD ? subDays(finD, 7) : null;
-
+      return finish_date ? subDays(finish_date, 7) : null;
     default:
       return null;
   }
 }
 
-// Decide estado inicial según fecha real / teórica
-function calcEstado(
-  fechaReal: string | null,
-  fechaTeorica: string | null
-): string {
+// Estado enviada/pendiente en función de la fecha
+function calcEstado(fechaReal: string | null, fechaTeorica: string | null): string {
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
 
   if (fechaReal) {
     const d = new Date(fechaReal + "T00:00:00");
-    if (!isNaN(d.getTime()) && d.getTime() < hoy.getTime()) {
-      return "enviada";
-    }
+    if (!isNaN(d.getTime()) && d < hoy) return "enviada";
     return "pendiente";
   }
-
-  // Sin fecha real → siempre pendiente (aunque tenga teórica)
+  // sin fecha real → siempre pendiente
   return "pendiente";
 }
 
-// Construye un registro de muestra listo para insertar en Supabase
-function buildSampleRecord(
-  tipo: string,
-  line: LineData,
-  header: POHeader
-) {
-  // Mapear tipo lógico a campos de la línea
+// ======================================================
+//  APPROVALS → CONFIRMADA / NO CONFIRMADA
+// ======================================================
+
+// Interpreta lo que venga del CSV:
+// - "Cfm", "cfm", "confirmed", "confirmada" → "confirmada"
+// - "N/Cfm", "n/cfm", "no confirmada" → "no_confirmada"
+// - vacío o cualquier otra cosa → null (sin info)
+function interpretApproval(
+  raw: string | null | undefined
+): "confirmada" | "no_confirmada" | null {
+  if (raw == null) return null;
+  const s = String(raw).trim().toLowerCase();
+  if (!s) return null;
+
+  if (
+    s === "cfm" ||
+    s === "confirmed" ||
+    s === "confirmada" ||
+    s === "ok"
+  ) {
+    return "confirmada";
+  }
+
+  if (
+    s === "n/cfm" ||
+    s === "n/c" ||
+    s === "no confirmada" ||
+    s === "not confirmed"
+  ) {
+    return "no_confirmada";
+  }
+
+  return null;
+}
+
+// Construye el texto de notas según estado + fecha
+// ✔ Con fecha: "Confirmada 2025-01-20"
+// ✔ Sin fecha: "Confirmada sin fecha"
+function buildApprovalNotes(
+  status: "confirmada" | "no_confirmada" | null,
+  date: string | null | undefined
+): string | null {
+  if (!status) return null;
+
+  if (status === "confirmada") {
+    return date ? `Confirmada ${date}` : "Confirmada sin fecha";
+  }
+
+  if (status === "no_confirmada") {
+    return date ? `No confirmada ${date}` : "No confirmada sin fecha";
+  }
+
+  return null;
+}
+
+// ======================================================
+//  CREAR MUESTRA COMPLETA A PARTIR DE UNA LÍNEA
+// ======================================================
+
+function buildSampleRecord(tipo: string, line: LineData, header: POHeader) {
   let roundRaw: string | null | undefined = null;
   let fechaReal: string | null = null;
 
+  // approvals por tipo de muestra
+  let approvalText: string | null | undefined = null;
+  let approvalDate: string | null | undefined = null;
+
   switch (tipo) {
     case "CFMS":
-      roundRaw = line.cfm_round ?? null;
+      roundRaw = line.cfm_round;
       fechaReal = line.cfm ?? null;
+      approvalText = line.cfm_approval;
+      approvalDate = line.cfm_approval_date;
       break;
+
     case "COUNTERS":
-      roundRaw = line.counter_round ?? null;
+      roundRaw = line.counter_round;
       fechaReal = line.counter_sample ?? null;
+      approvalText = line.counter_approval;
+      approvalDate = line.counter_approval_date;
       break;
+
     case "FITTINGS":
-      roundRaw = line.fitting_round ?? null;
+      roundRaw = line.fitting_round;
       fechaReal = line.fitting ?? null;
+      approvalText = line.fitting_approval;
+      approvalDate = line.fitting_approval_date;
       break;
+
     case "PPS":
-      roundRaw = line.pps_round ?? null;
+      roundRaw = line.pps_round;
       fechaReal = line.pps ?? null;
+      approvalText = line.pps_approval;
+      approvalDate = line.pps_approval_date;
       break;
+
     case "TESTINGS":
-      roundRaw = line.testing_round ?? null;
+      roundRaw = line.testing_round;
       fechaReal = line.testing_sample ?? null;
+      approvalText = line.testing_approval;
+      approvalDate = line.testing_approval_date;
       break;
+
     case "SHIPPINGS":
-      roundRaw = line.shipping_round ?? null;
+      roundRaw = line.shipping_round;
       fechaReal = line.shipping_sample ?? null;
+      approvalText = line.shipping_approval;
+      approvalDate = line.shipping_approval_date;
       break;
+
     default:
-      roundRaw = null;
-      fechaReal = null;
+      // tipo desconocido → no creamos nada
+      return null;
   }
 
-  // Si no se necesita la muestra (N/N o vacío) → no crear nada
+  // Si el round indica que no se necesita (N/N, vacío, etc.) → nada
   if (!isNeededRound(roundRaw)) return null;
 
   const round = extractRoundNumber(roundRaw);
@@ -218,25 +276,25 @@ function buildSampleRecord(
     line.finish_date ?? null
   );
   const estado_muestra = calcEstado(fechaReal, fecha_teorica);
-
-  // NOTA: fecha_muestra = fecha REAL del Excel (si la hay)
   const fecha_muestra = fechaReal || null;
 
+  // Interpretar el texto de approval + generar notas
+  const interpreted = interpretApproval(approvalText);
+  const notas = buildApprovalNotes(interpreted, approvalDate);
+
   return {
-    tipo_muestra: tipo,          // ej. "CFMS", "PPS", "TESTINGS"
-    round,                       // solo el número o "N/A"
-    fecha_muestra,               // real
-    fecha_teorica,               // teórica según reglas
-    estado_muestra,              // "enviada" / "pendiente"
-    notas: null,                 // de momento sin notas
+    tipo_muestra: tipo,
+    round,
+    fecha_muestra,
+    fecha_teorica,
+    estado_muestra,
+    notas,
   };
 }
 
-//
 // ======================================================
-//   🔵 IMPORTADOR PRINCIPAL
+//  IMPORTADOR PRINCIPAL
 // ======================================================
-//
 
 export async function POST(req: Request) {
   try {
@@ -248,10 +306,17 @@ export async function POST(req: Request) {
 
     for (const poGroup of groupedPOs as POGroup[]) {
       const { header, lines } = poGroup;
-      const estadoPO = compareResult?.detalles?.[header.po]?.status || "nuevo";
+
+      const estadoPO: string =
+        compareResult?.detalles?.[header.po]?.status || "nuevo";
+
+      // Sólo procesamos nuevos o modificados
+      if (estadoPO !== "nuevo" && estadoPO !== "modificado") {
+        continue;
+      }
 
       // ------------------------------------------------------
-      // 1) Buscar / Crear PO (sin category/channel/size_run)
+      // 1) Buscar / crear cabecera del PO
       // ------------------------------------------------------
       const { data: existing, error: findErr } = await supabase
         .from("pos")
@@ -260,19 +325,19 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (findErr) {
-        console.error("❌ Buscar PO:", findErr);
+        console.error("❌ Error buscando PO:", findErr);
         errores++;
         continue;
       }
 
       const skipFields = ["category", "channel", "size_run"];
-
       let poId: string;
 
       if (existing?.id) {
         const cleanHeader = Object.fromEntries(
           Object.entries(header).filter(
-            ([k, v]) => v !== null && v !== "" && !skipFields.includes(k)
+            ([k, v]) =>
+              v !== null && v !== "" && !skipFields.includes(k as string)
           )
         );
 
@@ -282,7 +347,7 @@ export async function POST(req: Request) {
           .eq("id", existing.id);
 
         if (updErr) {
-          console.error("❌ Actualizar PO:", updErr);
+          console.error("❌ Error actualizando PO:", updErr);
           errores++;
           continue;
         }
@@ -291,7 +356,8 @@ export async function POST(req: Request) {
       } else {
         const insertHeader = Object.fromEntries(
           Object.entries(header).filter(
-            ([k, v]) => v !== null && v !== "" && !skipFields.includes(k)
+            ([k, v]) =>
+              v !== null && v !== "" && !skipFields.includes(k as string)
           )
         );
 
@@ -302,7 +368,7 @@ export async function POST(req: Request) {
           .maybeSingle();
 
         if (insErr || !inserted) {
-          console.error("❌ Insertar PO:", insErr);
+          console.error("❌ Error insertando PO:", insErr);
           errores++;
           continue;
         }
@@ -311,18 +377,36 @@ export async function POST(req: Request) {
       }
 
       // ------------------------------------------------------
-      // 2) Si el PO es modificado → limpiar líneas y muestras
+      // 2) Si el PO es modificado → borrar líneas y muestras
       // ------------------------------------------------------
       if (estadoPO === "modificado") {
-        const { data: oldLines } = await supabase
+        const { data: oldLines, error: oldErr } = await supabase
           .from("lineas_pedido")
           .select("id")
           .eq("po_id", poId);
 
-        if (oldLines?.length) {
-          const lineIds = oldLines.map((l) => l.id);
-          await supabase.from("muestras").delete().in("linea_pedido_id", lineIds);
-          await supabase.from("lineas_pedido").delete().in("id", lineIds);
+        if (oldErr) {
+          console.error("⚠️ Error leyendo líneas antiguas:", oldErr);
+        } else if (oldLines?.length) {
+          const ids = oldLines.map((l) => l.id);
+
+          const { error: delSamplesErr } = await supabase
+            .from("muestras")
+            .delete()
+            .in("linea_pedido_id", ids);
+
+          if (delSamplesErr) {
+            console.error("⚠️ Error borrando muestras antiguas:", delSamplesErr);
+          }
+
+          const { error: delLinesErr } = await supabase
+            .from("lineas_pedido")
+            .delete()
+            .in("id", ids);
+
+          if (delLinesErr) {
+            console.error("⚠️ Error borrando líneas antiguas:", delLinesErr);
+          }
         }
       }
 
@@ -358,7 +442,7 @@ export async function POST(req: Request) {
       }
 
       // ------------------------------------------------------
-      // 4) Construir e insertar muestras (con fecha teórica)
+      // 4) Construir e insertar muestras nuevas
       // ------------------------------------------------------
       const tiposMuestra = [
         "CFMS",
@@ -394,42 +478,21 @@ export async function POST(req: Request) {
       }
 
       if (samplesToInsert.length > 0) {
-        const { error: insErr } = await supabase
+        const { error: insSamplesErr } = await supabase
           .from("muestras")
           .insert(samplesToInsert);
 
-        if (insErr) {
-          console.error("⚠️ Error insertando muestras:", insErr);
+        if (insSamplesErr) {
+          console.error("⚠️ Error insertando muestras:", insSamplesErr);
           errores++;
         }
       }
-
-      // ------------------------------------------------------
-      // 5) Actualizar total de muestras del PO
-      // ------------------------------------------------------
-      const { count } = await supabase
-        .from("muestras")
-        .select("*", { count: "exact", head: true })
-        .in(
-          "linea_pedido_id",
-          (
-            await supabase
-              .from("lineas_pedido")
-              .select("id")
-              .eq("po_id", poId)
-          ).data?.map((l) => l.id) || []
-        );
-
-      await supabase
-        .from("pos")
-        .update({ total_muestras: count || 0 })
-        .eq("id", poId);
 
       ok++;
     }
 
     // ------------------------------------------------------
-    // 6) Registrar importación
+    // 5) Registrar importación
     // ------------------------------------------------------
     await supabase.from("importaciones").insert({
       nombre_archivo: fileName,
@@ -438,7 +501,9 @@ export async function POST(req: Request) {
       datos: { ok, errores },
     });
 
-    console.log(`✅ Importación completada → ${ok} POs OK, ${errores} con errores`);
+    console.log(
+      `✅ Importación finalizada → ${ok} POs procesados, ${errores} con errores`
+    );
 
     return NextResponse.json({
       mensaje: "Importación finalizada",

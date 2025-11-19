@@ -3,25 +3,64 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
+/* ============================================================
+   INTERFACES COMPLETAS (incluye approvals + rounds)
+   ============================================================ */
 interface LineData {
   reference: string;
   style: string;
   color: string;
   size_run?: string;
+  category?: string | null;
+  channel?: string | null;
+
   qty: number;
   price: number;
   amount?: number;
+
   trial_upper?: string | null;
   trial_lasting?: string | null;
   lasting?: string | null;
   finish_date?: string | null;
+
+  // === FECHAS REALES DE MUESTRAS ===
   cfm?: string | null;
   counter_sample?: string | null;
   fitting?: string | null;
   pps?: string | null;
   testing_sample?: string | null;
   shipping_sample?: string | null;
-  inspection?: string | null;
+
+  // === ROUNDS ===
+  cfm_round?: string | null;
+  counter_round?: string | null;
+  fitting_round?: string | null;
+  pps_round?: string | null;
+  testing_round?: string | null;
+  shipping_round?: string | null;
+
+  // === APPROVALS ===
+  cfm_approval?: string | null;
+  cfm_approval_date?: string | null;
+
+  counter_approval?: string | null;
+  counter_approval_date?: string | null;
+
+  fitting_approval?: string | null;
+  fitting_approval_date?: string | null;
+
+  pps_approval?: string | null;
+  pps_approval_date?: string | null;
+
+  testing_approval?: string | null;
+  testing_approval_date?: string | null;
+
+  shipping_approval?: string | null;
+  shipping_approval_date?: string | null;
+
+  // === INSPECTION ===
+  inspection_approval?: string | null;
+  inspection_approval_date?: string | null;
 }
 
 interface POHeader {
@@ -53,6 +92,9 @@ interface PreviewStepProps {
   onNextWithCompare: (compareResult: any) => void;
 }
 
+/* ============================================================
+   COMPONENTE PRINCIPAL
+   ============================================================ */
 export default function PreviewStep({
   data,
   onBack,
@@ -61,7 +103,7 @@ export default function PreviewStep({
   const [compareResult, setCompareResult] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
-  /** === Fetch comparación === */
+  // === Fetch Comparación ===
   useEffect(() => {
     const fetchCompare = async () => {
       setLoading(true);
@@ -85,19 +127,33 @@ export default function PreviewStep({
   };
 
   const formatUSD = (num?: number) =>
-    num == null ? "-" : `$${num.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`;
+    num == null
+      ? "-"
+      : `$${num.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`;
 
   const highlight = (po: string, field: string, value: any) => {
     const cambios = compareResult?.detalles?.[po]?.cambios || [];
     const changed = cambios.some((c: any) => c.campo?.includes(field));
-    return changed ? <span className="bg-yellow-100 px-1 rounded">{value}</span> : value;
+    return changed ? (
+      <span className="bg-yellow-100 px-1 rounded">{value}</span>
+    ) : (
+      value
+    );
   };
 
-  if (loading) return <div className="text-center py-10 text-gray-600">Comparando datos...</div>;
+  if (loading)
+    return (
+      <div className="text-center py-10 text-gray-600">
+        Comparando datos...
+      </div>
+    );
 
   return (
     <div className="space-y-8">
-      <h2 className="text-2xl font-semibold text-center">Previsualización y comparación</h2>
+      <h2 className="text-2xl font-semibold text-center">
+        Previsualización y comparación
+      </h2>
+
       {compareResult && (
         <p className="text-center">
           🟢 Nuevos: <b>{compareResult.nuevos}</b> | 🟠 Modificados:{" "}
@@ -116,28 +172,46 @@ export default function PreviewStep({
         );
 
         return (
-          <div key={i} className="border border-gray-200 rounded-xl p-6 bg-white">
+          <div
+            key={i}
+            className="border border-gray-200 rounded-xl p-6 bg-white"
+          >
             <div className="flex justify-between items-start mb-2">
               <div>
                 <p className="font-semibold text-lg">
                   PO: {h.po}{" "}
                   {compareResult?.detalles?.[h.po]?.status === "modificado" && (
-                    <span className="text-orange-500 text-sm">(modificado)</span>
+                    <span className="text-orange-500 text-sm">
+                      (modificado)
+                    </span>
                   )}
                 </p>
                 <p className="text-sm text-gray-600">
-                  {h.supplier || "-"} / {h.customer || "-"} / {h.factory || "-"}
+                  {h.supplier || "-"} / {h.customer || "-"} /{" "}
+                  {h.factory || "-"}
                 </p>
               </div>
               <div className="text-sm text-gray-500">
-                {totalQty.toLocaleString("es-ES")} uds — {formatUSD(totalAmount)}
+                {totalQty.toLocaleString("es-ES")} uds —{" "}
+                {formatUSD(totalAmount)}
               </div>
             </div>
 
             <p className="text-sm text-gray-500">
-              Season: {h.season || "-"} | Category: {h.category || "-"} | Channel: {h.channel || "-"}<br/>
-              PO Date: {highlight(h.po!, "po_date", formatDate(h.po_date))} | ETD PI: {highlight(h.po!, "etd_pi", formatDate(h.etd_pi))} | Booking: {highlight(h.po!, "booking", formatDate(h.booking))} | Shipping: {highlight(h.po!, "shipping_date", formatDate(h.shipping_date))} | Closing: {highlight(h.po!, "closing", formatDate(h.closing))}<br/>
-              PI: {highlight(h.po!, "pi", h.pi || "-")} | Currency: {h.currency || "USD"} | Insp.: {h.estado_inspeccion || "-"}
+              Season: {h.season || "-"} | Category: {h.category || "-"} |
+              Channel: {h.channel || "-"}
+              <br />
+              PO Date:{" "}
+              {highlight(h.po!, "po_date", formatDate(h.po_date))} | ETD
+              PI: {highlight(h.po!, "etd_pi", formatDate(h.etd_pi))} |
+              Booking: {highlight(h.po!, "booking", formatDate(h.booking))} |
+              Shipping:{" "}
+              {highlight(h.po!, "shipping_date", formatDate(h.shipping_date))} |
+              Closing:{" "}
+              {highlight(h.po!, "closing", formatDate(h.closing))}
+              <br />
+              PI: {highlight(h.po!, "pi", h.pi || "-")} | Currency:{" "}
+              {h.currency || "USD"} | Insp.: {h.estado_inspeccion || "-"}
             </p>
 
             <div className="overflow-x-auto mt-3">
@@ -163,26 +237,103 @@ export default function PreviewStep({
                     <th className="p-2 text-center">Inspection</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {lines.map((l, idx) => (
-                    <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr
+                      key={idx}
+                      className="border-b border-gray-100 hover:bg-gray-50"
+                    >
                       <td className="p-2">{l.reference}</td>
                       <td className="p-2">{l.style}</td>
                       <td className="p-2">{l.color}</td>
                       <td className="p-2 text-right">{l.qty}</td>
-                      <td className="p-2 text-right">{formatUSD(l.price)}</td>
-                      <td className="p-2 text-right">{formatUSD(l.amount)}</td>
-                      <td className="p-2 text-center">{highlight(h.po!, `${l.reference} → trial_upper`, formatDate(l.trial_upper))}</td>
-                      <td className="p-2 text-center">{highlight(h.po!, `${l.reference} → trial_lasting`, formatDate(l.trial_lasting))}</td>
-                      <td className="p-2 text-center">{highlight(h.po!, `${l.reference} → lasting`, formatDate(l.lasting))}</td>
-                      <td className="p-2 text-center">{highlight(h.po!, `${l.reference} → finish_date`, formatDate(l.finish_date))}</td>
-                      <td className="p-2 text-center">{highlight(h.po!, `${l.reference} → CFM`, formatDate(l.cfm))}</td>
-                      <td className="p-2 text-center">{formatDate(l.counter_sample)}</td>
-                      <td className="p-2 text-center">{formatDate(l.fitting)}</td>
-                      <td className="p-2 text-center">{highlight(h.po!, `${l.reference} → PPS`, formatDate(l.pps))}</td>
-                      <td className="p-2 text-center">{highlight(h.po!, `${l.reference} → TESTING S`, formatDate(l.testing_sample))}</td>
-                      <td className="p-2 text-center">{highlight(h.po!, `${l.reference} → SHIPPING S`, formatDate(l.shipping_sample))}</td>
-                      <td className="p-2 text-center">{highlight(h.po!, `${l.reference} → INSPECTION`, formatDate(l.inspection))}</td>
+                      <td className="p-2 text-right">
+                        {formatUSD(l.price)}
+                      </td>
+                      <td className="p-2 text-right">
+                        {formatUSD(l.amount)}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {highlight(
+                          h.po!,
+                          `${l.reference} → trial_upper`,
+                          formatDate(l.trial_upper)
+                        )}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {highlight(
+                          h.po!,
+                          `${l.reference} → trial_lasting`,
+                          formatDate(l.trial_lasting)
+                        )}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {highlight(
+                          h.po!,
+                          `${l.reference} → lasting`,
+                          formatDate(l.lasting)
+                        )}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {highlight(
+                          h.po!,
+                          `${l.reference} → finish_date`,
+                          formatDate(l.finish_date)
+                        )}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {highlight(
+                          h.po!,
+                          `${l.reference} → CFM`,
+                          formatDate(l.cfm)
+                        )}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {formatDate(l.counter_sample)}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {formatDate(l.fitting)}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {highlight(
+                          h.po!,
+                          `${l.reference} → PPS`,
+                          formatDate(l.pps)
+                        )}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {highlight(
+                          h.po!,
+                          `${l.reference} → TESTINGS`,
+                          formatDate(l.testing_sample)
+                        )}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {highlight(
+                          h.po!,
+                          `${l.reference} → SHIPPINGS`,
+                          formatDate(l.shipping_sample)
+                        )}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {highlight(
+                          h.po!,
+                          `${l.reference} → INSPECTION`,
+                          formatDate(l.inspection_approval_date)
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -193,7 +344,9 @@ export default function PreviewStep({
       })}
 
       <div className="flex justify-center gap-4 pt-6">
-        <Button onClick={onBack} variant="outline">← Volver</Button>
+        <Button onClick={onBack} variant="outline">
+          ← Volver
+        </Button>
         <Button
           onClick={() => onNextWithCompare(compareResult)}
           className="bg-green-600 text-white font-semibold hover:bg-green-700"
