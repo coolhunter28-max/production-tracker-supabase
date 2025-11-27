@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-// ✅ Obtener un PO completo con líneas y muestras
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+// GET: obtener un PO con líneas + muestras
+export async function GET(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   const { data, error } = await supabase
     .from("pos")
-    .select(`
-      *,
-      lineas_pedido (
-        *,
-        muestras (*)
-      )
-    `)
+    .select("*, lineas_pedido(*, muestras(*))")
     .eq("id", params.id)
     .single();
 
@@ -23,22 +20,23 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   return NextResponse.json(data);
 }
 
-// ✅ Función auxiliar para limpiar los valores vacíos
+// Limpia valores "" → null
 function cleanObject(obj: Record<string, any>) {
   const cleaned: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (value === "") cleaned[key] = null;
-    else cleaned[key] = value;
+    cleaned[key] = value === "" ? null : value;
   }
   return cleaned;
 }
 
-// ✅ Actualizar PO, líneas y muestras
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+// PUT: actualizar PO + líneas + muestras
+export async function PUT(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   const body = await req.json();
 
   try {
-    // 1️⃣ Limpiar el PO principal
     const poData: Record<string, any> = cleanObject({
       season: body.season,
       po: body.po,
@@ -53,11 +51,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       inspection: body.inspection,
       estado_inspeccion: body.estado_inspeccion,
       currency: body.currency || "USD",
+      pi: body.pi ?? null,
     });
-
-    if ("proforma_invoice" in body) {
-      poData.proforma_invoice = body.proforma_invoice || null;
-    }
 
     const { error: poError } = await supabase
       .from("pos")
@@ -66,19 +61,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
     if (poError) throw poError;
 
-    // 2️⃣ Actualizar las líneas de pedido
     if (Array.isArray(body.lineas_pedido)) {
       for (const linea of body.lineas_pedido) {
         const { id: lineaId, muestras, ...lineaData } = linea;
         const cleanLinea = cleanObject(lineaData);
-
         let lineaIdReal = lineaId;
 
-        if (lineaId) {
+        if (lineaIdReal) {
           const { error: updateError } = await supabase
             .from("lineas_pedido")
             .update(cleanLinea)
-            .eq("id", lineaId);
+            .eq("id", lineaIdReal);
           if (updateError) throw updateError;
         } else {
           const { data: inserted, error: insertError } = await supabase
@@ -90,7 +83,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           lineaIdReal = inserted.id;
         }
 
-        // 3️⃣ Actualizar muestras asociadas
         if (Array.isArray(muestras)) {
           for (const m of muestras) {
             const { id: muestraId, ...muestraData } = m;
@@ -124,8 +116,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-// ✅ Eliminar un PO
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+// DELETE: eliminar un PO
+export async function DELETE(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   const { error } = await supabase.from("pos").delete().eq("id", params.id);
   if (error) {
     console.error("❌ Error eliminando PO:", error);

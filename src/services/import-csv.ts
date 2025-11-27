@@ -1,24 +1,38 @@
-// src/services/import-csv.ts
+import { normalizeRow, groupRowsByPO } from '@/lib/csv-utils';
 
 /**
- * Stub temporal para importar un CSV.
- * Deberás reemplazar esta lógica con la real (ej: parsear CSV y subir a Supabase).
+ * Importa los datos CSV a Supabase a través de la API Route.
+ * Antes de enviar, normaliza los datos para garantizar
+ * que las fechas y números están en formato ISO y numérico.
  */
-export async function importCSV(file: File): Promise<{
-  message: string;
-  count: number;
-  successCount: number;
-  errorCount: number;
-}> {
-  console.log("Importando archivo:", file.name);
+export async function importCsvToSupabase(rawRows: any[], fileName: string) {
+  try {
+    // 🧩 Paso 1: normalizar todas las filas del CSV
+    console.log('🔧 Normalizando datos CSV antes de enviar a API...');
+    const normalized = rawRows.map((row) => normalizeRow(row));
 
-  // Simulación: espera 1 segundo y responde con datos ficticios
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+    // 🧩 Paso 2: agrupar por número de PO
+    const groupedPOs = groupRowsByPO(normalized);
 
-  return {
-    message: `Archivo ${file.name} procesado correctamente.`,
-    count: 100, // total de registros detectados
-    successCount: 95, // registros importados con éxito
-    errorCount: 5, // registros con error
-  };
+    // 🧩 Paso 3: enviar al backend (API route /api/import-csv)
+    console.log(`📤 Enviando ${groupedPOs.length} pedidos a Supabase...`);
+    const res = await fetch('/api/import-csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groupedPOs, fileName }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      console.error('❌ Error en API import-csv:', error);
+      throw new Error(error.message || 'Error en la importación');
+    }
+
+    const data = await res.json();
+    console.log('✅ Respuesta del servidor:', data);
+    return data.results;
+  } catch (err: any) {
+    console.error('❌ Error general en importCsvToSupabase:', err);
+    throw err;
+  }
 }

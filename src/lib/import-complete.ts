@@ -1,368 +1,303 @@
-﻿// src/lib/import-complete.ts
-import { supabase } from './supabase';
-import Papa from 'papaparse';
+﻿import { supabase } from "@/lib/supabase";
 
-export interface CSVRow {
-  [key: string]: string;
+interface SampleStatus {
+  needed: boolean;
+  round?: number | null;
+  date?: string | null;
 }
 
-export const importCSV = async (file: File) => {
-  return new Promise((resolve, reject) => {
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        try {
-          const data = results.data as CSVRow[];
-          const posMap = new Map<string, string>(); // PO -> ID
-          const lineasMap = new Map<string, string>(); // PO_STYLE_COLOR -> ID
-          let successCount = 0;
-          let errorCount = 0;
+interface LineData {
+  style: string;
+  color: string;
+  reference: string;
+  qty: number;
+  price: number;
+  amount?: number;
+  cfm?: SampleStatus;
+  counter_sample?: SampleStatus;
+  fitting?: SampleStatus;
+  pps?: SampleStatus;
+  testing_sample?: SampleStatus;
+  shipping_sample?: SampleStatus;
+  inspection?: SampleStatus;
+  trial_upper?: SampleStatus;
+  trial_lasting?: SampleStatus;
+  lasting?: SampleStatus;
+  finish_date?: SampleStatus;
+}
 
-          for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            try {
-              // 1. Procesar PO
-              const poValue = row['PO'] || '';
-              let poId = posMap.get(poValue);
-              
-              if (!poId) {
-                poId = await getOrCreatePO(row);
-                posMap.set(poValue, poId);
-              }
+interface POHeader {
+  po?: string;
+  supplier?: string;
+  factory?: string;
+  customer?: string;
+  season?: string;
+  category?: string;
+  channel?: string;
+  currency?: string;
+  po_date?: string;
+  etd_pi?: string;
+  booking?: string;
+  closing?: string;
+  shipping_date?: string;
+  pi?: string;
+  estado_inspeccion?: string;
+}
 
-              // 2. Procesar Línea de Pedido
-              const lineaKey = `${poValue}_${row['STYLE']}_${row['COLOR']}`;
-              let lineaId = lineasMap.get(lineaKey);
-              
-              if (!lineaId) {
-                lineaId = await getOrCreateLineaPedido(poId, row);
-                lineasMap.set(lineaKey, lineaId);
-              }
+interface POGroup {
+  header: POHeader;
+  lines: LineData[];
+}
 
-              // 3. Procesar Muestras
-              await processMuestras(lineaId, row);
-              
-              successCount++;
-            } catch (error) {
-              console.error(`Error procesando fila ${i + 1}:`, error);
-              errorCount++;
-            }
-          }
+export async function syncToSupabase(poGroups: POGroup[]) {
+  const results = {
+    total: poGroups.length,
+    newPOs: 0,
+    updatedPOs: 0,
+    unchangedPOs: 0,
+    updatedLines: 0,
+    updatedSamples: 0,
+    errors: [] as string[],
+    newPOList: [] as string[],
+    updatedPOList: [] as string[],
+    unchangedPOList: [] as string[],
+  };
 
-          resolve({ 
-            success: errorCount === 0, 
-            count: data.length,
-            successCount,
-            errorCount,
-            message: `Importación completada. ${successCount} registros exitosos, ${errorCount} errores.`
-          });
-        } catch (error) {
-          console.error('Error en importación:', error);
-          reject(error);
-        }
-      },
-      error: (error) => {
-        console.error('Error al parsear CSV:', error);
-        reject(error);
-      }
+  try {
+    // === 1️⃣ Cargar POs existentes ===
+    const { data: existingPOs, error: fetchError } = await supabase
+      .from("pos")
+      .select(
+        "id, po, supplier, factory, customer, season, category, channel, currency, po_date, etd_pi, booking, shipping_date, closing, pi, estado_inspeccion"
+      );
+
+    if (fetchError) throw fetchError;
+
+    // === 2️⃣ Función de normalización ===
+    const normalizeValue = (v: any) => {
+      if (v === null || v === undefined) return "";
+      if (typeof v === "number") return v.toString();
+      if (typeof v === "boolean") return v ? "true" : "false";
+      if (typeof v === "object" && v instanceof Date)
+        return v.toISOString().split("T")[0];
+      return String(v).trim();
+    };
+
+    // === 3️⃣ Normalización de código PO (sin romper formato original) ===
+    const normalizePO = (v: string | undefined) => {
+      if (!v) return "";
+      return String(v).trim().replace(/\s+/g, "").toUpperCase();
+    };
+
+    // === 4️⃣ Mapa de POs existentes ===
+    const poMap = new Map<string, any>();
+    existingPOs?.forEach((po) => {
+      const key = normalizePO(po.po);
+      poMap.set(key, po);
     });
-  });
-};
 
-const getOrCreatePO = async (row: CSVRow): Promise<string> => {
-  const poValue = row['PO'] || '';
-  
-  // Buscar si el PO ya existe
-  const { data: existingPO, error: fetchError } = await supabase
-    .from('pos')
-    .select('id')
-    .eq('po', poValue);
-  
-  if (fetchError) throw fetchError;
-  
-  if (existingPO && existingPO.length > 0) {
-    return existingPO[0].id;
-  }
-  
-  // Crear nuevo PO
-  const poData = {
-    po: poValue,
-    supplier: row['SUPPLIER'] || '',
-    season: row['SEASON'] || '',
-    customer: row['CUSTOMER'] || '',
-    factory: row['FACTORY'] || '',
-    po_date: parseDate(row['PO DATE']),
-    etd_pi: parseDate(row['ETD PI']),
-    pi: row['PI'] || '',
-    channel: row['CHANNEL'] || '',
-    booking: row['Booking'] || '',
-    closing: row['Closing'] || '',
-    shipping_date: parseDate(row['Shipping Date']),
-  };
-  
-  const { data: newPO, error: insertError } = await supabase
-    .from('pos')
-    .insert([poData])
-    .select()
-    .single();
-  
-  if (insertError) throw insertError;
-  return newPO.id;
-};
+    console.log("📦 POs existentes en Supabase:", existingPOs?.length);
+    console.log("Ejemplo de PO existente:", existingPOs?.[0]?.po);
 
-const getOrCreateLineaPedido = async (poId: string, row: CSVRow): Promise<string> => {
-  const lineaData = {
-    po_id: poId,
-    reference: row['REFERENCE'] || '',
-    style: row['STYLE'] || '',
-    color: row['COLOR'] || '',
-    size_run: row['SIZE RUN'] || '',
-    qty: parseInt(row['QTY']) || 0,
-    category: row['CATEGORY'] || '',
-    price: parseNumber(row['PRICE']),
-    amount: parseNumber(row['AMOUNT']),
-    pi_bsg: row['PI BSG'] || '',
-    price_selling: parseNumber(row['PRICE SELLING']),
-    amount_selling: parseNumber(row['AMOUNT SELLING']),
-    trial_upper: row['Trial Upper'] || '',
-    trial_lasting: row['Trial Lasting'] || '',
-    lasting: row['Lasting'] || '',
-    finish_date: parseDate(row['FINISH DATE']),
-  };
-  
-  // Verificar si ya existe una línea con estos datos
-  const { data: existingLinea, error: fetchError } = await supabase
-    .from('lineas_pedido')
-    .select('id')
-    .eq('po_id', poId)
-    .eq('style', lineaData.style)
-    .eq('color', lineaData.color);
-  
-  if (fetchError) throw fetchError;
-  
-  if (existingLinea && existingLinea.length > 0) {
-    // Actualizar línea existente
-    const { error: updateError } = await supabase
-      .from('lineas_pedido')
-      .update(lineaData)
-      .eq('id', existingLinea[0].id);
-    
-    if (updateError) throw updateError;
-    return existingLinea[0].id;
-  } else {
-    // Insertar nueva línea
-    const { data: newLinea, error: insertError } = await supabase
-      .from('lineas_pedido')
-      .insert([lineaData])
-      .select()
-      .single();
-    
-    if (insertError) throw insertError;
-    return newLinea.id;
-  }
-};
+    // === 5️⃣ Procesar cada grupo del CSV ===
+    for (const po of poGroups) {
+      const { header, lines } = po;
+      const poNumber = normalizePO(header.po);
+      if (!poNumber) continue;
 
-const processMuestras = async (lineaId: string, row: CSVRow) => {
-  const tiposMuestras = [
-    { 
-      tipo: 'CFMs', 
-      roundField: 'CFMs Round', 
-      dateField: 'CFMs',
-      approvalField: 'CFMs Approval',
-      approvalDateField: 'CFMs Approval Date'
-    },
-    { 
-      tipo: 'Counter Sample', 
-      roundField: 'Counter Sample Round', 
-      dateField: 'Counter Sample',
-      approvalField: 'Counter Sample Approval',
-      approvalDateField: 'Counter Sample Approval Date'
-    },
-    { 
-      tipo: 'Fitting', 
-      roundField: 'Fitting Round', 
-      dateField: 'Fitting',
-      approvalField: 'Fitting Approval',
-      approvalDateField: 'Fitting Approval Date'
-    },
-    { 
-      tipo: 'PPS', 
-      roundField: 'PPS Round', 
-      dateField: 'PPS',
-      approvalField: 'PPS Approval',
-      approvalDateField: 'PPS Approval Date'
-    },
-    { 
-      tipo: 'Testing Samples', 
-      roundField: 'Testing Samples Round', 
-      dateField: 'Testing Samples',
-      approvalField: 'Testing Samples Approval',
-      approvalDateField: 'Testing Samples Approval Date'
-    },
-    { 
-      tipo: 'Shipping Samples', 
-      roundField: 'Shipping Samples Round', 
-      dateField: 'Shipping Samples',
-      approvalField: 'Shipping Samples Approval',
-      approvalDateField: 'Shipping Samples Approval Date'
-    },
-    { 
-      tipo: 'Inspection', 
-      roundField: 'Inspection Round', 
-      dateField: 'Inspection',
-      approvalField: 'Inspection Approval',
-      approvalDateField: 'Inspection Approval Date'
-    }
-  ];
+      const existing = poMap.get(poNumber);
 
-  for (const tipoMuestra of tiposMuestras) {
-    const roundValue = row[tipoMuestra.roundField];
-    const dateValue = row[tipoMuestra.dateField];
-    const approvalValue = row[tipoMuestra.approvalField];
-    const approvalDateValue = row[tipoMuestra.approvalDateField];
-
-    // Si hay información de round o fecha, procesamos esta muestra
-    if (roundValue || dateValue) {
-      const roundNumber = roundValue ? parseInt(roundValue.replace(/\D/g, '')) : 1;
-      
-      // Crear o actualizar la muestra
-      const muestraData = {
-        linea_pedido_id: lineaId,
-        tipo_muestra: tipoMuestra.tipo,
-        round: roundNumber,
-        fecha_muestra: parseDate(dateValue),
-        estado_muestra: dateValue ? 'recibida' : 'pendiente',
-        notas: `Muestra ${tipoMuestra.tipo} Round ${roundNumber}`
+      const poRecord = {
+        po: header.po,
+        supplier: header.supplier,
+        factory: header.factory,
+        customer: header.customer,
+        season: header.season,
+        category: header.category,
+        channel: header.channel,
+        currency: header.currency,
+        po_date: header.po_date,
+        etd_pi: header.etd_pi,
+        booking: header.booking,
+        closing: header.closing,
+        shipping_date: header.shipping_date,
+        pi: header.pi,
+        estado_inspeccion: header.estado_inspeccion,
+        updated_at: new Date().toISOString(),
       };
 
-      // Primero verificar si ya existe
-      const { data: existingMuestra } = await supabase
-        .from('muestras')
-        .select('id')
-        .eq('linea_pedido_id', lineaId)
-        .eq('tipo_muestra', tipoMuestra.tipo)
-        .eq('round', roundNumber);
-      
-      let muestraId;
-      if (existingMuestra && existingMuestra.length > 0) {
-        // Actualizar muestra existente
-        const { data: updatedMuestra, error: updateError } = await supabase
-          .from('muestras')
-          .update(muestraData)
-          .eq('id', existingMuestra[0].id)
-          .select()
-          .single();
-        
-        if (updateError) throw updateError;
-        muestraId = updatedMuestra.id;
-      } else {
-        // Insertar nueva muestra
-        const { data: newMuestra, error: insertError } = await supabase
-          .from('muestras')
-          .insert([muestraData])
-          .select()
-          .single();
-        
-        if (insertError) throw insertError;
-        muestraId = newMuestra.id;
-      }
+      let hasChanges = false;
+      if (existing) {
+        hasChanges = Object.keys(poRecord).some((k) => {
+          const newVal = normalizeValue(poRecord[k as keyof typeof poRecord]);
+          const oldVal = normalizeValue(existing[k]);
+          return newVal !== oldVal;
+        });
 
-      // Procesar aprobación para esta muestra
-      if (approvalValue || approvalDateValue) {
-        const aprobacionData = {
-          muestra_id: muestraId,
-          tipo_aprobacion: tipoMuestra.tipo,
-          estado: approvalValue || (approvalDateValue ? 'aprobado' : 'pendiente'),
-          fecha_aprobacion: parseDate(approvalDateValue),
-          round: roundNumber
-        };
-
-        // Verificar si ya existe la aprobación
-        const { data: existingAprobacion } = await supabase
-          .from('aprobaciones')
-          .select('id')
-          .eq('muestra_id', muestraId)
-          .eq('tipo_aprobacion', tipoMuestra.tipo);
-        
-        if (existingAprobacion && existingAprobacion.length > 0) {
-          // Actualizar aprobación existente
-          await supabase
-            .from('aprobaciones')
-            .update(aprobacionData)
-            .eq('id', existingAprobacion[0].id);
-        } else {
-          // Insertar nueva aprobación
-          await supabase
-            .from('aprobaciones')
-            .insert([aprobacionData]);
+        if (hasChanges) {
+          console.log(`🟦 PO ${header.po} → cambios detectados`);
         }
       }
 
-      // Procesar validaciones específicas según el tipo de muestra
-      await processValidacionesEspecificas(muestraId, tipoMuestra.tipo, row);
+      // === 6️⃣ Insertar o actualizar ===
+      let poId = existing?.id;
+
+      if (!existing) {
+        const { data, error: insertErr } = await supabase
+          .from("pos")
+          .insert(poRecord)
+          .select("id")
+          .single();
+
+        if (insertErr) {
+          results.errors.push(`PO ${header.po}: ${insertErr.message}`);
+          continue;
+        }
+        poId = data.id;
+        results.newPOs++;
+        results.newPOList.push(header.po || "");
+      } else if (hasChanges) {
+        const { error: updateErr } = await supabase
+          .from("pos")
+          .update(poRecord)
+          .eq("po", header.po);
+
+        if (updateErr) {
+          results.errors.push(`PO ${header.po}: ${updateErr.message}`);
+        } else {
+          results.updatedPOs++;
+          results.updatedPOList.push(header.po || "");
+        }
+      } else {
+        results.unchangedPOs++;
+        results.unchangedPOList.push(header.po || "");
+      }
+
+      // === 7️⃣ Sincronizar líneas ===
+      const { data: existingLines } = await supabase
+        .from("lineas_pedido")
+        .select("id, po_id, reference, color, qty, price, amount")
+        .eq("po_id", poId);
+
+      const lineKey = (r: any) => `${r.reference}-${r.color}`.toUpperCase();
+      const lineMap = new Map<string, any>();
+      existingLines?.forEach((l) => lineMap.set(lineKey(l), l));
+
+      for (const line of lines) {
+        const key = lineKey(line);
+        const existingLine = lineMap.get(key);
+        const record = {
+          po_id: poId,
+          reference: line.reference,
+          style: line.style,
+          color: line.color,
+          qty: line.qty,
+          price: line.price,
+          amount: line.amount,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (!existingLine) {
+          const { error: insertLineErr } = await supabase
+            .from("lineas_pedido")
+            .insert(record);
+          if (insertLineErr) {
+            results.errors.push(
+              `PO ${header.po} - Línea ${line.reference}: ${insertLineErr.message}`
+            );
+          } else {
+            results.updatedLines++;
+          }
+        } else {
+          const changed = Object.keys(record).some((k) => {
+            const newVal = normalizeValue(record[k as keyof typeof record]);
+            const oldVal = normalizeValue(existingLine[k]);
+            return newVal !== oldVal;
+          });
+
+          if (changed) {
+            const { error: updateLineErr } = await supabase
+              .from("lineas_pedido")
+              .update(record)
+              .eq("id", existingLine.id);
+            if (updateLineErr) {
+              results.errors.push(
+                `PO ${header.po} - Línea ${line.reference}: ${updateLineErr.message}`
+              );
+            } else {
+              results.updatedLines++;
+            }
+          }
+        }
+
+        // === 8️⃣ Sincronizar muestras ===
+        const sampleMap: Record<string, SampleStatus | undefined> = {
+          cfm: line.cfm,
+          counter_sample: line.counter_sample,
+          fitting: line.fitting,
+          pps: line.pps,
+          testing_sample: line.testing_sample,
+          shipping_sample: line.shipping_sample,
+          inspection: line.inspection,
+          trial_upper: line.trial_upper,
+          trial_lasting: line.trial_lasting,
+          lasting: line.lasting,
+          finish_date: line.finish_date,
+        };
+
+        for (const [type, sample] of Object.entries(sampleMap)) {
+          if (!sample || !sample.needed) continue;
+
+          const { data: existingSample } = await supabase
+            .from("muestras")
+            .select("id, fecha_muestra, round")
+            .eq("linea_pedido_id", existingLine?.id)
+            .eq("tipo_muestra", type)
+            .maybeSingle();
+
+          if (!existingSample) {
+            const { error: insertSampleErr } = await supabase
+              .from("muestras")
+              .insert({
+                linea_pedido_id: existingLine?.id,
+                tipo_muestra: type,
+                round: sample.round,
+                fecha_muestra: sample.date,
+              });
+            if (insertSampleErr) {
+              results.errors.push(
+                `PO ${header.po} - Sample ${type}: ${insertSampleErr.message}`
+              );
+            } else {
+              results.updatedSamples++;
+            }
+          } else if (
+            sample.date &&
+            sample.date !== existingSample.fecha_muestra
+          ) {
+            const { error: updateSampleErr } = await supabase
+              .from("muestras")
+              .update({
+                round: sample.round,
+                fecha_muestra: sample.date,
+              })
+              .eq("id", existingSample.id);
+            if (updateSampleErr) {
+              results.errors.push(
+                `PO ${header.po} - Sample ${type}: ${updateSampleErr.message}`
+              );
+            } else {
+              results.updatedSamples++;
+            }
+          }
+        }
+      }
     }
-  }
-};
-
-const processValidacionesEspecificas = async (muestraId: string, tipoMuestra: string, row: CSVRow) => {
-  const validaciones = [];
-
-  // Validaciones específicas según el tipo de muestra
-  switch (tipoMuestra) {
-    case 'CFMs':
-      if (row['Trial Upper']) {
-        validaciones.push({
-          tipo_validacion: 'Trial Upper',
-          resultado: 'aprobado',
-          fecha_validacion: parseDate(row['Trial Upper']),
-          comentarios: 'Trial Upper completado'
-        });
-      }
-      if (row['Trial Lasting']) {
-        validaciones.push({
-          tipo_validacion: 'Trial Lasting',
-          resultado: 'aprobado',
-          fecha_validacion: parseDate(row['Trial Lasting']),
-          comentarios: 'Trial Lasting completado'
-        });
-      }
-      break;
-      
-    case 'Fitting':
-      if (row['Lasting']) {
-        validaciones.push({
-          tipo_validacion: 'Lasting',
-          resultado: 'aprobado',
-          fecha_validacion: parseDate(row['Lasting']),
-          comentarios: 'Lasting completado'
-        });
-      }
-      break;
+  } catch (err: any) {
+    console.error(err);
+    results.errors.push(err.message);
   }
 
-  // Insertar todas las validaciones
-  for (const validacion of validaciones) {
-    await supabase
-      .from('validaciones_muestra')
-      .insert([{
-        ...validacion,
-        muestra_id: muestraId
-      }]);
-  }
-};
-
-const parseDate = (dateStr: string): string | null => {
-  if (!dateStr) return null;
-  const parts = dateStr.split('/');
-  if (parts.length === 3) {
-    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-  }
-  return null;
-};
-
-const parseNumber = (numStr: string): number | null => {
-  if (!numStr) return null;
-  const num = parseFloat(numStr.replace(',', '.'));
-  return isNaN(num) ? null : num;
-};
+  console.log("✅ Resultados syncToSupabase:", results);
+  return results;
+}

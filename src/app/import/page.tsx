@@ -1,80 +1,132 @@
 ﻿"use client";
 
-import { useState } from "react";
-// importa tu helper real aquí (ajústalo si lo tienes en otra carpeta)
-import { importCSV } from "@/services/import-csv"; 
+import React, { useState } from "react";
+import UploadStep from "@/components/import/UploadStep";
+import ValidateStep from "@/components/import/ValidateStep";
+import PreviewStep from "@/components/import/PreviewStep";
+import ConfirmStep from "@/components/import/ConfirmStep";
 
 export default function ImportPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [previewData, setPreviewData] = useState<any[]>([]);
-  const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0, errors: 0 });
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  // === Estados globales ===
+  const [step, setStep] = useState(1);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileName, setFileName] = useState<string | undefined>();
+  const [csvContent, setCsvContent] = useState<string>("");
+  const [groupedPOs, setGroupedPOs] = useState<any[]>([]);
+  const [compareResult, setCompareResult] = useState<any | null>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) {
-      setFile(f);
-      // ⚠️ aquí podrías parsear para preview si quieres
-      setPreviewData([]);
-    }
+  // === Paso 1: Upload ===
+  const handleFileUpload = (file: File, content: string) => {
+    console.log("✅ Archivo recibido:", file.name);
+    setSelectedFile(file);
+    setFileName(file.name);
+    setCsvContent(content);
+    setStep(2);
   };
 
-  const handleImport = async () => {
-    if (!file || previewData.length === 0) return;
+  // === Paso 2: Validate ===
+  const handleValidated = (data: any[]) => {
+    console.log("✅ Datos validados:", data.length, "filas");
+    setGroupedPOs(data);
+    setStep(3);
+  };
 
-    setImporting(true);
-    setProgress({ current: 0, total: 0, errors: 0 });
-    setError(null);
-    setSuccess(null);
+  // === Paso 3: Preview ===
+  const handlePreviewNext = (compareData?: any) => {
+    if (compareData) setCompareResult(compareData);
+    console.log("➡️ Avanzando a Confirmación");
+    setStep(4);
+  };
 
-    try {
-      const result = await importCSV(file);
-      setSuccess(result.message);
-      setProgress({
-        current: result.successCount || 0,
-        total: result.count || 0,
-        errors: result.errorCount || 0,
-      });
-    } catch (err: any) {
-      console.error("Error durante la importación:", err);
-      setError(
-        `Error durante la importación: ${err.message || "Error desconocido"}`
-      );
-    } finally {
-      setImporting(false);
-    }
+  // === Paso 4: Confirm ===
+  const handleFinish = () => {
+    alert("✅ Importación finalizada correctamente.");
+    // 🔄 Reset completo del flujo
+    setStep(1);
+    setSelectedFile(null);
+    setFileName(undefined);
+    setCsvContent("");
+    setGroupedPOs([]);
+    setCompareResult(null);
   };
 
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-bold mb-4">Importar datos</h1>
+    <div className="relative max-w-6xl mx-auto p-8 space-y-10">
+      {/* 🔙 Botón Volver al inicio */}
+      <div className="absolute top-6 left-6 z-10">
+        <a
+          href="/"
+          className="inline-flex items-center gap-2 rounded-lg border border-green-600 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-50 active:scale-[0.99] transition"
+        >
+          <span aria-hidden>←</span> Volver al inicio
+        </a>
+      </div>
 
-      <input
-        type="file"
-        accept=".csv"
-        onChange={handleFileChange}
-        className="mb-4"
-      />
+      {/* === PROGRESS HEADER === */}
+      <div className="flex justify-center mb-6">
+        <div className="flex items-center gap-4 text-sm font-medium">
+          {[1, 2, 3, 4].map((i) => {
+            const titles = ["Upload", "Validate", "Preview", "Confirm"];
+            const name = titles[i - 1];
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <div
+                  className={`h-7 w-7 flex items-center justify-center rounded-full border-2 ${
+                    step === i
+                      ? "bg-green-500 text-white border-green-500"
+                      : step > i
+                      ? "bg-green-100 text-green-700 border-green-400"
+                      : "bg-gray-100 text-gray-500 border-gray-300"
+                  }`}
+                >
+                  {i}
+                </div>
+                <span
+                  className={`${
+                    step === i ? "text-green-700 font-semibold" : "text-gray-500"
+                  }`}
+                >
+                  {name}
+                </span>
+                {i < 4 && (
+                  <span className="w-6 border-t border-gray-300 opacity-60"></span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-      <button
-        disabled={!file || importing}
-        onClick={handleImport}
-        className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50"
-      >
-        {importing ? "Importando..." : "Importar CSV"}
-      </button>
+      {/* === STEP CONTENT === */}
+      {step === 1 && <UploadStep onNext={handleFileUpload} />}
 
-      {progress.total > 0 && (
-        <p className="mt-2 text-sm text-gray-700">
-          Importados {progress.current} de {progress.total} con {progress.errors}{" "}
-          errores.
-        </p>
+      {step === 2 && (
+        <ValidateStep
+          file={selectedFile}
+          content={csvContent}
+          onBack={() => setStep(1)}
+          onNext={handleValidated}
+        />
       )}
 
-      {success && <p className="text-green-600 mt-2">{success}</p>}
-      {error && <p className="text-red-600 mt-2">{error}</p>}
+      {step === 3 && (
+  <PreviewStep
+    data={groupedPOs}
+    onBack={() => setStep(2)}
+    onNextWithCompare={handlePreviewNext}  // 👈 esta es la clave
+  />
+)}
+
+
+      {step === 4 && (
+        <ConfirmStep
+          fileName={fileName}
+          groupedPOs={groupedPOs}
+          compareResult={compareResult}
+          onBack={() => setStep(3)}
+          onConfirm={handleFinish}
+        />
+      )}
     </div>
   );
 }
