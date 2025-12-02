@@ -15,6 +15,7 @@ import ImportChina from "@/components/dashboard/ImportChina";
 import POsTable from "@/components/dashboard/POsTable";
 import AlertasDashboard from "@/components/alertas/AlertasDashboard";
 import FiltersBox from "@/components/dashboard/FiltersBox";
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
 
 // -----------------------------------------------------
 // Tipos y constantes
@@ -54,10 +55,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
+  // Alerts (solo estado, sin lógica vieja)
   const [alertasNoLeidasCount, setAlertasNoLeidasCount] = useState(0);
   const [generandoAlertas, setGenerandoAlertas] = useState(false);
   const [mensajeAlertas, setMensajeAlertas] = useState("");
 
+  // Import China
   const [chinaFile, setChinaFile] = useState<File | null>(null);
   const [importingChina, setImportingChina] = useState(false);
   const [importChinaMsg, setImportChinaMsg] = useState("");
@@ -78,29 +81,6 @@ export default function DashboardPage() {
       }
     };
     loadPOs();
-  }, []);
-
-  // -----------------------------------------------------
-  // Cargar contador de alertas no leídas
-  // -----------------------------------------------------
-  useEffect(() => {
-    const cargarContadorAlertas = async () => {
-      try {
-        const res = await fetch("/api/alertas?leida=false", {
-          cache: "no-store",
-        });
-        const data = await res.json();
-
-        if (data?.success) {
-          setAlertasNoLeidasCount(data.alertas.length);
-        } else if (Array.isArray(data)) {
-          setAlertasNoLeidasCount(data.filter((a: any) => !a.leida).length);
-        }
-      } catch (error) {
-        console.error("Error cargando contador de alertas:", error);
-      }
-    };
-    cargarContadorAlertas();
   }, []);
 
   // -----------------------------------------------------
@@ -241,15 +221,7 @@ export default function DashboardPage() {
     <div className="container mx-auto py-6 space-y-6">
 
       {/* HEADER */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Dashboard de Producción</h1>
-
-        <div className="flex gap-2">
-          <Link href="/"><Button variant="outline">Inicio</Button></Link>
-          <Link href="/po/nuevo/editar"><Button>Nuevo PO</Button></Link>
-          <Link href="/produccion/import"><Button variant="outline">Importador CSV</Button></Link>
-        </div>
-      </div>
+      <DashboardHeader />
 
       {/* TABS */}
       <Tabs defaultValue="dashboard" className="space-y-4">
