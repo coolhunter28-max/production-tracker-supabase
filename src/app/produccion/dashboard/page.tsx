@@ -425,14 +425,8 @@ const handleImportChina = async (): Promise<string> => {
             totalFactories={factories.length}
           />
 
-                   {/* EXPORT CHINA */}
-          <ExportChina
-            seasons={seasons}
-            exportSeasons={exportSeasons}
-            toggleExportSeason={toggleExportSeason}
-            handleExportChina={handleExportChina}
-          />
-
+{/* EXPORT CHINA */}
+<ExportChina seasons={seasons} />
 
    <ImportChina
   chinaFile={chinaFile}
