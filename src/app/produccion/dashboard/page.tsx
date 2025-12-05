@@ -4,23 +4,25 @@ import { useState, useEffect, useMemo } from "react";
 import { fetchPOs } from "@/services/pos";
 import { PO } from "@/types";
 
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import Link from "next/link";
-
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import DashboardCards from "@/components/dashboard/DashboardCards";
 import ExportChina from "@/components/dashboard/ExportChina";
 import ImportChina from "@/components/dashboard/ImportChina";
-import POsTable from "@/components/dashboard/POsTable";
-import AlertasDashboard from "@/components/alertas/AlertasDashboard";
 import FiltersBox from "@/components/dashboard/FiltersBox";
-import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import POsTable from "@/components/dashboard/POsTable";
+import AlertsBox from "@/components/dashboard/AlertsBox";
+
+// Estados y gráficos
+import { getEstadoPO } from "@/utils/getEstadoPO";
+import { getEstadoPOPriority } from "@/utils/getEstadoPriority";
+import { getDashboardEstados } from "@/utils/getDashboardEstados";
+import POStatusChart from "@/components/dashboard/POStatusChart";
 
 // -----------------------------------------------------
-// Tipos y constantes
+// Tipos
 // -----------------------------------------------------
-
 type Filters = {
   customer: string;
   supplier: string;
@@ -39,26 +41,27 @@ const DEFAULT_FILTERS: Filters = {
   search: "",
 };
 
-// Helper seguro
 function getStylesFromPO(po: PO): string[] {
-  const maybe = (po as any)?.styles;
-  return Array.isArray(maybe) ? maybe.filter(Boolean) : [];
+  const list = (po as any)?.styles;
+  return Array.isArray(list) ? list.filter(Boolean) : [];
 }
 
 // -----------------------------------------------------
 // Página principal
 // -----------------------------------------------------
-
 export default function DashboardPage() {
   const [pos, setPOs] = useState<PO[]>([]);
   const [filteredPOs, setFilteredPOs] = useState<PO[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // FILTROS (tabla principal)
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
-  // Alerts (solo estado, sin lógica vieja)
-  const [alertasNoLeidasCount, setAlertasNoLeidasCount] = useState(0);
-  const [generandoAlertas, setGenerandoAlertas] = useState(false);
-  const [mensajeAlertas, setMensajeAlertas] = useState("");
+  // FILTROS DEL GRÁFICO
+  const [selectedSeason, setSelectedSeason] = useState("todas");
+  const [selectedSupplier, setSelectedSupplier] = useState("todos");
+  const [selectedFactory, setSelectedFactory] = useState("todos");
+  const [selectedCustomer, setSelectedCustomer] = useState("todos");
 
   // Import China
   const [chinaFile, setChinaFile] = useState<File | null>(null);
@@ -69,18 +72,18 @@ export default function DashboardPage() {
   // Cargar POs
   // -----------------------------------------------------
   useEffect(() => {
-    const loadPOs = async () => {
+    const loadData = async () => {
       try {
         const data = await fetchPOs();
         setPOs(data);
         setFilteredPOs(data);
-      } catch (error) {
-        console.error("Error loading POs:", error);
+      } catch (err) {
+        console.error("Error cargando POs:", err);
       } finally {
         setLoading(false);
       }
     };
-    loadPOs();
+    loadData();
   }, []);
 
   // -----------------------------------------------------
@@ -107,55 +110,59 @@ export default function DashboardPage() {
   );
 
   const availableStyles = useMemo(() => {
-    const all = pos.flatMap((po) => getStylesFromPO(po));
-    return [...new Set(all)].sort();
+    const styles = pos.flatMap((po) => getStylesFromPO(po));
+    return [...new Set(styles)].sort();
   }, [pos]);
 
   // -----------------------------------------------------
-  // Funciones refactorizadas para FiltersBox
-  // -----------------------------------------------------
-
-  const updateFilter = (field: keyof Filters, value: string) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const resetFilters = () => {
-    setFilters(DEFAULT_FILTERS);
-  };
-
-  // -----------------------------------------------------
-  // Aplicar filtros
+  // Aplicar filtros a la TABLA + ordenar por estado
   // -----------------------------------------------------
   useEffect(() => {
     let result = pos;
 
-    if (filters.customer !== "todos") result = result.filter((po) => po.customer === filters.customer);
-    if (filters.supplier !== "todos") result = result.filter((po) => po.supplier === filters.supplier);
-    if (filters.factory !== "todos") result = result.filter((po) => po.factory === filters.factory);
-    if (filters.season !== "todos") result = result.filter((po) => (po as any)?.season === filters.season);
+    if (filters.customer !== "todos")
+      result = result.filter((p) => p.customer === filters.customer);
+
+    if (filters.supplier !== "todos")
+      result = result.filter((p) => p.supplier === filters.supplier);
+
+    if (filters.factory !== "todos")
+      result = result.filter((p) => p.factory === filters.factory);
+
+    if (filters.season !== "todos")
+      result = result.filter((p) => (p as any)?.season === filters.season);
 
     if (filters.style !== "todos") {
-      result = result.filter((po) => getStylesFromPO(po).includes(filters.style));
+      result = result.filter((p) =>
+        getStylesFromPO(p).includes(filters.style)
+      );
     }
 
     if (filters.search) {
       const q = filters.search.toLowerCase();
-      result = result.filter((po) => {
+      result = result.filter((p) => {
         const test = (s?: string) => (s || "").toLowerCase().includes(q);
-        const styles = getStylesFromPO(po).join(" ").toLowerCase();
+        const styles = getStylesFromPO(p).join(" ").toLowerCase();
 
         return (
-          test(po.po) ||
-          test(po.customer) ||
-          test(po.supplier) ||
-          test(po.factory) ||
-          test((po as any)?.season) ||
+          test(p.po) ||
+          test(p.customer) ||
+          test(p.supplier) ||
+          test(p.factory) ||
+          test((p as any)?.season) ||
           styles.includes(q)
         );
       });
     }
 
-    setFilteredPOs(result);
+    // ORDENAR POR ESTADO (Delay → Producción → Finalizado → Sin datos)
+    const sorted = [...result].sort((a, b) => {
+      const eA = getEstadoPO(a);
+      const eB = getEstadoPO(b);
+      return getEstadoPOPriority(eA.estado) - getEstadoPOPriority(eB.estado);
+    });
+
+    setFilteredPOs(sorted);
   }, [filters, pos]);
 
   // -----------------------------------------------------
@@ -208,6 +215,17 @@ export default function DashboardPage() {
   };
 
   // -----------------------------------------------------
+  // FILTRO DEL GRÁFICO
+  // -----------------------------------------------------
+  const posForChart = pos
+    .filter((p) => selectedSeason === "todas" || (p as any)?.season === selectedSeason)
+    .filter((p) => selectedSupplier === "todos" || p.supplier === selectedSupplier)
+    .filter((p) => selectedFactory === "todos" || p.factory === selectedFactory)
+    .filter((p) => selectedCustomer === "todos" || p.customer === selectedCustomer);
+
+  const chartData = getDashboardEstados(posForChart);
+
+  // -----------------------------------------------------
   // Loader
   // -----------------------------------------------------
   if (loading) {
@@ -215,7 +233,7 @@ export default function DashboardPage() {
   }
 
   // -----------------------------------------------------
-  // UI principal
+  // Render principal
   // -----------------------------------------------------
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -227,19 +245,11 @@ export default function DashboardPage() {
       <Tabs defaultValue="dashboard" className="space-y-4">
         <TabsList>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-
-          <TabsTrigger value="alertas">
-            Alertas
-            {alertasNoLeidasCount > 0 && (
-              <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-1">
-                {alertasNoLeidasCount}
-              </span>
-            )}
-          </TabsTrigger>
+          <TabsTrigger value="alertas">Alertas</TabsTrigger>
         </TabsList>
 
-        {/* TAB DASHBOARD */}
-        <TabsContent value="dashboard" className="space-y-4">
+        {/* --- TAB: DASHBOARD --- */}
+        <TabsContent value="dashboard" className="space-y-6">
 
           <DashboardCards
             totalPOs={pos.length}
@@ -248,6 +258,84 @@ export default function DashboardPage() {
             totalFactories={factories.length}
           />
 
+          {/* ================================
+              FILTROS DEL GRÁFICO
+          ================================== */}
+          <div className="bg-white p-4 rounded-lg shadow space-y-4">
+            <h2 className="text-lg font-semibold">Estado general de los POs</h2>
+
+            {/* SELECTORES */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+              {/* Season */}
+              <div>
+                <label className="text-sm font-medium">Season:</label>
+                <select
+                  value={selectedSeason}
+                  onChange={(e) => setSelectedSeason(e.target.value)}
+                  className="w-full border px-3 py-1 rounded"
+                >
+                  <option value="todas">Todas</option>
+                  {seasons.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Supplier */}
+              <div>
+                <label className="text-sm font-medium">Supplier:</label>
+                <select
+                  value={selectedSupplier}
+                  onChange={(e) => setSelectedSupplier(e.target.value)}
+                  className="w-full border px-3 py-1 rounded"
+                >
+                  <option value="todos">Todos</option>
+                  {suppliers.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Factory */}
+              <div>
+                <label className="text-sm font-medium">Factory:</label>
+                <select
+                  value={selectedFactory}
+                  onChange={(e) => setSelectedFactory(e.target.value)}
+                  className="w-full border px-3 py-1 rounded"
+                >
+                  <option value="todos">Todas</option>
+                  {factories.map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Customer */}
+              <div>
+                <label className="text-sm font-medium">Customer:</label>
+                <select
+                  value={selectedCustomer}
+                  onChange={(e) => setSelectedCustomer(e.target.value)}
+                  className="w-full border px-3 py-1 rounded"
+                >
+                  <option value="todos">Todos</option>
+                  {customers.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+            </div>
+
+            {/* GRÁFICO */}
+            <div className="pt-4">
+              <POStatusChart data={chartData} />
+            </div>
+          </div>
+
+          {/* IMPORT / EXPORT / FILTERS */}
           <ExportChina seasons={seasons} />
 
           <ImportChina
@@ -265,38 +353,18 @@ export default function DashboardPage() {
             seasons={seasons}
             styles={availableStyles}
             filters={filters}
-            onChange={updateFilter}
-            onClear={resetFilters}
+            onChange={setFilters}
+            onClear={() => setFilters(DEFAULT_FILTERS)}
           />
 
           <POsTable pos={filteredPOs} />
         </TabsContent>
 
-        {/* TAB ALERTAS */}
+        {/* --- TAB: ALERTAS --- */}
         <TabsContent value="alertas" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Sistema de Alertas</h2>
-
-            <Button
-              onClick={async () => {
-                setGenerandoAlertas(true);
-                const res = await fetch("/api/generar-alertas", { method: "POST" });
-                const data = await res.json();
-                setMensajeAlertas(data.message || "Proceso finalizado.");
-                setGenerandoAlertas(false);
-              }}
-              disabled={generandoAlertas}
-            >
-              {generandoAlertas ? "Generando..." : "Generar alertas"}
-            </Button>
-          </div>
-
-          {mensajeAlertas && (
-            <div className="p-3 rounded bg-gray-50 border">{mensajeAlertas}</div>
-          )}
-
-          <AlertasDashboard />
+          <AlertsBox />
         </TabsContent>
+
       </Tabs>
     </div>
   );

@@ -189,3 +189,6 @@ git push -u origin main
 
 📌 **Notas finales**  
 Este README se irá actualizando a medida que avancemos con la migración del módulo de inspecciones y la optimización de dashboards.
+## Documentación interna
+
+- [Documento maestro del Production Tracker](./docs/production-tracker-documento-maestro.md)
