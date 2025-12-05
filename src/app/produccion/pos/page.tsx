@@ -115,8 +115,9 @@ export default function POsPage() {
             ← Inicio
           </Link>
 
+          {/* ✅ RUTA CORRECTA */}
           <Link
-            href="/produccion/pos/nuevo"
+            href="/po/nuevo/editar"
             className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800 transition"
           >
             + Nuevo PO
