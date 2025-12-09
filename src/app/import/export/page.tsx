@@ -1,19 +1,59 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ImportExportLayout from "@/components/layout/ImportExportLayout";
+import { supabase } from "@/lib/supabase";
 
 export default function ExportChinaPage() {
-  const [season, setSeason] = useState("FW25");
+  const [seasons, setSeasons] = useState<string[]>([]);
+  const [selectedSeasons, setSelectedSeasons] = useState<string[]>([]);
   const [downloading, setDownloading] = useState(false);
   const [msg, setMsg] = useState("");
 
+  // 🔥 CARGAR SEASONS REALES DESDE LA BBDD
+  useEffect(() => {
+    const loadSeasons = async () => {
+      const { data, error } = await supabase
+        .from("pos")
+        .select("season")
+        .order("season", { ascending: false });
+
+      if (error) {
+        console.error("Error loading seasons:", error);
+        return;
+      }
+
+      const unique = Array.from(new Set(data.map((x) => x.season))).filter(
+        (x) => x && x.trim() !== ""
+      );
+
+      setSeasons(unique);
+    };
+
+    loadSeasons();
+  }, []);
+
+  const handleSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const values = Array.from(
+      event.target.selectedOptions,
+      (opt) => opt.value
+    );
+    setSelectedSeasons(values);
+  };
+
   const handleExport = async () => {
+    if (selectedSeasons.length === 0) {
+      setMsg("Selecciona al menos una season.");
+      return;
+    }
+
     setDownloading(true);
     setMsg("");
 
     try {
-const res = await fetch(`/api/export-china?seasons=${season}`);
+      const seasonParam = selectedSeasons.join(",");
+
+      const res = await fetch(`/api/export-china?seasons=${seasonParam}`);
 
       if (!res.ok) {
         setMsg("Error realizando exportación.");
@@ -21,13 +61,13 @@ const res = await fetch(`/api/export-china?seasons=${season}`);
         return;
       }
 
-      // Descargar el archivo
+      // Descargar archivo
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = `EXPORT_CHINA_${season}.xlsx`;
+      a.download = `EXPORT_CHINA_${seasonParam}.xlsx`;
       a.click();
 
       setMsg("Exportación completada.");
@@ -46,19 +86,25 @@ const res = await fetch(`/api/export-china?seasons=${season}`);
     >
       <div className="flex flex-col gap-6">
 
-        {/* Selector de season */}
+        {/* Selector de seasons dinámicas */}
         <div className="flex flex-col">
-          <label className="font-medium mb-1">Selecciona Season:</label>
+          <label className="font-medium mb-1">Selecciona Season(s):</label>
+
           <select
-            className="border p-3 rounded-lg"
-            value={season}
-            onChange={(e) => setSeason(e.target.value)}
+            multiple
+            className="border p-3 rounded-lg h-40"
+            onChange={handleSelect}
           >
-            <option>FW25</option>
-            <option>SS25</option>
-            <option>FW24</option>
-            <option>SS24</option>
+            {seasons.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
+
+          <small className="text-gray-500 mt-1">
+            * Pulsa CTRL para seleccionar varias
+          </small>
         </div>
 
         <button
