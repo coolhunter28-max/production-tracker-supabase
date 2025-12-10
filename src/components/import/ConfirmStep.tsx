@@ -7,7 +7,7 @@ interface ConfirmStepProps {
   groupedPOs: any[];
   compareResult: any;
   onBack: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void;  // redirect final
 }
 
 export default function ConfirmStep({
@@ -19,17 +19,11 @@ export default function ConfirmStep({
   const [importing, setImporting] = useState(false);
   const [summary, setSummary] = useState<any | null>(null);
 
-  // 🔍 Log de lo que llega a este paso
-  useEffect(() => {
-    console.log("🔎 [ConfirmStep] groupedPOs:", groupedPOs);
-    console.log("🔎 [ConfirmStep] compareResult:", compareResult);
-  }, [groupedPOs, compareResult]);
-
   const handleImport = async () => {
     try {
       setImporting(true);
 
-      console.log("📨 [ConfirmStep] Enviando a /api/import-csv:", {
+      console.log("📨 Enviando a /api/import-csv:", {
         groupedPOs,
         compareResult,
       });
@@ -41,39 +35,45 @@ export default function ConfirmStep({
       });
 
       const json = await res.json();
-
-      console.log("📥 [ConfirmStep] Respuesta de /api/import-csv:", json);
-
       setImporting(false);
+
+      console.log("📥 Respuesta importación:", json);
+
+      // ⛳ MOSTRAR EL RESUMEN
       setSummary(json);
 
-      if (json.ok) onConfirm();
+      // ⛳ SOLO REDIRIGIR DESPUÉS DE 2 segundos
+      if (json.ok) {
+        setTimeout(() => {
+          onConfirm();
+        }, 2000);
+      }
+
     } catch (err) {
-      console.error("💥 [ConfirmStep] Error al llamar a /api/import-csv:", err);
+      console.error("💥 Error al importar:", err);
       setImporting(false);
-      alert("Error inesperado al importar. Revisa la consola.");
+      alert("Error inesperado al importar. Consulta consola.");
     }
   };
 
   return (
     <div className="text-center space-y-6">
       <h2 className="text-2xl font-semibold">Confirmación de importación</h2>
-      <p>
-        Se importarán solo los <b>POs nuevos o modificados</b>.
-      </p>
+      <p>Se importarán solo los <b>POs nuevos o modificados</b>.</p>
 
       <div className="text-gray-700">
-        🟢 Nuevos: <b>{compareResult?.nuevos || 0}</b> | 🟠 Modificados:{" "}
-        <b>{compareResult?.modificados || 0}</b> | ⚪ Sin cambios:{" "}
-        <b>{compareResult?.sinCambios || 0}</b>
+        🟢 Nuevos: <b>{compareResult?.nuevos || 0}</b> |
+        🟠 Modificados: <b>{compareResult?.modificados || 0}</b> |
+        ⚪ Sin cambios: <b>{compareResult?.sinCambios || 0}</b>
       </div>
 
       {summary && (
         <div className="mt-4 border-t pt-4 text-sm text-gray-700">
           <p>✅ Nuevos: {summary.nuevos}</p>
           <p>🔁 Actualizados: {summary.actualizados}</p>
-          <p>
-            🧩 Muestras insertadas/actualizadas: {summary.muestrasInsertadas}
+          <p>🧩 Muestras insertadas/actualizadas: {summary.muestrasInsertadas}</p>
+          <p className="text-green-700 font-semibold mt-2">
+            ✔ Importación finalizada correctamente
           </p>
         </div>
       )}
@@ -82,6 +82,7 @@ export default function ConfirmStep({
         <Button onClick={onBack} variant="outline">
           ← Volver
         </Button>
+
         <Button
           onClick={handleImport}
           disabled={importing}
