@@ -7,12 +7,14 @@ import POsTable from "@/components/dashboard/POsTable";
 import Link from "next/link";
 import { PO } from "@/types";
 
+import { getEstadoPO } from "@/utils/getEstadoPO";
+
 type Filters = {
   customer: string;
   supplier: string;
   factory: string;
   season: string;
-  style: string;
+  estado: string;
   search: string;
 };
 
@@ -21,27 +23,38 @@ const DEFAULT_FILTERS: Filters = {
   supplier: "todos",
   factory: "todos",
   season: "todos",
-  style: "todos",
+  estado: "todos",
   search: "",
 };
 
 export default function POsPage() {
-  const [pos, setPOs] = useState<PO[]>([]);
-  const [filteredPOs, setFilteredPOs] = useState<PO[]>([]);
+  const [pos, setPOs] = useState<any[]>([]);
+  const [filteredPOs, setFilteredPOs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
   // -----------------------------------------------------
-  // Load POs
+  // Load POs + calcular estado dinámico
   // -----------------------------------------------------
   useEffect(() => {
     const load = async () => {
       const data = await fetchPOs();
-      setPOs(data);
-      setFilteredPOs(data);
+
+      // ⭐ Añadir estado calculado
+      const enriched = data.map((po: any) => {
+        const estadoInfo = getEstadoPO(po);
+        return {
+          ...po,
+          estado: estadoInfo.estado ?? "Sin datos",
+        };
+      });
+
+      setPOs(enriched);
+      setFilteredPOs(enriched);
       setLoading(false);
     };
+
     load();
   }, []);
 
@@ -52,16 +65,25 @@ export default function POsPage() {
     () => [...new Set(pos.map((p) => p.customer).filter(Boolean))].sort(),
     [pos]
   );
+
   const suppliers = useMemo(
     () => [...new Set(pos.map((p) => p.supplier).filter(Boolean))].sort(),
     [pos]
   );
+
   const factories = useMemo(
     () => [...new Set(pos.map((p) => p.factory).filter(Boolean))].sort(),
     [pos]
   );
+
   const seasons = useMemo(
     () => [...new Set(pos.map((p) => p.season).filter(Boolean))].sort(),
+    [pos]
+  );
+
+  const estados = useMemo(
+    () =>
+      [...new Set(pos.map((p) => p.estado).filter(Boolean))].sort(), // Delay / Finalizado / En producción / Sin datos
     [pos]
   );
 
@@ -86,6 +108,9 @@ export default function POsPage() {
     if (filters.season !== "todos")
       result = result.filter((p) => p.season === filters.season);
 
+    if (filters.estado !== "todos")
+      result = result.filter((p) => p.estado === filters.estado);
+
     if (filters.search)
       result = result.filter(
         (p) =>
@@ -93,11 +118,16 @@ export default function POsPage() {
           test(p.customer) ||
           test(p.supplier) ||
           test(p.factory) ||
-          test(p.season)
+          test(p.season) ||
+          test(p.estado)
       );
 
     setFilteredPOs(result);
   }, [filters, pos]);
+
+  const handleFilterChange = (field: keyof Filters, value: string) => {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+  };
 
   if (loading) return <div className="p-10">Cargando...</div>;
 
@@ -115,7 +145,7 @@ export default function POsPage() {
             ← Inicio
           </Link>
 
-          {/* ✅ RUTA CORRECTA */}
+          {/* Ruta correcta */}
           <Link
             href="/po/nuevo/editar"
             className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800 transition"
@@ -131,9 +161,9 @@ export default function POsPage() {
         suppliers={suppliers}
         factories={factories}
         seasons={seasons}
-        styles={[]} // por ahora vacío
+        estados={estados}
         filters={filters}
-        onChange={setFilters}
+        onChange={handleFilterChange}
         onClear={() => setFilters(DEFAULT_FILTERS)}
       />
 

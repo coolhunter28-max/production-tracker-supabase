@@ -1,7 +1,13 @@
 "use client";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -10,7 +16,7 @@ type Filters = {
   supplier: string;
   factory: string;
   season: string;
-  style: string;
+  estado: string;
   search: string;
 };
 
@@ -19,7 +25,7 @@ export default function FiltersBox({
   suppliers,
   factories,
   seasons,
-  styles,
+  estados,
   filters,
   onChange,
   onClear,
@@ -28,7 +34,7 @@ export default function FiltersBox({
   suppliers: string[];
   factories: string[];
   seasons: string[];
-  styles: string[];
+  estados: string[];
   filters: Filters;
   onChange: (field: keyof Filters, value: string) => void;
   onClear: () => void;
@@ -40,7 +46,6 @@ export default function FiltersBox({
       </CardHeader>
 
       <CardContent>
-        {/* GRID DE FILTROS */}
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
 
           {/* CUSTOMER */}
@@ -56,9 +61,7 @@ export default function FiltersBox({
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 {customers.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -77,9 +80,7 @@ export default function FiltersBox({
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 {suppliers.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -98,9 +99,7 @@ export default function FiltersBox({
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 {factories.map((f) => (
-                  <SelectItem key={f} value={f}>
-                    {f}
-                  </SelectItem>
+                  <SelectItem key={f} value={f}>{f}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -119,29 +118,44 @@ export default function FiltersBox({
               <SelectContent>
                 <SelectItem value="todos">Todas</SelectItem>
                 {seasons.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* STYLE */}
+          {/* ESTADO */}
           <div>
-            <label className="text-sm">Style</label>
+            <label className="text-sm">Estado</label>
             <Select
-              value={filters.style}
-              onValueChange={(v) => onChange("style", v)}
+              value={filters.estado}
+              onValueChange={(v) => onChange("estado", v)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
-                {styles.map((st) => (
-                  <SelectItem key={st} value={st}>
-                    {st}
+
+                {estados.map((e) => (
+                  <SelectItem key={e} value={e}>
+                    <div className="flex items-center gap-2">
+                      {/* COLORES */}
+                      {e === "Finalizado" && (
+                        <span className="w-3 h-3 rounded-full bg-green-500" />
+                      )}
+                      {e === "En producción" && (
+                        <span className="w-3 h-3 rounded-full bg-blue-500" />
+                      )}
+                      {e === "Delay" && (
+                        <span className="w-3 h-3 rounded-full bg-red-500" />
+                      )}
+                      {e === "Sin datos" && (
+                        <span className="w-3 h-3 rounded-full bg-gray-400" />
+                      )}
+
+                      {e}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -157,7 +171,6 @@ export default function FiltersBox({
               placeholder="PO / Supplier / Customer..."
             />
           </div>
-
         </div>
 
         {/* BOTÓN LIMPIAR */}
@@ -166,7 +179,6 @@ export default function FiltersBox({
             Limpiar filtros
           </Button>
         </div>
-
       </CardContent>
     </Card>
   );

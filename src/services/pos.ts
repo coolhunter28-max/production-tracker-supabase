@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";   // ⬅️ ANTES ponía supabaseClient
+import { supabase } from "@/lib/supabase";
 import { PO } from "@/types";
 
 export async function fetchPOs(): Promise<PO[]> {
@@ -12,5 +12,13 @@ export async function fetchPOs(): Promise<PO[]> {
     return [];
   }
 
-  return data || [];
+  if (!data) return [];
+
+  // ⚠️ REGLA: si no hay estado, generamos uno por defecto
+  const enriched = data.map((po: any) => ({
+    ...po,
+    estado: po.estado || "Sin datos",
+  }));
+
+  return enriched;
 }
