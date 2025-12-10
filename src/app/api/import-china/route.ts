@@ -71,7 +71,7 @@ export async function POST(req: Request) {
     let lineasActualizadas = 0;
     let muestrasActualizadas = 0;
 
-    const DATA_START = 4; // cabeceras están en fila 3
+    const DATA_START = 4;
 
     for (let rowIndex = DATA_START; rowIndex <= sheet.rowCount; rowIndex++) {
       const row = sheet.getRow(rowIndex);
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
       // -------------------------------------------------------------
       // IDENTIFICADORES DEL EXCEL
       // -------------------------------------------------------------
-      const lineaId = parseSCO(row.getCell(1).value); // SCO → columna A
+      const lineaId = parseSCO(row.getCell(1).value);
       if (!lineaId) continue;
 
       const excelRef = row.getCell(7).value ? String(row.getCell(7).value) : "-";
@@ -111,21 +111,22 @@ export async function POST(req: Request) {
 
       if (lineaError || !linea) {
         errores.push(
-          `[PO ${excelPO}] [Ref ${excelRef}] [Style ${excelStyle}] [Color ${excelColor}] ` +
-            `[SCO ${lineaId}] Línea no existe en BD (no se ha podido actualizar).`
+          `[PO ${excelPO}] [Ref ${excelRef}] [Style ${excelStyle}] [Color ${excelColor}] [SCO ${lineaId}] Línea no existe en BD.`
         );
         continue;
       }
 
-      // Obtener PO "humano" para el reporte
+      // Obtener número de PO
       let poNumber = excelPO;
       try {
         const { data: poRow } = await supabase
           .from("pos")
-          .select("po")
+          .select("po, inspection, booking, closing, shipping_date")
           .eq("id", linea.po_id)
           .single();
         if (poRow?.po) poNumber = poRow.po;
+
+        linea.poData = poRow; // guardo PO para comparar antiguos
       } catch {}
 
       const refBD = linea.reference || excelRef;
@@ -135,40 +136,45 @@ export async function POST(req: Request) {
       posActualizados.add(linea.po_id);
 
       // -------------------------------------------------------------
-      // ACTUALIZAR FECHAS DE TRIALS / FINISH (columnas 26–29)
+      // TRIALS & FINISH DATE
       // -------------------------------------------------------------
       const newTrialUpper = parseDate(row.getCell(26).value);
       const newTrialLasting = parseDate(row.getCell(27).value);
       const newLasting = parseDate(row.getCell(28).value);
       const newFinishDate = parseDate(row.getCell(29).value);
 
+      const oldTrialUpper = linea.trial_upper;
+      const oldTrialLasting = linea.trial_lasting;
+      const oldLasting = linea.lasting;
+      const oldFinishDate = linea.finish_date;
+
       const updateLinea: any = {};
 
-      if (newTrialUpper) {
+      if (newTrialUpper && newTrialUpper !== oldTrialUpper) {
         updateLinea.trial_upper = newTrialUpper;
         cambios.push(
-          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] trial_upper → ${newTrialUpper}`
+          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] trial_upper: ${oldTrialUpper || "—"} → ${newTrialUpper}`
         );
       }
 
-      if (newTrialLasting) {
+      if (newTrialLasting && newTrialLasting !== oldTrialLasting) {
         updateLinea.trial_lasting = newTrialLasting;
         cambios.push(
-          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] trial_lasting → ${newTrialLasting}`
+          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] trial_lasting: ${oldTrialLasting || "—"} → ${newTrialLasting}`
         );
       }
 
-      if (newLasting) {
+      if (newLasting && newLasting !== oldLasting) {
         updateLinea.lasting = newLasting;
         cambios.push(
-          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] lasting → ${newLasting}`
+          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] lasting: ${oldLasting || "—"} → ${newLasting}`
         );
       }
 
-      if (newFinishDate) {
+      if (newFinishDate && newFinishDate !== oldFinishDate) {
         updateLinea.finish_date = newFinishDate;
         cambios.push(
-          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] finish_date → ${newFinishDate}`
+          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] finish_date: ${oldFinishDate || "—"} → ${newFinishDate}`
         );
       }
 
@@ -178,7 +184,7 @@ export async function POST(req: Request) {
       }
 
       // -------------------------------------------------------------
-      // ACTUALIZAR MUESTRAS (CFM, COUNTER, FITTING, PPS, TESTING, SHIPPING)
+      // MUESTRAS
       // -------------------------------------------------------------
       const muestraMapping = {
         CFMS: parseDate(row.getCell(15).value),
@@ -193,32 +199,32 @@ export async function POST(req: Request) {
         const nuevaFecha = muestraMapping[tipo];
         if (!nuevaFecha) continue;
 
-        const existente = linea.muestras?.find(
-          (m: any) => m.tipo_muestra === tipo
-        );
-
+        const existente = linea.muestras?.find((m: any) => m.tipo_muestra === tipo);
         if (!existente) {
           avisos.push(
-            `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] ` +
-              `Muestra ${tipo} no existe en BD. Se ignora (no se crea nueva).`
+            `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] Muestra ${tipo} no existe.`
           );
           continue;
         }
 
-        await supabase
-          .from("muestras")
-          .update({ fecha_muestra: nuevaFecha })
-          .eq("id", existente.id);
+        const oldFecha = existente.fecha_muestra;
 
-        muestrasActualizadas++;
-        cambios.push(
-          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] ` +
-            `Muestra ${tipo} → fecha_muestra = ${nuevaFecha}`
-        );
+        if (nuevaFecha !== oldFecha) {
+          await supabase
+            .from("muestras")
+            .update({ fecha_muestra: nuevaFecha })
+            .eq("id", existente.id);
+
+          muestrasActualizadas++;
+
+          cambios.push(
+            `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] Muestra ${tipo}: ${oldFecha || "—"} → ${nuevaFecha}`
+          );
+        }
       }
 
       // -------------------------------------------------------------
-      // CAMPOS EDITABLES DEL PO (Inspection, Booking...)
+      // CAMPOS EDITABLES DEL PO
       // -------------------------------------------------------------
       const inspection = parseDate(row.getCell(31).value);
       const booking = parseDate(row.getCell(32).value);
@@ -227,31 +233,36 @@ export async function POST(req: Request) {
 
       const updatePO: any = {};
 
-      if (inspection) {
+      const oldInspection = linea.poData?.inspection || null;
+      const oldBooking = linea.poData?.booking || null;
+      const oldClosing = linea.poData?.closing || null;
+      const oldShipping = linea.poData?.shipping_date || null;
+
+      if (inspection && inspection !== oldInspection) {
         updatePO.inspection = inspection;
         cambios.push(
-          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] inspection → ${inspection}`
+          `[PO ${poNumber}] inspection: ${oldInspection || "—"} → ${inspection}`
         );
       }
 
-      if (booking) {
+      if (booking && booking !== oldBooking) {
         updatePO.booking = booking;
         cambios.push(
-          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] booking → ${booking}`
+          `[PO ${poNumber}] booking: ${oldBooking || "—"} → ${booking}`
         );
       }
 
-      if (closing) {
+      if (closing && closing !== oldClosing) {
         updatePO.closing = closing;
         cambios.push(
-          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] closing → ${closing}`
+          `[PO ${poNumber}] closing: ${oldClosing || "—"} → ${closing}`
         );
       }
 
-      if (shipping_date) {
+      if (shipping_date && shipping_date !== oldShipping) {
         updatePO.shipping_date = shipping_date;
         cambios.push(
-          `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] shipping_date → ${shipping_date}`
+          `[PO ${poNumber}] shipping_date: ${oldShipping || "—"} → ${shipping_date}`
         );
       }
 
@@ -270,9 +281,7 @@ export async function POST(req: Request) {
       muestras_actualizadas: muestrasActualizadas,
       avisos,
       errores,
-      detalles: {
-        cambios,
-      },
+      detalles: { cambios },
     });
   } catch (error: any) {
     console.error("Error import-china:", error);

@@ -105,7 +105,8 @@ export default function DashboardPage() {
   );
 
   const seasons = useMemo(
-    () => [...new Set(pos.map((p) => (p as any)?.season).filter(Boolean))].sort(),
+    () =>
+      [...new Set(pos.map((p) => (p as any)?.season).filter(Boolean))].sort(),
     [pos]
   );
 
@@ -133,9 +134,7 @@ export default function DashboardPage() {
       result = result.filter((p) => (p as any)?.season === filters.season);
 
     if (filters.style !== "todos") {
-      result = result.filter((p) =>
-        getStylesFromPO(p).includes(filters.style)
-      );
+      result = result.filter((p) => getStylesFromPO(p).includes(filters.style));
     }
 
     if (filters.search) {
@@ -155,7 +154,6 @@ export default function DashboardPage() {
       });
     }
 
-    // ORDENAR POR ESTADO (Delay → Producción → Finalizado → Sin datos)
     const sorted = [...result].sort((a, b) => {
       const eA = getEstadoPO(a);
       const eB = getEstadoPO(b);
@@ -166,7 +164,7 @@ export default function DashboardPage() {
   }, [filters, pos]);
 
   // -----------------------------------------------------
-  // Import China
+  // Import China (UNIFICADO con /import/china)
   // -----------------------------------------------------
   const handleChinaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setChinaFile(e.target.files?.[0] || null);
@@ -199,7 +197,8 @@ export default function DashboardPage() {
         return msg;
       }
 
-      const resumen =
+      // Resumen corto para ver directamente en la tarjeta
+      const resumenCorto =
         `Importación completada:\n` +
         `• POs encontrados: ${json.pos_encontrados}\n` +
         `• Líneas actualizadas: ${json.lineas_actualizadas}\n` +
@@ -207,8 +206,40 @@ export default function DashboardPage() {
         `• Avisos: ${json.avisos.length}\n` +
         `• Errores: ${json.errores.length}\n`;
 
-      setImportChinaMsg(resumen);
-      return resumen;
+      setImportChinaMsg(resumenCorto);
+
+      // Informe completo (el que se muestra en el modal + TXT)
+      const cambios: string[] = json.detalles?.cambios || [];
+      const avisos: string[] = json.avisos || [];
+      const errores: string[] = json.errores || [];
+
+      const reportLines: string[] = [
+        "===== INFORME IMPORTACIÓN CHINA =====",
+        "",
+        `POs encontrados: ${json.pos_encontrados}`,
+        `Líneas actualizadas: ${json.lineas_actualizadas}`,
+        `Muestras actualizadas: ${json.muestras_actualizadas}`,
+        `Avisos: ${avisos.length}`,
+        `Errores: ${errores.length}`,
+        "",
+        "=== CAMBIOS ===",
+        ...(cambios.length > 0
+          ? cambios.map((c) => `• ${c}`)
+          : ["(Sin cambios registrados)"]),
+        "",
+        "=== AVISOS ===",
+        ...(avisos.length > 0
+          ? avisos.map((a) => `• ${a}`)
+          : ["(Sin avisos)"]),
+        "",
+        "=== ERRORES ===",
+        ...(errores.length > 0
+          ? errores.map((e) => `• ${e}`)
+          : ["(Sin errores)"]),
+      ];
+
+      const report = reportLines.join("\n");
+      return report; // 🔥 esto lo recibe el componente ImportChina y abre el modal
     } finally {
       setImportingChina(false);
     }
@@ -218,10 +249,18 @@ export default function DashboardPage() {
   // FILTRO DEL GRÁFICO
   // -----------------------------------------------------
   const posForChart = pos
-    .filter((p) => selectedSeason === "todas" || (p as any)?.season === selectedSeason)
-    .filter((p) => selectedSupplier === "todos" || p.supplier === selectedSupplier)
-    .filter((p) => selectedFactory === "todos" || p.factory === selectedFactory)
-    .filter((p) => selectedCustomer === "todos" || p.customer === selectedCustomer);
+    .filter(
+      (p) => selectedSeason === "todas" || (p as any)?.season === selectedSeason
+    )
+    .filter(
+      (p) => selectedSupplier === "todos" || p.supplier === selectedSupplier
+    )
+    .filter(
+      (p) => selectedFactory === "todos" || p.factory === selectedFactory
+    )
+    .filter(
+      (p) => selectedCustomer === "todos" || p.customer === selectedCustomer
+    );
 
   const chartData = getDashboardEstados(posForChart);
 
@@ -237,7 +276,6 @@ export default function DashboardPage() {
   // -----------------------------------------------------
   return (
     <div className="container mx-auto py-6 space-y-6">
-
       {/* HEADER */}
       <DashboardHeader />
 
@@ -250,7 +288,6 @@ export default function DashboardPage() {
 
         {/* --- TAB: DASHBOARD --- */}
         <TabsContent value="dashboard" className="space-y-6">
-
           <DashboardCards
             totalPOs={pos.length}
             totalCustomers={customers.length}
@@ -258,15 +295,11 @@ export default function DashboardPage() {
             totalFactories={factories.length}
           />
 
-          {/* ================================
-              FILTROS DEL GRÁFICO
-          ================================== */}
+          {/* FILTROS DEL GRÁFICO */}
           <div className="bg-white p-4 rounded-lg shadow space-y-4">
             <h2 className="text-lg font-semibold">Estado general de los POs</h2>
 
-            {/* SELECTORES */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-
               {/* Season */}
               <div>
                 <label className="text-sm font-medium">Season:</label>
@@ -277,7 +310,9 @@ export default function DashboardPage() {
                 >
                   <option value="todas">Todas</option>
                   {seasons.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -292,7 +327,9 @@ export default function DashboardPage() {
                 >
                   <option value="todos">Todos</option>
                   {suppliers.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -307,7 +344,9 @@ export default function DashboardPage() {
                 >
                   <option value="todos">Todas</option>
                   {factories.map((f) => (
-                    <option key={f} value={f}>{f}</option>
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -322,14 +361,14 @@ export default function DashboardPage() {
                 >
                   <option value="todos">Todos</option>
                   {customers.map((c) => (
-                    <option key={c} value={c}>{c}</option>
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
                   ))}
                 </select>
               </div>
-
             </div>
 
-            {/* GRÁFICO */}
             <div className="pt-4">
               <POStatusChart data={chartData} />
             </div>
@@ -364,7 +403,6 @@ export default function DashboardPage() {
         <TabsContent value="alertas" className="space-y-4">
           <AlertsBox />
         </TabsContent>
-
       </Tabs>
     </div>
   );

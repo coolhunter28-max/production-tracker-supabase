@@ -9,7 +9,7 @@ export default function ImportChinaPage() {
   const [errorMsg, setErrorMsg] = useState("");
 
   // ----------------------------------------------------
-  // 🔥 NUEVO handleUpload (incluye captura RAW + logs)
+  // Subir archivo
   // ----------------------------------------------------
   const handleUpload = async () => {
     setErrorMsg("");
@@ -31,34 +31,71 @@ export default function ImportChinaPage() {
         body: formData,
       });
 
-      // Capturamos la respuesta como texto ANTES de intentar JSON
       const text = await res.text();
+      console.log("📌 RAW RESPONSE:", text);
 
-      console.log("📌 RAW RESPONSE FROM SERVER:", text);
-
-      // Intentamos convertir el texto a JSON
-      let data = null;
+      let data;
       try {
         data = JSON.parse(text);
-      } catch (jsonErr) {
-        throw new Error(
-          "La API devolvió una respuesta NO válida. Respuesta recibida: " +
-            text.substring(0, 500)
-        );
+      } catch {
+        throw new Error("La API devolvió texto no válido: " + text.slice(0, 300));
       }
 
-      if (!res.ok) {
-        throw new Error(data?.error || "Error desconocido al importar.");
-      }
+      if (!res.ok) throw new Error(data.error || "Error desconocido");
 
-      // 🎯 Si llegamos aquí → todo correcto
       setResult(data);
     } catch (err: any) {
       console.error("IMPORT ERROR:", err);
-      setErrorMsg(err.message || "Error al importar el archivo de China.");
+      setErrorMsg(err.message || "Error desconocido");
     } finally {
       setLoading(false);
     }
+  };
+
+  // ----------------------------------------------------
+  // Descargar reporte TXT
+  // ----------------------------------------------------
+  const handleDownloadReport = () => {
+    if (!result) return;
+
+    let contenido = "=== INFORME IMPORTACIÓN CHINA ===\n\n";
+
+    contenido += `POs encontrados: ${result.pos_encontrados}\n`;
+    contenido += `Líneas actualizadas: ${result.lineas_actualizadas}\n`;
+    contenido += `Muestras actualizadas: ${result.muestras_actualizadas}\n\n`;
+
+    if (result.detalles?.cambios?.length) {
+      contenido += "=== CAMBIOS ===\n";
+      result.detalles.cambios.forEach((c: string) => {
+        contenido += "• " + c + "\n";
+      });
+      contenido += "\n";
+    }
+
+    if (result.avisos?.length) {
+      contenido += "=== AVISOS ===\n";
+      result.avisos.forEach((a: string) => {
+        contenido += "• " + a + "\n";
+      });
+      contenido += "\n";
+    }
+
+    if (result.errores?.length) {
+      contenido += "=== ERRORES ===\n";
+      result.errores.forEach((e: string) => {
+        contenido += "• " + e + "\n";
+      });
+    }
+
+    const blob = new Blob([contenido], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "informe_import_china.txt";
+    a.click();
+
+    URL.revokeObjectURL(url);
   };
 
   // ----------------------------------------------------
@@ -68,56 +105,57 @@ export default function ImportChinaPage() {
     <div className="max-w-3xl mx-auto p-10 space-y-6">
       <h1 className="text-2xl font-bold">📥 Importar datos desde China</h1>
       <p className="text-gray-600">
-        Sube el archivo Excel que nos devuelve China con fechas de muestras,
-        trials, booking, closing y shipping.
+        Sube el archivo Excel devuelto por China para actualizar muestras y producción.
       </p>
 
-      {/* INPUT */}
       <input
         type="file"
         accept=".xlsx"
-        onChange={(e) => {
-          setFile(e.target.files?.[0] || null);
-        }}
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
         className="border p-2 rounded w-full"
       />
 
       <button
         onClick={handleUpload}
         disabled={loading}
-        className="px-5 py-2 bg-black text-white rounded hover:bg-gray-800 transition disabled:opacity-50"
+        className="px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
       >
-        {loading ? "Importando…" : "Importar archivo de China"}
+        {loading ? "Importando…" : "Importar archivo"}
       </button>
 
-      {/* ERROR */}
       {errorMsg && (
         <div className="p-3 bg-red-100 border border-red-300 text-red-700 rounded">
           {errorMsg}
         </div>
       )}
 
-      {/* RESULTADO */}
       {result && (
-        <div className="p-4 bg-green-50 border border-green-300 rounded">
+        <div className="p-4 bg-green-50 border border-green-300 rounded space-y-4">
           <h2 className="text-lg font-bold text-green-700">
             Resultado de la importación
           </h2>
 
-          <ul className="mt-2 space-y-1 text-sm">
-            <li>
-              POs encontrados: <b>{result.pos_encontrados}</b>
-            </li>
-            <li>
-              Líneas actualizadas: <b>{result.lineas_actualizadas}</b>
-            </li>
-            <li>
-              Muestras actualizadas: <b>{result.muestras_actualizadas}</b>
-            </li>
+          <ul className="text-sm space-y-1">
+            <li>POs encontrados: <b>{result.pos_encontrados}</b></li>
+            <li>Líneas actualizadas: <b>{result.lineas_actualizadas}</b></li>
+            <li>Muestras actualizadas: <b>{result.muestras_actualizadas}</b></li>
           </ul>
 
+          {/* CAMBIOS */}
+          {result.detalles?.cambios?.length > 0 && (
+            <div className="p-3 bg-blue-100 border border-blue-300 text-blue-800 rounded">
+              <b>Cambios aplicados:</b>
+              <ul className="list-disc ml-5 mt-1 text-sm">
+                {result.detalles.cambios.map((c: string, i: number) => (
+                  <li key={i}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* AVISOS */}
           {result.avisos?.length > 0 && (
-            <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 text-yellow-700 rounded">
+            <div className="p-3 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded">
               <b>Avisos:</b>
               <ul className="list-disc ml-5 mt-1 text-sm">
                 {result.avisos.map((a: string, i: number) => (
@@ -127,8 +165,9 @@ export default function ImportChinaPage() {
             </div>
           )}
 
+          {/* ERRORES */}
           {result.errores?.length > 0 && (
-            <div className="mt-3 p-2 bg-red-100 border border-red-300 text-red-700 rounded">
+            <div className="p-3 bg-red-100 border border-red-300 text-red-800 rounded">
               <b>Errores:</b>
               <ul className="list-disc ml-5 mt-1 text-sm">
                 {result.errores.map((e: string, i: number) => (
@@ -137,6 +176,14 @@ export default function ImportChinaPage() {
               </ul>
             </div>
           )}
+
+          {/* DESCARGAR REPORTE */}
+          <button
+            onClick={handleDownloadReport}
+            className="mt-4 px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+          >
+            Descargar informe TXT
+          </button>
         </div>
       )}
     </div>
