@@ -1,6 +1,11 @@
 "use client";
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/components/ui/card";
 import {
   Select,
   SelectTrigger,
@@ -16,7 +21,8 @@ type Filters = {
   supplier: string;
   factory: string;
   season: string;
-  estado: string;
+  style: string;
+  estado?: string;
   search: string;
 };
 
@@ -25,7 +31,8 @@ export default function FiltersBox({
   suppliers,
   factories,
   seasons,
-  estados,
+  styles,
+  estados = [],   // <--- fallback seguro (muy importante)
   filters,
   onChange,
   onClear,
@@ -34,7 +41,8 @@ export default function FiltersBox({
   suppliers: string[];
   factories: string[];
   seasons: string[];
-  estados: string[];
+  styles: string[];
+  estados?: string[];    // <--- lo hacemos opcional
   filters: Filters;
   onChange: (field: keyof Filters, value: string) => void;
   onClear: () => void;
@@ -55,9 +63,7 @@ export default function FiltersBox({
               value={filters.customer}
               onValueChange={(v) => onChange("customer", v)}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 {customers.map((c) => (
@@ -74,9 +80,7 @@ export default function FiltersBox({
               value={filters.supplier}
               onValueChange={(v) => onChange("supplier", v)}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 {suppliers.map((s) => (
@@ -93,9 +97,7 @@ export default function FiltersBox({
               value={filters.factory}
               onValueChange={(v) => onChange("factory", v)}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 {factories.map((f) => (
@@ -112,9 +114,7 @@ export default function FiltersBox({
               value={filters.season}
               onValueChange={(v) => onChange("season", v)}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todas</SelectItem>
                 {seasons.map((s) => (
@@ -124,37 +124,21 @@ export default function FiltersBox({
             </Select>
           </div>
 
-          {/* ESTADO */}
+          {/* ESTADO (seguro) */}
           <div>
             <label className="text-sm">Estado</label>
             <Select
-              value={filters.estado}
+              value={filters.estado ?? "todos"}
               onValueChange={(v) => onChange("estado", v)}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
 
-                {estados.map((e) => (
+                {(estados ?? []).map((e) => (
                   <SelectItem key={e} value={e}>
                     <div className="flex items-center gap-2">
-                      {/* COLORES */}
-                      {e === "Finalizado" && (
-                        <span className="w-3 h-3 rounded-full bg-green-500" />
-                      )}
-                      {e === "En producción" && (
-                        <span className="w-3 h-3 rounded-full bg-blue-500" />
-                      )}
-                      {e === "Delay" && (
-                        <span className="w-3 h-3 rounded-full bg-red-500" />
-                      )}
-                      {e === "Sin datos" && (
-                        <span className="w-3 h-3 rounded-full bg-gray-400" />
-                      )}
-
-                      {e}
+                      <span>{e}</span>
                     </div>
                   </SelectItem>
                 ))}
@@ -173,7 +157,6 @@ export default function FiltersBox({
           </div>
         </div>
 
-        {/* BOTÓN LIMPIAR */}
         <div className="mt-3">
           <Button variant="secondary" onClick={onClear}>
             Limpiar filtros

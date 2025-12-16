@@ -8,6 +8,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center py-16 px-6">
 
+      {/* HEADER */}
       <div className="flex flex-col items-center mb-8">
         <Image
           src="/logo-bsg.png"
@@ -24,6 +25,7 @@ export default function HomePage() {
         </p>
       </div>
 
+      {/* GRID DE MÓDULOS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-5xl">
 
         {/* Dashboard */}
@@ -67,6 +69,32 @@ export default function HomePage() {
             </CardHeader>
           </Card>
         </Link>
+
+        {/* QC MODULE */}
+        <Card className="p-6 hover:shadow-lg transition">
+          <CardHeader>
+            <CardTitle>Quality Control (QC)</CardTitle>
+            <CardDescription>
+              Inspecciones de calidad · Upload · Reportes
+            </CardDescription>
+          </CardHeader>
+
+          <div className="flex gap-2 mt-4">
+            <Link
+              href="/qc"
+              className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 transition"
+            >
+              Ver inspecciones
+            </Link>
+
+            <Link
+              href="/qc/upload"
+              className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-500 transition"
+            >
+              Subir QC
+            </Link>
+          </div>
+        </Card>
 
       </div>
     </div>
