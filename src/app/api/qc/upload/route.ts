@@ -30,38 +30,14 @@ export async function POST(req: Request) {
 const workbook = new ExcelJS.Workbook();
 await workbook.xlsx.load(buf);
 
-// --------------------------------------------------
-// 🔽 EXTRAER IMÁGENES (1 por hoja)
-// --------------------------------------------------
-const allImages = await extractExcelImages(workbook);
+// 🔽 PRUEBA DE IMÁGENES
+const images = await extractExcelImages(workbook);
 
-/**
- * imagesBySheet = {
- *   "Style Views": [img, img, ...],
- *   "D1 - PCS 缺陷品1": [img],
- *   "D2 - PCS 缺陷品2": [img],
- * }
- */
-const imagesBySheet: Record<string, typeof allImages> = {};
-
-for (const img of allImages) {
-  if (!imagesBySheet[img.sheetName]) {
-    imagesBySheet[img.sheetName] = [];
-  }
-  imagesBySheet[img.sheetName].push(img);
-}
-
-// 👉 Solo una imagen por hoja
-for (const sheetName of Object.keys(imagesBySheet)) {
-  imagesBySheet[sheetName] = imagesBySheet[sheetName].slice(0, 1);
-}
-
-// 🔍 LOG DE CONTROL
 console.log(
-  Object.entries(imagesBySheet).map(([sheet, imgs]) => ({
-    sheet,
-    images: imgs.length,
-    size: imgs[0]?.buffer.length,
+  images.map((i) => ({
+    sheet: i.sheetName,
+    size: i.buffer.length,
+    ext: i.extension,
   }))
 );
 
