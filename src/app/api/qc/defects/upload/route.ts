@@ -11,8 +11,8 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
 
-    const file = formData.get("file") as File;
-    const defectId = formData.get("defect_id") as string;
+    const file = formData.get("file") as File | null;
+    const defectId = formData.get("defect_id") as string | null;
 
     if (!file || !defectId) {
       return NextResponse.json(
@@ -22,7 +22,6 @@ export async function POST(req: Request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-
     const fileName = `qc/defects/${defectId}/${Date.now()}-${file.name}`;
 
     const photoUrl = await uploadToR2({
@@ -31,15 +30,17 @@ export async function POST(req: Request) {
       contentType: file.type,
     });
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("qc_defect_photos")
       .insert({
         defect_id: defectId,
         photo_url: photoUrl,
         photo_name: file.name,
-      });
+      })
+      .select()
+      .single();
 
-    if (error) {
+    if (error || !data) {
       console.error("Supabase insert error:", error);
       return NextResponse.json(
         { error: "DB insert failed" },
@@ -47,7 +48,11 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ photo_url: photoUrl });
+    // 👇 RESPUESTA COMPLETA Y CLARA
+    return NextResponse.json({
+      id: data.id,
+      photo_url: data.photo_url,
+    });
   } catch (error) {
     console.error("QC defect image upload error:", error);
     return NextResponse.json(

@@ -3,21 +3,45 @@ import ExcelJS from "exceljs";
 import { createClient } from "@supabase/supabase-js";
 import { extractExcelImages } from "@/lib/extractExcelImages";
 
+export const runtime = "nodejs";
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-function get(sheet: ExcelJS.Worksheet, cell: string) {
-  return sheet.getCell(cell).value
-    ? String(sheet.getCell(cell).value).trim()
-    : "";
+// --------------------------------------------------
+// Helpers
+// --------------------------------------------------
+function cell(sheet: ExcelJS.Worksheet, ref: string): string {
+  const v = sheet.getCell(ref).value;
+  return v ? String(v).trim() : "";
 }
 
+function toInt(v: any): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseDate(v: any): string | null {
+  if (!v) return null;
+
+  if (typeof v === "number") {
+    const d = ExcelJS.DateUtils.excelToJsDate(v);
+    return d.toISOString().slice(0, 10);
+  }
+
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+// --------------------------------------------------
+// POST
+// --------------------------------------------------
 export async function POST(req: Request) {
   try {
     const form = await req.formData();
-    const file = form.get("file") as File;
+    const file = form.get("file") as File | null;
 
     if (!file) {
       return NextResponse.json({ error: "File is required" }, { status: 400 });
@@ -26,20 +50,9 @@ export async function POST(req: Request) {
     // --------------------------------------------------
     // 1) Leer Excel
     // --------------------------------------------------
-    const buf = Buffer.from(await file.arrayBuffer());
-const workbook = new ExcelJS.Workbook();
-await workbook.xlsx.load(buf);
-
-// 🔽 PRUEBA DE IMÁGENES
-const images = await extractExcelImages(workbook);
-
-console.log(
-  images.map((i) => ({
-    sheet: i.sheetName,
-    size: i.buffer.length,
-    ext: i.extension,
-  }))
-);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
 
     const sheet = workbook.getWorksheet("Inspection Report");
     if (!sheet) {
@@ -50,120 +63,189 @@ console.log(
     }
 
     // --------------------------------------------------
-    // 2) Datos principales
+    // 2) CABECERA (CLAVE)
     // --------------------------------------------------
-    const poNumber = get(sheet, "B9");
-    const reference = get(sheet, "B10");
-    const style = get(sheet, "B11");
-    const color = get(sheet, "B12");
-    const inspector = get(sheet, "B13");
-
-    const qtyPO = Number(get(sheet, "C28")) || 0;
-    const qtyInspected = Number(get(sheet, "C29")) || 0;
-
-    const criticalAllowed = Number(get(sheet, "B30")) || 0;
-    const majorAllowed = Number(get(sheet, "B31")) || 0;
-    const minorAllowed = Number(get(sheet, "B32")) || 0;
-
-    const totalCritical = Number(get(sheet, "C30")) || 0;
-    const totalMajor = Number(get(sheet, "C31")) || 0;
-    const totalMinor = Number(get(sheet, "C32")) || 0;
-
-    const aqlResult = get(sheet, "B33"); // Conform / Not conform
-    const aqlLevel = get(sheet, "D28");  // LEVEL II, etc.
-
-    // --------------------------------------------------
-    // 3) Leer defectos (D1–D10)
-    // --------------------------------------------------
-    const defectos: any[] = [];
-
-    for (let row = 16; row <= 25; row++) {
-      const defect_id = get(sheet, `A${row}`);
-      const defect_type = get(sheet, `B${row}`);
-      const defect_qty = Number(get(sheet, `C${row}`)) || 0;
-      const defect_category = get(sheet, `D${row}`);
-      const defect_desc = get(sheet, `E${row}`);
-
-      if (!defect_id || defect_qty === 0) continue;
-
-      defectos.push({
-        defect_id,
-        defect_type,
-        defect_quantity: defect_qty,
-        defect_category,
-        defect_description: defect_desc,
-      });
+    const reportNumber = cell(sheet, "B1");
+    if (!reportNumber) {
+      return NextResponse.json(
+        { error: "Missing report_number (B1)" },
+        { status: 400 }
+      );
     }
+
+    const inspectionType = cell(sheet, "B2");
+    const factory = cell(sheet, "B3");
+    const customer = cell(sheet, "B4");
+    const season = cell(sheet, "B5");
+    const inspectionDate = parseDate(sheet.getCell("B6").value);
+
+    const poNumber = cell(sheet, "B9");
+    const reference = cell(sheet, "B10");
+    const style = cell(sheet, "B11");
+    const color = cell(sheet, "B12");
+    const inspector = cell(sheet, "B13");
+
+    // --------------------------------------------------
+    // 3) AQL
+    // --------------------------------------------------
+    const qtyPo = toInt(sheet.getCell("B28").value);
+    const qtyInspected = toInt(sheet.getCell("B29").value);
+
+    const criticalAllowed = toInt(sheet.getCell("B30").value);
+    const majorAllowed = toInt(sheet.getCell("B31").value);
+    const minorAllowed = toInt(sheet.getCell("B32").value);
+
+    const criticalFound = toInt(sheet.getCell("C30").value);
+    const majorFound = toInt(sheet.getCell("C31").value);
+    const minorFound = toInt(sheet.getCell("C32").value);
+
+    const aqlResult = cell(sheet, "B33");
+    const aqlLevel = cell(sheet, "D28") || null;
 
     // --------------------------------------------------
     // 4) Buscar PO
     // --------------------------------------------------
-    const { data: po, error: poError } = await supabase
+    const { data: po } = await supabase
       .from("pos")
       .select("id, po")
       .eq("po", poNumber)
       .maybeSingle();
 
-    if (poError) throw poError;
-
     if (!po) {
       return NextResponse.json(
-        {
-          error: "PO not found in system",
-          poNumber,
-          reference,
-          style,
-          color,
-        },
+        { error: `PO ${poNumber} not found` },
         { status: 404 }
       );
     }
 
     // --------------------------------------------------
-    // 5) Insertar QC INSPECTION
+    // 5) UPSERT qc_inspections (CLAVE)
     // --------------------------------------------------
-    const { data: inspection, error: inspectionError } = await supabase
+    const { data: inspection, error: inspErr } = await supabase
       .from("qc_inspections")
-      .insert({
-        po_id: po.id,
-        po_number: poNumber,
-        reference,
-        style,
-        color,
-        inspector,
-        qty_po: qtyPO,
-        qty_inspected: qtyInspected,
-        aql_level: aqlLevel,
-        aql_result: aqlResult,
-        critical_allowed: criticalAllowed,
-        major_allowed: majorAllowed,
-        minor_allowed: minorAllowed,
-        critical_found: totalCritical,
-        major_found: totalMajor,
-        minor_found: totalMinor,
-      })
-      .select()
+      .upsert(
+        {
+          report_number: reportNumber,
+          po_id: po.id,
+          po_number: poNumber,
+          reference,
+          style,
+          color,
+          inspector,
+          inspection_type: inspectionType || null,
+          inspection_date: inspectionDate,
+          season,
+          customer,
+          factory,
+          qty_po: qtyPo,
+          qty_inspected: qtyInspected,
+          aql_level: aqlLevel,
+          aql_result: aqlResult,
+          critical_allowed: criticalAllowed,
+          major_allowed: majorAllowed,
+          minor_allowed: minorAllowed,
+          critical_found: criticalFound,
+          major_found: majorFound,
+          minor_found: minorFound,
+        },
+        { onConflict: "report_number" }
+      )
+      .select("*")
       .single();
 
-    if (inspectionError) throw inspectionError;
+    if (inspErr || !inspection) {
+      throw inspErr;
+    }
+
+    const inspectionId = inspection.id;
 
     // --------------------------------------------------
-    // 6) Insertar DEFECTOS
+    // 6) LIMPIEZA DEFECTOS (reimport seguro)
     // --------------------------------------------------
-    for (const d of defectos) {
-      await supabase.from("qc_defects").insert({
-        inspection_id: inspection.id,
-        ...d,
+    await supabase
+      .from("qc_defects")
+      .delete()
+      .eq("inspection_id", inspectionId);
+
+    // --------------------------------------------------
+    // 7) LEER DEFECTOS (D1–D10)
+    // --------------------------------------------------
+    const defects: any[] = [];
+
+    for (let row = 16; row <= 25; row++) {
+      const defectCode = cell(sheet, `A${row}`);
+      if (!defectCode) continue;
+
+      const defectType = cell(sheet, `B${row}`);
+      const defectsFound = toInt(sheet.getCell(`C${row}`).value);
+      const defectCategory = cell(sheet, `D${row}`);
+      const defectDescription = cell(sheet, `E${row}`);
+
+      if (defectsFound === 0) continue;
+
+      defects.push({
+        inspection_id: inspectionId,
+        defect_code: defectCode,
+        defect_index: Number(defectCode.replace("D", "")) || null,
+        defect_type: defectType,
+        defects_found: defectsFound,
+        defect_category: defectCategory,
+        defect_description: defectDescription,
       });
     }
 
     // --------------------------------------------------
-    // 7) Respuesta
+    // 8) INSERT DEFECTOS
+    // --------------------------------------------------
+    const insertedDefects: any[] = [];
+
+    for (const d of defects) {
+      const { data, error } = await supabase
+        .from("qc_defects")
+        .insert(d)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      insertedDefects.push(data);
+    }
+
+    // --------------------------------------------------
+    // 9) STYLE VIEWS → qc_pps_photos
+    // --------------------------------------------------
+    const images = await extractExcelImages(workbook);
+    let ppsImagesInserted = 0;
+
+    if (images.length) {
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+
+        const { error } = await supabase
+          .from("qc_pps_photos")
+          .insert({
+            po_id: po.id,
+            reference,
+            style,
+            color,
+            photo_url: "PENDING_UPLOAD", // placeholder
+            photo_name: img.sheetName || `style_view_${i + 1}`,
+            photo_order: i + 1,
+          });
+
+        if (!error) ppsImagesInserted++;
+        else console.error("PPS photo insert error:", error);
+      }
+    }
+
+    // --------------------------------------------------
+    // 10) RESPUESTA
     // --------------------------------------------------
     return NextResponse.json({
-      status: "ok",
-      inspection_id: inspection.id,
-      defectos_insertados: defectos.length,
+      ok: true,
+      inspection_id: inspectionId,
+      report_number: reportNumber,
+      defects: insertedDefects.length,
+      pps_images: ppsImagesInserted,
     });
 
   } catch (err: any) {
