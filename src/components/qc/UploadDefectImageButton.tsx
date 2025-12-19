@@ -30,9 +30,16 @@ export function UploadDefectImageButton({
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("defect_id", defectId);
+formData.append("defect_id", defectId);
 
-      const res = await fetch("/api/qc/defects/upload", {
+// contexto para R2 path
+formData.append("po", inspectionId); // o po_number si lo tienes
+formData.append("reference", "");
+formData.append("style", "");
+formData.append("color", "");
+
+
+      const res = await fetch("/api/qc/defects/photos/upload", {
         method: "POST",
         body: formData,
       });
