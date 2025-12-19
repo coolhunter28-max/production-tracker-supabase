@@ -1,61 +1,66 @@
-# 📘 Production Tracker — Documento Maestro v6.1
-**Proyecto completo, actualizado y listo para continuar en conversación nueva sin pérdida de contexto**
+📘 Production Tracker — Documento Maestro v6.2
 
----
+Versión consolidada tras cierre del Módulo QC – Importación
+Este documento es la fuente de verdad del proyecto a partir de este commit.
 
-> ⚠️ Documento consolidado a partir del Documento Maestro original + todo el trabajo realizado hasta hoy (importadores, exportadores, alertas y módulo QC).  
-> Este documento es la **fuente de verdad** del proyecto.
+1. Objetivo del sistema
 
----
+El Production Tracker es una plataforma interna para gestionar:
 
-# 1. Objetivo del sistema
+Pedidos (POs)
 
-El **Production Tracker** es una plataforma interna para gestionar **pedidos (POs)**, **producción**, **muestras**, **calidad (QC)**, **alertas automatizadas**, **importación / exportación de datos** y **seguimiento por fábricas**, sustituyendo completamente los Excels operativos entre España y China.
+Producción y muestras
 
-Objetivos clave:
+Calidad (QC)
 
-- Centralizar información operativa (POs, líneas, muestras, QC)
-- Eliminar dependencias manuales de Excel
-- Garantizar trazabilidad completa
-- Automatizar fechas, estados y alertas
-- Soportar trabajo distribuido (España ↔ China)
+Alertas automatizadas
 
----
+Importación / exportación de datos
 
-# 2. Arquitectura Tecnológica
+Seguimiento por fábricas
 
-## 2.1 Frontend
+Sustituye completamente los Excels operativos entre España ↔ China, manteniendo trazabilidad y control.
 
-- **Next.js 14 (App Router)**
-- React Server Components + Client Components
-- TailwindCSS
-- ShadCN UI
-- ExcelJS (lectura / escritura de Excel)
+2. Arquitectura Tecnológica
+2.1 Frontend
 
-## 2.2 Backend
+Next.js 14 (App Router)
 
-- API Routes con Next.js (`/app/api/*`)
-- Lógica server-side (Node)
+React Server / Client Components
 
-## 2.3 Base de Datos
+TailwindCSS
 
-- **Supabase (PostgreSQL)**
-- Relaciones estrictas
-- UUIDs
-- Preparado para RLS / multiusuario
+ShadCN UI
 
-## 2.4 Almacenamiento de archivos
+ExcelJS (lectura Excel)
 
-- **Cloudflare R2**
-- Usado para:
-  - Imágenes QC (Style Views y defectos)
-  - Archivos futuros (reportes, adjuntos)
+2.2 Backend
 
----
+API Routes (/app/api/*)
 
-# 3. Estructura del Proyecto
+Node.js (runtime nodejs)
 
-```
+2.3 Base de Datos
+
+Supabase (PostgreSQL)
+
+UUIDs
+
+Relaciones estrictas
+
+Preparado para RLS / multiusuario
+
+2.4 Almacenamiento de archivos
+
+Cloudflare R2
+
+Usado para:
+
+Imágenes QC (PPS y defectos)
+
+Archivos futuros
+
+3. Estructura del Proyecto
 src/
  ├─ app/
  │   ├─ produccion/
@@ -69,7 +74,7 @@ src/
  │   │   ├─ import-china/
  │   │   ├─ export-china/
  │   │   ├─ qc/
- │   │   │   └─ upload/
+ │   │   │   └─ upload/     ← API QC
  │   │   └─ generar-alertas/
  │   └─ page.tsx
  │
@@ -77,7 +82,7 @@ src/
  │   ├─ dashboard/
  │   ├─ alertas/
  │   └─ qc/
- │       └─ ImageUploader.tsx (futuro)
+ │       └─ (pendiente UI defect photos)
  │
  ├─ lib/
  │   ├─ extractExcelImages.ts
@@ -88,339 +93,223 @@ src/
  │
  └─ types/
      └─ index.ts
-```
 
----
-
-# 4. Modelo de Base de Datos
-
-## 4.1 pos
+4. Modelo de Base de Datos (resumen)
+pos
 
 Pedido principal.
 
-```
-id (uuid)
-po
-customer
-supplier
-factory
-season
-inspection
-booking
-closing
-shipping_date
-created_at
-updated_at
-```
+lineas_pedido
 
----
+Líneas por referencia / color.
 
-## 4.2 lineas_pedido
+muestras
 
-```
-id
-po_id → pos.id
-reference
-style
-color
-qty
-sco
-trial_upper
-trial_lasting
-lasting
-finish_date
-created_at
-updated_at
-```
+CFM, Counter, Fitting, PPS, Testing, Shipping
+(solo creadas desde importador España)
 
----
+5. Importador CSV España
 
-## 4.3 muestras
+Estado: COMPLETADO Y ESTABLE
 
-```
-id
-linea_pedido_id
-tipo_muestra (CFM, Counter, Fitting, PPS, Testing, Shipping)
-fecha_muestra
-created_at
-updated_at
-```
+Flujo 4 pasos (Upload → Validate → Preview → Confirm)
 
-> ⚠️ Las muestras solo se crean desde el importador CSV España.
+Normalización EU
 
----
+Creación automática de muestras
 
-# 5. Importador CSV España (Fase 3)
+Base del sistema
 
-Estado: **COMPLETADO Y ESTABLE**
+6. Importador China
 
-### Flujo UI
+Estado: COMPLETO
 
-1. Upload
-2. Validate
-3. Preview
-4. Confirm
+Actualiza fechas
 
-### Funciones
+No crea datos nuevos
 
-- Agrupa por PO
-- Crea / actualiza líneas
-- Normaliza fechas y números EU
-- Crea automáticamente las 6 muestras base
-- Validación estricta
+Identificación por SCO
 
----
+Flujo seguro ida/vuelta
 
-# 6. Importador China
+7. Exportador China
 
-Estado: **COMPLETO**
+Estado: COMPLETO (v2)
 
-- Lee Excel China
-- Identifica líneas por SCO
-- Actualiza fechas de producción y muestras
-- No crea datos nuevos
-- Devuelve reporte detallado
+Selección por season
 
----
+Funciona con 1 o múltiples seasons
 
-# 7. Exportador China
+Excel bloqueado
 
-Estado: **COMPLETO (v2 estable)**
+Usado operativamente
 
-- Selección por season
-- Funciona con una o múltiples seasons
-- Columnas específicas para China
-- Excel bloqueado
+8. Sistema de Alertas
 
----
+Estado: OPERATIVO
 
-# 8. Sistema de Alertas
+Retrasos
 
-Estado: **OPERATIVO**
+Fechas vencidas
 
-- Retrasos
-- Fechas vencidas
-- Muestras pendientes
+Muestras pendientes
 
-Ejecutado desde:
+Ruta:
 
-```
 /api/generar-alertas
-```
 
----
+9. Dashboard Producción
 
-# 9. Dashboard Producción
+Estado: Refactorizado
 
-Estado: **Refactorizado**
+DashboardHeader
 
-Componentes:
+Cards
 
-- DashboardHeader
-- DashboardCards
-- FiltersBox
-- POsTable
-- ExportChina
-- ImportChina
+Filters
 
----
+Tabla POs
 
-# 10. MÓDULO QC (CALIDAD)
+Import / Export China
 
-## 10.1 Objetivo
-Importar (desde un **Excel de inspección**) y gestionar inspecciones de calidad por **línea/PO** con:
-- **Trazabilidad por `report_number`** (anti-duplicados / reimport seguro).
-- Metadatos completos (no solo PO): tipo de inspección, factory, customer, season, inspector, fecha, AQL, etc.
-- Defectos D1..D10 asociados a la inspección.
-- Imágenes:
-  - **PPS / Style Views** (las primeras fotos del reporte) → se guardan como URLs en `qc_pps_photos` (almacenamiento real en **Cloudflare R2**).
-  - **Fotos manuales de defectos** (subidas por el usuario) → `qc_defect_photos` (también con URLs en R2).
+10. MÓDULO QC (CALIDAD) — ESTADO DEFINITIVO v1
+10.1 Objetivo
 
-> Nota importante: un mismo `po_number` puede tener **múltiples inspecciones** (Trial Upper / Trial Lasting / Lasting / etc.), por eso el identificador único real es `report_number`.
+Gestionar inspecciones de calidad desde Excel con:
 
----
+Trazabilidad por report_number
 
-## 10.2 Endpoints y UI actuales
+Metadatos completos
 
-### UI
-- **Página:** `/qc/upload`
-  - Subida del Excel y muestra el JSON de respuesta.
+Defectos estructurados (D1–D10)
 
-### API
-- **Ruta correcta (actual):** `POST /api/qc/upload`
-  - Lee Excel (ExcelJS), extrae cabecera + AQL + defectos, hace upsert en `qc_inspections` por `report_number`.
-  - Extrae imágenes con `extractExcelImages(workbook)` (por ahora se usa para detectar/extraer buffers y su sheetName).
-- **Ruta antigua (deprecada):** `POST /api/qc/import`
-  - Se usaba antes; generó confusión. La UI estaba apuntando a `/api/qc/upload`, no a `/api/qc/import`.
+Imágenes PPS automáticas
 
----
+Imágenes de defectos manuales
 
-## 10.3 Plantilla Excel QC (celdas clave confirmadas)
+10.2 Flujo definitivo QC
+1️⃣ Importación automática desde Excel
 
-Hoja: **`Inspection Report`**
+Endpoint
 
-### Cabecera
-- `B1` → `report_number`
-- `B2` → `inspection_type` (ej. T7-FPI / Trial Upper / etc.)
-- `B3` → `factory`
-- `B4` → `customer`
-- `B5` → `season`
-- `B6` → `inspection_date` (fecha)
-- `B9` → `po_number`
-- `B10` → `reference`
-- `B11` → `style`
-- `B12` → `color`
-- `B13` → `inspector`
-
-### Bloque AQL
-(la primera celda combinada está en B28/B29 con C, por eso hay que leer bien B/C según el campo)
-- `B28` → `qty_po`
-- `B29` → `qty_inspected`
-- Allowed:
-  - `B30` → `critical_allowed`
-  - `B31` → `major_allowed`
-  - `B32` → `minor_allowed`
-- Found:
-  - `C30` → `critical_found`
-  - `C31` → `major_found`
-  - `C32` → `minor_found`
-- `B33` → `aql_result` (Conform / Not Conform)
-- `D28` (o similar en bloque central) → `aql_level` (ej. LEVEL II)
-
-### Tabla defectos (D1..D10)
-Filas `16..25`:
-- `A{row}` → defect_id (D1..D10)
-- `B{row}` → defect_type
-- `C{row}` → defects_found / defect_quantity
-- `D{row}` → defect_category
-- `E{row}` → defect_description
-
-### Hoja imágenes PPS / Style Views
-- Hoja: **`Style Views`** (ojo: el nombre exacto importa)
-- Aquí van las primeras fotos “bonitas” del reporte.
-
----
-
-## 10.4 Tablas QC en Supabase
-
-### `qc_inspections` (cabecera de inspección)
-Campos confirmados (los que ya existen):
-- `id` (uuid, PK)
-- `po_id` (uuid, FK → `pos.id`)
-- `po_number` (text)
-- `reference` (text)
-- `style` (text)
-- `color` (text)
-- `inspector` (text)
-- `qty_po` (int)
-- `qty_inspected` (int)
-- `aql_level` (text)
-- `aql_result` (text)
-- `critical_allowed` / `major_allowed` / `minor_allowed` (int)
-- `critical_found` / `major_found` / `minor_found` (int)
-- `inspection_date` (date)
-- `report_number` (text, **NOT NULL**, **UNIQUE**)
-- `inspection_type` (text)
-- `factory` (text)
-- `customer` (text)
-- `season` (text)
-- `created_at` (timestamptz)
-
-**Regla anti-duplicados:**
-- `report_number` es el identificador único real.
-- Importar el mismo Excel dos veces debe hacer **upsert** (no crear duplicados).
-
-### `qc_defects` (defectos asociados a una inspección)
-⚠️ Importante: aquí NO podemos inventar nombres; hay que usar el schema real.
-Estructura objetivo (la que se venía usando y que debemos alinear con el SQL):
-- `id` (uuid, PK)
-- `inspection_id` (uuid, FK → `qc_inspections.id`)
-- `defect_id` (text)  // D1..D10
-- `defect_type` (text)
-- `defect_quantity` (int)  // o `defects_found` según SQL definitivo
-- `defect_category` (text)
-- `defect_description` (text)
-- `created_at` (timestamptz)
-
-> Estado: ahora mismo estamos chocando con errores tipo **“could not find column defect_code”** → señal de que el código no coincide con el schema real de `qc_defects`. Hay que ajustar la inserción a los nombres exactos.
-
-### `qc_defect_photos` (fotos manuales por defecto)
-- Se usa para fotos que el usuario sube manualmente para un defecto concreto.
-- Debe guardar **URL** (Cloudflare R2), no el binario.
-
-### `qc_pps_photos` (fotos PPS / Style Views)
-Tabla confirmada (SQL actual):
-- `id` (uuid, PK)
-- `po_id` (uuid, FK → `pos.id`)
-- `reference` (text)
-- `style` (text)
-- `color` (text)
-- `photo_url` (text, NOT NULL)
-- `photo_name` (text)
-- `photo_order` (int)
-- `created_at` (timestamptz)
-
-> Nota: esta tabla **no** tiene `inspection_id` en el SQL actual. Para evitar ambigüedades en el futuro, probablemente añadiremos `report_number` o `inspection_id` (pero no es obligatorio para el primer MVP).
-
----
-
-## 10.5 Cloudflare R2 (regla de oro)
-- El Supabase Storage no se usará para QC (límite 50MB).
-- El flujo correcto:
-  1) Extraer imagen (buffer) del Excel (ExcelJS).
-  2) Subir a R2.
-  3) Guardar la **URL pública** en `qc_pps_photos` o `qc_defect_photos`.
-
----
-
-## 10.6 Estado del módulo QC
-✅ Ya funciona:
-- Se ha resuelto el bloqueo grande: **la UI llamaba a `/api/qc/upload`**, no a `/api/qc/import`.
-- Se insertan correctamente los datos de `qc_inspections` con `report_number` y metadatos.
-
-🚧 Pendiente (lo siguiente a hacer):
-1) **Ajustar el insert de `qc_defects`** a los nombres reales del schema (para que no falle y se rellene).
-2) **Limpiar/reimport seguro**:
-   - Si reimportas el mismo `report_number`, borrar defectos + fotos asociados antes de reinsertar.
-3) **PPS/Style Views**:
-   - Detectar solo imágenes de la hoja `Style Views` (y no las de defectos).
-   - Subir a R2 y rellenar `qc_pps_photos` con `po_id + reference + style + color + url`.
-4) Más adelante: import de imágenes por defecto (hojas `D1...D10`) y asignación a `qc_defects` (si decidimos que esas no son “manuales”).
+POST /api/qc/upload
 
 
+Se importan:
 
+🔹 Inspección
 
-# 11. Estado Actual del Proyecto
+Tabla: qc_inspections
 
-| Módulo | Estado |
-|------|------|
-| Importador CSV España | ✔ Completo |
-| Importador China | ✔ Completo |
-| Exportador China | ✔ Completo |
-| Alertas | ✔ Completo |
-| Dashboard | ✔ Refactorizado |
-| QC Inspections | ✔ Datos |
-| QC Images Style Views | ✔ Automático |
-| QC Images Defectos | 🔜 Subida manual |
-| Vista Detalle PO | ❌ Pendiente |
-| Fechas Teóricas v2 | ❌ Pendiente |
-| Multiusuario | ❌ Pendiente |
+Clave única: report_number
 
----
+Upsert seguro
 
-# 12. Próximo Paso RECOMENDADO
+🔹 Defectos
 
-### 🎯 Implementar UI QC Defect Image Upload
+Tabla: qc_defects
 
-- Vista detalle QC
-- Grid + modal ampliable
-- Upload directo a R2
-- Asociación por defecto
+Defectos D1–D10
 
----
+Reimport seguro (delete + insert)
 
-# 13. FIN
+🔹 PPS / Style Views
 
-**Documento Maestro v6.1**  
-Este documento permite continuar el proyecto en una conversación nueva **sin pérdida de contexto ni decisiones técnicas**.
+Hoja Excel: Style Views
 
+Imágenes detectadas con extractExcelImages
+
+Subidas a Cloudflare R2
+
+URLs guardadas en qc_pps_photos
+
+2️⃣ Fotos de defectos (MANUAL)
+
+📌 Decisión técnica definitiva
+
+Las fotos de defectos NO se importan desde Excel.
+
+Motivo:
+
+ExcelJS no detecta de forma fiable imágenes en hojas D1–D10
+
+Probado con:
+
+copiar/pegar
+
+insertar desde dispositivo
+
+imágenes nuevas
+
+Resultado consistente: no detectable
+
+👉 Decisión consciente:
+Las fotos de defectos se suben manualmente desde la aplicación.
+
+Tabla: qc_defect_photos
+
+Relación directa con qc_defects.id
+
+Almacenamiento: Cloudflare R2
+
+Esto permite:
+
+Control total
+
+Reemplazo / borrado
+
+Independencia del Excel
+
+Uso directo por QC en China
+
+10.3 Estructura de almacenamiento en R2
+PPS
+qc/pps/{po}/{reference}/{style}/{color}/pps_{n}.jpg
+
+Defect photos (manual)
+qc/defects/{po}/{reference}/{style}/{color}/{defect_id}/defect_{n}.jpg
+
+10.4 Estado del módulo QC
+Componente	Estado
+QC Inspections	✅ Completo
+QC Defects	✅ Completo
+PPS automático (Excel)	✅ Completo
+Defect photos desde Excel	❌ Descartado
+Defect photos manual	⏳ Siguiente fase
+Vista detalle QC	⏳ Pendiente
+11. Estado Global del Proyecto
+Módulo	Estado
+Importador CSV España	✔
+Importador China	✔
+Exportador China	✔
+Alertas	✔
+Dashboard	✔
+QC Import	✔
+QC PPS	✔
+QC Defect Photos Manual	🔜
+Vista Detalle PO	❌
+Fechas Teóricas v2	❌
+Multiusuario	❌
+12. Próximos Pasos (ROADMAP INMEDIATO)
+1️⃣ UI subida manual de fotos de defectos
+
+Vista QC
+
+Listado D1–D10
+
+Upload a R2
+
+Guardar en qc_defect_photos
+
+2️⃣ Vista Detalle QC
+
+PPS arriba
+
+Defectos + fotos debajo
+
+Preparado para QC China
+
+13. FIN
+
+Documento Maestro v6.2
+Punto de corte estable tras cierre del Módulo QC – Importación.

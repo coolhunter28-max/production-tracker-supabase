@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { createClient } from "@supabase/supabase-js";
 import { extractExcelImages } from "@/lib/extractExcelImages";
+import { uploadToR2 } from "@/lib/r2";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,14 @@ function parseDate(v: any): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
+// Limpia strings para usarlos en rutas de R2 (sin espacios raros)
+function safePart(input: string): string {
+  return (input || "unknown")
+    .trim()
+    .replace(/[\/\\?%*:|"<>]/g, "-")
+    .replace(/\s+/g, "_");
+}
+
 // --------------------------------------------------
 // POST
 // --------------------------------------------------
@@ -63,7 +72,7 @@ export async function POST(req: Request) {
     }
 
     // --------------------------------------------------
-    // 2) CABECERA (CLAVE)
+    // 2) CABECERA
     // --------------------------------------------------
     const reportNumber = cell(sheet, "B1");
     if (!reportNumber) {
@@ -105,11 +114,13 @@ export async function POST(req: Request) {
     // --------------------------------------------------
     // 4) Buscar PO
     // --------------------------------------------------
-    const { data: po } = await supabase
+    const { data: po, error: poErr } = await supabase
       .from("pos")
       .select("id, po")
       .eq("po", poNumber)
       .maybeSingle();
+
+    if (poErr) throw poErr;
 
     if (!po) {
       return NextResponse.json(
@@ -119,7 +130,7 @@ export async function POST(req: Request) {
     }
 
     // --------------------------------------------------
-    // 5) UPSERT qc_inspections (CLAVE)
+    // 5) UPSERT qc_inspections
     // --------------------------------------------------
     const { data: inspection, error: inspErr } = await supabase
       .from("qc_inspections")
@@ -153,9 +164,7 @@ export async function POST(req: Request) {
       .select("*")
       .single();
 
-    if (inspErr || !inspection) {
-      throw inspErr;
-    }
+    if (inspErr || !inspection) throw inspErr;
 
     const inspectionId = inspection.id;
 
@@ -168,86 +177,108 @@ export async function POST(req: Request) {
       .eq("inspection_id", inspectionId);
 
     // --------------------------------------------------
-    // 7) LEER DEFECTOS (D1–D10)
+    // 7) LEER DEFECTOS (D1–D10) -> schema REAL
     // --------------------------------------------------
-    const defects: any[] = [];
+    const defectsToInsert: any[] = [];
 
     for (let row = 16; row <= 25; row++) {
-      const defectCode = cell(sheet, `A${row}`);
-      if (!defectCode) continue;
+      const defectId = cell(sheet, `A${row}`);
+      if (!defectId) continue;
 
       const defectType = cell(sheet, `B${row}`);
-      const defectsFound = toInt(sheet.getCell(`C${row}`).value);
+      const defectQty = toInt(sheet.getCell(`C${row}`).value);
       const defectCategory = cell(sheet, `D${row}`);
       const defectDescription = cell(sheet, `E${row}`);
 
-      if (defectsFound === 0) continue;
+      if (defectQty <= 0) continue;
 
-      defects.push({
+      defectsToInsert.push({
         inspection_id: inspectionId,
-        defect_code: defectCode,
-        defect_index: Number(defectCode.replace("D", "")) || null,
-        defect_type: defectType,
-        defects_found: defectsFound,
-        defect_category: defectCategory,
-        defect_description: defectDescription,
+        defect_id: defectId,
+        defect_type: defectType || null,
+        defect_category: defectCategory || null,
+        defect_description: defectDescription || null,
+        defect_quantity: defectQty,
       });
     }
 
-    // --------------------------------------------------
-    // 8) INSERT DEFECTOS
-    // --------------------------------------------------
-    const insertedDefects: any[] = [];
-
-    for (const d of defects) {
-      const { data, error } = await supabase
-        .from("qc_defects")
-        .insert(d)
-        .select("*")
-        .single();
-
+    if (defectsToInsert.length > 0) {
+      const { error } = await supabase.from("qc_defects").insert(defectsToInsert);
       if (error) throw error;
-      insertedDefects.push(data);
     }
 
     // --------------------------------------------------
-    // 9) STYLE VIEWS → qc_pps_photos
+    // 8) PPS (Style Views) -> R2 + qc_pps_photos
     // --------------------------------------------------
     const images = await extractExcelImages(workbook);
+
+    // Solo Style Views
+    const ppsImages = (images || []).filter(
+      (img: any) => String(img.sheetName || "").trim() === "Style Views"
+    );
+
+    // Reimport seguro PPS: borra las PPS previas del PO+reference+style+color
+    // (no borramos de R2 aquí porque tu tabla no guarda la key; si quieres, lo hacemos después)
+    await supabase
+      .from("qc_pps_photos")
+      .delete()
+      .eq("po_id", po.id)
+      .eq("reference", reference)
+      .eq("style", style)
+      .eq("color", color);
+
     let ppsImagesInserted = 0;
 
-    if (images.length) {
-      for (let i = 0; i < images.length; i++) {
-        const img = images[i];
+    for (let i = 0; i < ppsImages.length; i++) {
+      const img: any = ppsImages[i];
 
-        const { error } = await supabase
-          .from("qc_pps_photos")
-          .insert({
-            po_id: po.id,
-            reference,
-            style,
-            color,
-            photo_url: "PENDING_UPLOAD", // placeholder
-            photo_name: img.sheetName || `style_view_${i + 1}`,
-            photo_order: i + 1,
-          });
+      // Ajusta aquí si tu helper usa otros nombres:
+      const fileBuffer: Buffer = img.buffer; // <- si fuera img.file o img.data, cámbialo aquí
+      const ext = (img.extension || "jpg").toLowerCase();
 
-        if (!error) ppsImagesInserted++;
-        else console.error("PPS photo insert error:", error);
+      const fileName = `pps_${i + 1}.${ext}`;
+      const key = `qc/pps/${safePart(po.po)}/${safePart(reference)}/${safePart(
+        style
+      )}/${safePart(color)}/${fileName}`;
+
+      const contentType =
+        ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+
+      // 1) Subir a R2
+      const publicUrl = await uploadToR2({
+        file: fileBuffer,
+        fileName: key,
+        contentType,
+      });
+
+      // 2) Guardar en Supabase
+      const { error } = await supabase.from("qc_pps_photos").insert({
+        po_id: po.id,
+        reference,
+        style,
+        color,
+        photo_url: publicUrl,
+        photo_name: fileName,
+        photo_order: i + 1,
+      });
+
+      if (error) {
+        console.error("PPS photo insert error:", error);
+      } else {
+        ppsImagesInserted++;
       }
     }
 
     // --------------------------------------------------
-    // 10) RESPUESTA
+    // 9) RESPUESTA
     // --------------------------------------------------
     return NextResponse.json({
       ok: true,
       inspection_id: inspectionId,
       report_number: reportNumber,
-      defects: insertedDefects.length,
+      defects: defectsToInsert.length,
       pps_images: ppsImagesInserted,
     });
-
   } catch (err: any) {
     console.error("QC Upload error:", err);
     return NextResponse.json(
