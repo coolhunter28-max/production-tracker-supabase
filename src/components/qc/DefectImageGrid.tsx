@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { UploadDefectImageButton } from "./UploadDefectImageButton";
 import { DefectImageLightbox } from "./DefectImageLightbox";
 
@@ -10,17 +10,24 @@ type DefectPhoto = {
   photo_url: string;
 };
 
-export function DefectImageGrid({
-  images,
-  inspectionId,
-  defectId,
-}: {
-  images: DefectPhoto[];
+type Props = {
+  images?: DefectPhoto[]; // 👈 ahora opcional
   inspectionId: string;
   defectId: string;
-}) {
+};
+
+export function DefectImageGrid({
+  images = [], // 👈 fallback seguro
+  inspectionId,
+  defectId,
+}: Props) {
   // Estado local de imágenes
   const [localImages, setLocalImages] = useState<DefectPhoto[]>(images);
+
+  // Mantener sincronizado si cambian las props
+  useEffect(() => {
+    setLocalImages(images);
+  }, [images]);
 
   // UX states
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -119,7 +126,7 @@ export function DefectImageGrid({
         </div>
       </div>
 
-      {/* LIGHTBOX A7 */}
+      {/* LIGHTBOX */}
       {lightboxIndex !== null && (
         <DefectImageLightbox
           photos={localImages}

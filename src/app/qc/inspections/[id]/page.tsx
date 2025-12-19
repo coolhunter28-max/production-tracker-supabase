@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
-import Image from "next/image";
 import Link from "next/link";
-import { DefectImageGrid } from "@/components/qc/DefectImageGrid";
+import Image from "next/image";
+import { DefectBlock } from "@/components/qc/DefectBlock";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,20 +13,16 @@ export default async function QCInspectionPage({
 }: {
   params: { id: string };
 }) {
-  /* =====================================================
-   * 1) INSPECTION + DEFECTS + DEFECT PHOTOS
-   * ===================================================== */
+  /* -------------------------------------------------
+   * 1) INSPECTION + DEFECTS
+   * ------------------------------------------------- */
   const { data: inspection, error } = await supabase
     .from("qc_inspections")
     .select(`
       *,
       qc_defects (
         *,
-        qc_defect_photos (
-          id,
-          photo_url,
-          photo_order
-        )
+        qc_defect_photos (*)
       )
     `)
     .eq("id", params.id)
@@ -36,178 +32,122 @@ export default async function QCInspectionPage({
     return <div className="p-6">Inspection not found</div>;
   }
 
-  /* =====================================================
+  /* -------------------------------------------------
    * 2) PPS PHOTOS (BY PO)
-   * ===================================================== */
+   * ------------------------------------------------- */
   const { data: ppsPhotos } = await supabase
     .from("qc_pps_photos")
-    .select("id, photo_url, photo_name, photo_order")
+    .select("*")
     .eq("po_id", inspection.po_id)
     .order("photo_order", { ascending: true });
 
-  /* =====================================================
-   * 3) NORMALIZE DEFECTS (SAFE)
-   * ===================================================== */
-  const defects = inspection.qc_defects.map((defect: any) => ({
-    ...defect,
-    qc_defect_photos: Array.isArray(defect.qc_defect_photos)
-      ? defect.qc_defect_photos.sort(
-          (a: any, b: any) => (a.photo_order ?? 0) - (b.photo_order ?? 0)
-        )
-      : [],
-  }));
+  /* -------------------------------------------------
+   * 3) SUMMARY CALCULATIONS
+   * ------------------------------------------------- */
+  const inspected = inspection.qty_inspected || 0;
 
-  /* =====================================================
-   * 4) QC SUMMARY CALCULATIONS
-   * ===================================================== */
-  const qtyInspected = inspection.qty_inspected || 0;
+  const sumByType = (type: string) =>
+    inspection.qc_defects
+      .filter((d: any) =>
+        d.defect_type?.toLowerCase().includes(type)
+      )
+      .reduce((s: number, d: any) => s + (d.defect_quantity || 0), 0);
 
-  const criticalFound = inspection.critical_found || 0;
-  const majorFound = inspection.major_found || 0;
-  const minorFound = inspection.minor_found || 0;
+  const critical = sumByType("critical");
+  const major = sumByType("major");
+  const minor = sumByType("minor");
 
-  const totalFound = criticalFound + majorFound + minorFound;
+  const totalDefects = critical + major + minor;
 
-  const pct = (found: number) =>
-    qtyInspected > 0 ? Math.round((found / qtyInspected) * 100) : 0;
+  const pct = (n: number) =>
+    inspected ? Math.round((n / inspected) * 100) : 0;
 
-  const totalPct = pct(totalFound);
+  /* ------------------------------------------------- */
 
-  /* =====================================================
-   * RENDER
-   * ===================================================== */
   return (
     <div className="p-6 space-y-8">
       {/* NAV */}
-      <div className="flex items-center gap-4">
-        <Link href="/qc" className="text-sm text-blue-600 hover:underline">
+      <div className="flex gap-4 text-sm">
+        <Link href="/qc" className="text-blue-600 hover:underline">
           ← Back to inspections
         </Link>
-        <Link href="/" className="text-sm text-gray-600 hover:underline">
+        <Link href="/" className="text-gray-600 hover:underline">
           Home
         </Link>
       </div>
 
       {/* HEADER */}
-      <div className="space-y-1">
-        <div className="text-2xl font-bold">
+      <div>
+        <h1 className="text-2xl font-bold">
           QC Inspection – {inspection.po_number}
-        </div>
+        </h1>
 
-        <div className="text-sm text-gray-600 flex flex-wrap gap-x-6 gap-y-1">
-          <div>Report: {inspection.report_number}</div>
-          <div>Factory: {inspection.factory}</div>
-          <div>Date: {inspection.inspection_date}</div>
-          <div>Reference: {inspection.reference}</div>
-          <div>Style: {inspection.style}</div>
-          <div>Color: {inspection.color}</div>
-          <div>Season: {inspection.season}</div>
-          <div>Type: {inspection.inspection_type}</div>
-        </div>
-      </div>
-
-      {/* SUMMARY QC */}
-      <div className="border rounded p-4 bg-gray-50 space-y-2">
-        <div className="text-lg font-semibold">Inspection Summary</div>
-
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          <div>
-            Inspected: <span className="font-medium">{qtyInspected} pairs</span>
-          </div>
-
-          <div>
-            Total defects:{" "}
-            <span className="font-medium">
-              {totalFound} ({totalPct}%)
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-medium">
-              Critical
-            </span>
-            <span>
-              {criticalFound} ({pct(criticalFound)}%)
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 rounded bg-orange-100 text-orange-700 text-xs font-medium">
-              Major
-            </span>
-            <span>
-              {majorFound} ({pct(majorFound)}%)
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs font-medium">
-              Minor
-            </span>
-            <span>
-              {minorFound} ({pct(minorFound)}%)
-            </span>
-          </div>
+        <div className="mt-1 text-sm text-gray-600 flex flex-wrap gap-x-4 gap-y-1">
+          <span>Report: {inspection.report_number}</span>
+          <span>Factory: {inspection.factory}</span>
+          <span>Date: {inspection.inspection_date}</span>
+          <span>Reference: {inspection.reference}</span>
+          <span>Style: {inspection.style}</span>
+          <span>Color: {inspection.color}</span>
+          <span>Season: {inspection.season}</span>
+          <span>Type: {inspection.inspection_type}</span>
         </div>
       </div>
 
-      {/* PPS / STYLE VIEW */}
-      {ppsPhotos && ppsPhotos.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-lg font-semibold">PPS / Style View</div>
+      {/* SUMMARY */}
+      <div className="border rounded p-4 space-y-2">
+        <div className="font-semibold">Inspection Summary</div>
 
-          <div className="flex gap-3 flex-wrap">
-            {ppsPhotos.map((photo: any) => (
-              <a
-                key={photo.id}
-                href={photo.photo_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="relative w-24 h-24 border rounded overflow-hidden cursor-zoom-in"
-                title="Open PPS image"
-              >
-                <Image
-                  src={photo.photo_url}
-                  alt={photo.photo_name || "PPS image"}
-                  fill
-                  unoptimized
-                  className="object-cover"
-                />
-              </a>
+        <div className="text-sm">
+          Inspected: <b>{inspected}</b> pairs &nbsp;&nbsp;
+          Total defects: <b>{totalDefects}</b> ({pct(totalDefects)}%)
+        </div>
+
+        <div className="flex gap-3 text-sm">
+          <span className="px-2 py-0.5 rounded bg-red-100 text-red-700">
+            Critical {critical} ({pct(critical)}%)
+          </span>
+          <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-700">
+            Major {major} ({pct(major)}%)
+          </span>
+          <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+            Minor {minor} ({pct(minor)}%)
+          </span>
+        </div>
+      </div>
+
+      {/* PPS */}
+      <div>
+        <div className="font-semibold mb-2">PPS / Style View</div>
+
+        {ppsPhotos?.length ? (
+          <div className="flex gap-3">
+            {ppsPhotos.map((p: any) => (
+              <Image
+                key={p.id}
+                src={p.photo_url}
+                alt="PPS"
+                width={120}
+                height={120}
+                className="rounded border object-cover cursor-pointer"
+              />
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-sm text-gray-500">No PPS images</div>
+        )}
+      </div>
 
       {/* DEFECTS */}
       <div className="space-y-6">
-        <div className="text-lg font-semibold">Defects</div>
+        <div className="font-semibold">Defects</div>
 
-        {defects.map((defect: any) => (
-          <div key={defect.id} className="border rounded p-4 space-y-2">
-            <div className="font-semibold">
-              {defect.defect_id} – {defect.defect_type}
-            </div>
-
-            <div className="text-sm text-gray-500">
-              Qty: {defect.defect_quantity}
-            </div>
-
-            {defect.defect_description && (
-              <div className="text-sm text-gray-700">
-                <span className="font-medium">Description:</span>{" "}
-                {defect.defect_description}
-              </div>
-            )}
-
-            <DefectImageGrid
-              images={defect.qc_defect_photos}
-              inspectionId={inspection.id}
-              defectId={defect.id}
-            />
-          </div>
+        {inspection.qc_defects.map((defect: any) => (
+          <DefectBlock
+            key={defect.id}
+            defect={defect}
+            inspectionId={inspection.id}
+          />
         ))}
       </div>
     </div>
