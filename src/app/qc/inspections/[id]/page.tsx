@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import Image from "next/image";
-import { DefectBlock } from "@/components/qc/DefectBlock";
+import DefectBlock from "@/components/qc/DefectBlock";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -50,7 +50,7 @@ export default async function QCInspectionPage({
   params: { id: string };
 }) {
   /* -------------------------------------------------
-   * 1) INSPECTION + DEFECTS
+   * 1) INSPECTION + DEFECTS + HISTORY
    * ------------------------------------------------- */
   const { data: inspection, error } = await supabase
     .from("qc_inspections")
@@ -58,7 +58,8 @@ export default async function QCInspectionPage({
       *,
       qc_defects (
         *,
-        qc_defect_photos (*)
+        qc_defect_photos (*),
+        qc_defect_action_logs (*)
       )
     `)
     .eq("id", params.id)
@@ -69,7 +70,7 @@ export default async function QCInspectionPage({
   }
 
   /* -------------------------------------------------
-   * 2) PPS PHOTOS (BY PO)
+   * 2) PPS PHOTOS
    * ------------------------------------------------- */
   const { data: ppsPhotos } = await supabase
     .from("qc_pps_photos")
@@ -78,7 +79,7 @@ export default async function QCInspectionPage({
     .order("photo_order", { ascending: true });
 
   /* -------------------------------------------------
-   * 3) SUMMARY CALCULATIONS
+   * 3) SUMMARY
    * ------------------------------------------------- */
   const inspected = inspection.qty_inspected || 0;
 
@@ -90,13 +91,10 @@ export default async function QCInspectionPage({
   const critical = sumByType("critical");
   const major = sumByType("major");
   const minor = sumByType("minor");
-
   const totalDefects = critical + major + minor;
 
   const pct = (n: number) =>
     inspected ? Math.round((n / inspected) * 100) : 0;
-
-  /* ------------------------------------------------- */
 
   return (
     <div className="p-6 space-y-8">
@@ -115,45 +113,20 @@ export default async function QCInspectionPage({
         <h1 className="text-2xl font-bold">
           QC Inspection – {inspection.po_number}
         </h1>
-
-        <div className="mt-1 text-sm text-gray-600 flex flex-wrap gap-x-4 gap-y-1">
-          <span>Report: {inspection.report_number}</span>
-          <span>Factory: {inspection.factory}</span>
-          <span>Date: {inspection.inspection_date}</span>
-          <span>Reference: {inspection.reference}</span>
-          <span>Style: {inspection.style}</span>
-          <span>Color: {inspection.color}</span>
-          <span>Season: {inspection.season}</span>
-          <span>Type: {inspection.inspection_type}</span>
-        </div>
       </div>
 
       {/* SUMMARY */}
       <div className="border rounded p-4 space-y-2">
         <div className="font-semibold">Inspection Summary</div>
-
         <div className="text-sm">
-          Inspected: <b>{inspected}</b> pairs &nbsp;&nbsp;
-          Total defects: <b>{totalDefects}</b> ({pct(totalDefects)}%)
-        </div>
-
-        <div className="flex gap-3 text-sm">
-          <span className="px-2 py-0.5 rounded bg-red-100 text-red-700">
-            Critical {critical} ({pct(critical)}%)
-          </span>
-          <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-700">
-            Major {major} ({pct(major)}%)
-          </span>
-          <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700">
-            Minor {minor} ({pct(minor)}%)
-          </span>
+          Inspected: <b>{inspected}</b> pairs — Total defects:{" "}
+          <b>{totalDefects}</b> ({pct(totalDefects)}%)
         </div>
       </div>
 
       {/* PPS */}
       <div>
         <div className="font-semibold mb-2">PPS / Style View</div>
-
         {ppsPhotos?.length ? (
           <div className="flex gap-3">
             {ppsPhotos.map((p: any) => (
@@ -163,7 +136,7 @@ export default async function QCInspectionPage({
                 alt="PPS"
                 width={120}
                 height={120}
-                className="rounded border object-cover cursor-pointer"
+                className="rounded border object-cover"
               />
             ))}
           </div>
