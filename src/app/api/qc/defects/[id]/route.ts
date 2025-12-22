@@ -21,6 +21,21 @@ export async function PATCH(
       action_status,
     } = body;
 
+    /* ----------------------------------------
+     * 1) Guardar historial
+     * ---------------------------------------- */
+    await supabase.from("qc_defect_action_logs").insert({
+      defect_id: defectId,
+      action_plan,
+      action_owner,
+      action_due_date,
+      action_status,
+      changed_by: "QC user", // más adelante lo conectamos a auth
+    });
+
+    /* ----------------------------------------
+     * 2) Update principal
+     * ---------------------------------------- */
     const update: any = {
       action_plan,
       action_owner,
@@ -28,9 +43,11 @@ export async function PATCH(
       action_status,
     };
 
-    // Si se cierra, guardamos fecha de cierre
+    // Si se cierra, guardamos fecha real de cierre
     if (action_status === "closed") {
-      update.action_closed_at = new Date().toISOString().slice(0, 10);
+      update.action_closed_at = new Date()
+        .toISOString()
+        .slice(0, 10);
     }
 
     const { error } = await supabase
@@ -39,7 +56,10 @@ export async function PATCH(
       .eq("id", defectId);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ ok: true });

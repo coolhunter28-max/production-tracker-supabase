@@ -55,6 +55,12 @@ export function DefectBlock({
             {defect.action_status || "—"}
           </span>
         </div>
+
+        {isClosed && defect.action_closed_at && (
+          <div className="text-xs text-gray-500">
+            Closed on: {defect.action_closed_at}
+          </div>
+        )}
       </div>
 
       {/* DEFECT IMAGES */}
