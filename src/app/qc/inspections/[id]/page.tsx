@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import Image from "next/image";
-import DefectBlock from "@/components/qc/DefectBlock";
+import { DefectBlock } from "@/components/qc/DefectBlock";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,8 +9,22 @@ const supabase = createClient(
 );
 
 /* -------------------------------------------------
- * ACTION PLAN HELPERS
+ * DEFECT SORTING HELPERS
  * ------------------------------------------------- */
+
+const TYPE_ORDER: Record<string, number> = {
+  critical: 1,
+  major: 2,
+  minor: 3,
+};
+
+const STATUS_ORDER: Record<string, number> = {
+  overdue: 1,
+  in_progress: 2,
+  open: 3,
+  closed: 4,
+};
+
 function getEffectiveStatus(defect: any) {
   const { action_status, action_due_date } = defect;
 
@@ -25,33 +39,39 @@ function getEffectiveStatus(defect: any) {
   return action_status || "open";
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    open: "bg-gray-100 text-gray-700",
-    in_progress: "bg-blue-100 text-blue-700",
-    overdue: "bg-red-100 text-red-700",
-    closed: "bg-green-100 text-green-700",
-  };
+function sortDefects(defects: any[]) {
+  return [...defects].sort((a, b) => {
+    // 1️⃣ Tipo
+    const typeA =
+      TYPE_ORDER[a.defect_type?.toLowerCase()] ?? 99;
+    const typeB =
+      TYPE_ORDER[b.defect_type?.toLowerCase()] ?? 99;
 
-  return (
-    <span
-      className={`px-2 py-0.5 rounded text-xs font-medium ${
-        styles[status] ?? styles.open
-      }`}
-    >
-      {status.toUpperCase()}
-    </span>
-  );
+    if (typeA !== typeB) return typeA - typeB;
+
+    // 2️⃣ Estado efectivo
+    const statusA =
+      STATUS_ORDER[getEffectiveStatus(a)] ?? 99;
+    const statusB =
+      STATUS_ORDER[getEffectiveStatus(b)] ?? 99;
+
+    if (statusA !== statusB) return statusA - statusB;
+
+    // 3️⃣ Fallback estable
+    return a.id.localeCompare(b.id);
+  });
 }
+
+/* -------------------------------------------------
+ * PAGE
+ * ------------------------------------------------- */
 
 export default async function QCInspectionPage({
   params,
 }: {
   params: { id: string };
 }) {
-  /* -------------------------------------------------
-   * 1) INSPECTION + DEFECTS + HISTORY
-   * ------------------------------------------------- */
+  /* 1) INSPECTION + DEFECTS */
   const { data: inspection, error } = await supabase
     .from("qc_inspections")
     .select(`
@@ -69,24 +89,26 @@ export default async function QCInspectionPage({
     return <div className="p-6">Inspection not found</div>;
   }
 
-  /* -------------------------------------------------
-   * 2) PPS PHOTOS
-   * ------------------------------------------------- */
+  /* 2) PPS PHOTOS */
   const { data: ppsPhotos } = await supabase
     .from("qc_pps_photos")
     .select("*")
     .eq("po_id", inspection.po_id)
     .order("photo_order", { ascending: true });
 
-  /* -------------------------------------------------
-   * 3) SUMMARY
-   * ------------------------------------------------- */
+  /* 3) SUMMARY */
   const inspected = inspection.qty_inspected || 0;
 
   const sumByType = (type: string) =>
     inspection.qc_defects
-      .filter((d: any) => d.defect_type?.toLowerCase().includes(type))
-      .reduce((s: number, d: any) => s + (d.defect_quantity || 0), 0);
+      .filter((d: any) =>
+        d.defect_type?.toLowerCase().includes(type)
+      )
+      .reduce(
+        (s: number, d: any) =>
+          s + (d.defect_quantity || 0),
+        0
+      );
 
   const critical = sumByType("critical");
   const major = sumByType("major");
@@ -109,11 +131,9 @@ export default async function QCInspectionPage({
       </div>
 
       {/* HEADER */}
-      <div>
-        <h1 className="text-2xl font-bold">
-          QC Inspection – {inspection.po_number}
-        </h1>
-      </div>
+      <h1 className="text-2xl font-bold">
+        QC Inspection – {inspection.po_number}
+      </h1>
 
       {/* SUMMARY */}
       <div className="border rounded p-4 space-y-2">
@@ -141,7 +161,9 @@ export default async function QCInspectionPage({
             ))}
           </div>
         ) : (
-          <div className="text-sm text-gray-500">No PPS images</div>
+          <div className="text-sm text-gray-500">
+            No PPS images
+          </div>
         )}
       </div>
 
@@ -149,22 +171,15 @@ export default async function QCInspectionPage({
       <div className="space-y-6">
         <div className="font-semibold">Defects</div>
 
-        {inspection.qc_defects.map((defect: any) => {
-          const effectiveStatus = getEffectiveStatus(defect);
-
-          return (
-            <div key={defect.id}>
-              <div className="flex justify-end mb-1">
-                <StatusBadge status={effectiveStatus} />
-              </div>
-
-              <DefectBlock
-                defect={defect}
-                inspectionId={inspection.id}
-              />
-            </div>
-          );
-        })}
+        {sortDefects(inspection.qc_defects).map(
+          (defect: any) => (
+            <DefectBlock
+              key={defect.id}
+              defect={defect}
+              inspectionId={inspection.id}
+            />
+          )
+        )}
       </div>
     </div>
   );
