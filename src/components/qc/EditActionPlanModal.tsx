@@ -9,7 +9,7 @@ export function EditActionPlanModal({
 }: {
   defect: any;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (updatedDefect: any) => void;
 }) {
   const [plan, setPlan] = useState(defect.action_plan || "");
   const [owner, setOwner] = useState(defect.action_owner || "");
@@ -38,7 +38,19 @@ export function EditActionPlanModal({
       return;
     }
 
-    onSaved();
+    // 🔥 CLAVE: devolvemos el defecto actualizado
+    onSaved({
+      ...defect,
+      action_plan: plan,
+      action_owner: owner,
+      action_due_date: dueDate || null,
+      action_status: status,
+      action_closed_at:
+        status === "closed"
+          ? new Date().toISOString().slice(0, 10)
+          : null,
+    });
+
     onClose();
   };
 

@@ -19,35 +19,26 @@ export async function PATCH(
       action_owner,
       action_due_date,
       action_status,
+      reopen,
     } = body;
 
-    /* ----------------------------------------
-     * 1) Guardar historial
-     * ---------------------------------------- */
-    await supabase.from("qc_defect_action_logs").insert({
-      defect_id: defectId,
-      action_plan,
-      action_owner,
-      action_due_date,
-      action_status,
-      changed_by: "QC user", // más adelante lo conectamos a auth
-    });
+    const update: any = {};
 
-    /* ----------------------------------------
-     * 2) Update principal
-     * ---------------------------------------- */
-    const update: any = {
-      action_plan,
-      action_owner,
-      action_due_date,
-      action_status,
-    };
+    /* ---------- REOPEN ---------- */
+    if (reopen === true) {
+      update.action_status = "open";
+      update.action_closed_at = null;
+    } else {
+      update.action_plan = action_plan;
+      update.action_owner = action_owner;
+      update.action_due_date = action_due_date;
+      update.action_status = action_status;
 
-    // Si se cierra, guardamos fecha real de cierre
-    if (action_status === "closed") {
-      update.action_closed_at = new Date()
-        .toISOString()
-        .slice(0, 10);
+      if (action_status === "closed") {
+        update.action_closed_at = new Date()
+          .toISOString()
+          .slice(0, 10);
+      }
     }
 
     const { error } = await supabase
@@ -64,7 +55,7 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    console.error("Update action plan error:", e);
+    console.error("Action plan update error:", e);
     return NextResponse.json(
       { error: "Failed to update action plan" },
       { status: 500 }
