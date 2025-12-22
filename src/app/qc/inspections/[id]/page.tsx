@@ -8,6 +8,42 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+/* -------------------------------------------------
+ * ACTION PLAN HELPERS
+ * ------------------------------------------------- */
+function getEffectiveStatus(defect: any) {
+  const { action_status, action_due_date } = defect;
+
+  if (
+    action_status !== "closed" &&
+    action_due_date &&
+    new Date(action_due_date) < new Date()
+  ) {
+    return "overdue";
+  }
+
+  return action_status || "open";
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    open: "bg-gray-100 text-gray-700",
+    in_progress: "bg-blue-100 text-blue-700",
+    overdue: "bg-red-100 text-red-700",
+    closed: "bg-green-100 text-green-700",
+  };
+
+  return (
+    <span
+      className={`px-2 py-0.5 rounded text-xs font-medium ${
+        styles[status] ?? styles.open
+      }`}
+    >
+      {status.toUpperCase()}
+    </span>
+  );
+}
+
 export default async function QCInspectionPage({
   params,
 }: {
@@ -48,9 +84,7 @@ export default async function QCInspectionPage({
 
   const sumByType = (type: string) =>
     inspection.qc_defects
-      .filter((d: any) =>
-        d.defect_type?.toLowerCase().includes(type)
-      )
+      .filter((d: any) => d.defect_type?.toLowerCase().includes(type))
       .reduce((s: number, d: any) => s + (d.defect_quantity || 0), 0);
 
   const critical = sumByType("critical");
@@ -142,13 +176,22 @@ export default async function QCInspectionPage({
       <div className="space-y-6">
         <div className="font-semibold">Defects</div>
 
-        {inspection.qc_defects.map((defect: any) => (
-          <DefectBlock
-            key={defect.id}
-            defect={defect}
-            inspectionId={inspection.id}
-          />
-        ))}
+        {inspection.qc_defects.map((defect: any) => {
+          const effectiveStatus = getEffectiveStatus(defect);
+
+          return (
+            <div key={defect.id}>
+              <div className="flex justify-end mb-1">
+                <StatusBadge status={effectiveStatus} />
+              </div>
+
+              <DefectBlock
+                defect={defect}
+                inspectionId={inspection.id}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
