@@ -13,8 +13,12 @@ export function DefectBlock({
 }) {
   const [editing, setEditing] = useState(false);
 
+  const isClosed =
+    (defect.action_status || "").toLowerCase() === "closed";
+
   return (
-    <div className="border rounded p-4 space-y-2">
+    <div className="border rounded p-4 space-y-3">
+      {/* HEADER */}
       <div className="font-semibold">
         {defect.defect_id} – {defect.defect_type}
       </div>
@@ -24,35 +28,44 @@ export function DefectBlock({
       </div>
 
       <div className="text-sm">
-        Description: {defect.defect_description}
+        Description: {defect.defect_description || "—"}
       </div>
 
-      {/* Action plan */}
+      {/* ACTION PLAN */}
       <div className="mt-2 rounded border bg-gray-50 p-3 text-sm space-y-1">
-        <div className="font-medium flex justify-between">
-          Action Plan
-          <button
-            onClick={() => setEditing(true)}
-            className="text-blue-600 text-xs hover:underline"
-          >
-            Edit
-          </button>
+        <div className="flex items-start justify-between">
+          <div className="font-medium">Action Plan</div>
+
+          {!isClosed && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-blue-600 text-xs hover:underline"
+            >
+              Edit
+            </button>
+          )}
         </div>
+
         <div>Plan: {defect.action_plan || "—"}</div>
         <div>Owner: {defect.action_owner || "—"}</div>
         <div>
           Due: {defect.action_due_date || "—"} | Status:{" "}
-          <span className="font-medium">{defect.action_status}</span>
+          <span className="font-medium">
+            {defect.action_status || "—"}
+          </span>
         </div>
       </div>
 
-<DefectImageGrid
-  images={defect.qc_defect_photos || []}
-  inspectionId={inspectionId}
-  defectId={defect.id}
-/>
+      {/* DEFECT IMAGES */}
+      <DefectImageGrid
+        images={defect.qc_defect_photos || []}
+        inspectionId={inspectionId}
+        defectId={defect.id}
+      />
 
-      {editing && (
+      {/* MODAL */}
+      {editing && !isClosed && (
         <EditActionPlanModal
           defect={defect}
           onClose={() => setEditing(false)}
