@@ -1,4 +1,5 @@
-﻿import { createClient } from "@supabase/supabase-js";
+﻿// src/app/qc/page.tsx
+import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 
 const supabase = createClient(
@@ -43,9 +44,7 @@ function StatusBadge({ status }: { status: string }) {
 
   return (
     <span
-      className={`px-2 py-0.5 rounded text-xs font-medium ${
-        styles[status] ?? ""
-      }`}
+      className={`px-2 py-0.5 rounded text-xs font-medium ${styles[status] ?? ""}`}
     >
       {status.toUpperCase()}
     </span>
@@ -53,42 +52,47 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 /* -------------------------------------------------
- * QUERY HELPERS (KPIs clicables + reset)
+ * QUERY HELPERS (KPIs clicables + reset + toggle)
  * ------------------------------------------------- */
-function buildHref(
-  base: string,
-  current: {
-    status?: string;
-    customer?: string;
-    factory?: string;
-    overdue?: string;
-  },
-  patch: Partial<{
-    status: string;
-    customer: string;
-    factory: string;
-    overdue: string;
-  }>
-) {
-  const params = new URLSearchParams();
+type QCSearchParams = {
+  status?: string;
+  customer?: string;
+  factory?: string;
+  overdue?: string;
+};
 
-  const next = {
+function normalizeParams(current: QCSearchParams) {
+  return {
     status: current.status ?? "all",
     customer: current.customer ?? "all",
     factory: current.factory ?? "all",
     overdue: current.overdue ?? "all",
+  };
+}
+
+function buildHref(base: string, current: QCSearchParams, patch: Partial<QCSearchParams>) {
+  const params = new URLSearchParams();
+
+  const next = {
+    ...normalizeParams(current),
     ...patch,
   };
 
   // Guardamos solo los que no sean "all"
   if (next.status && next.status !== "all") params.set("status", next.status);
-  if (next.customer && next.customer !== "all")
-    params.set("customer", next.customer);
+  if (next.customer && next.customer !== "all") params.set("customer", next.customer);
   if (next.factory && next.factory !== "all") params.set("factory", next.factory);
   if (next.overdue && next.overdue !== "all") params.set("overdue", next.overdue);
 
   const qs = params.toString();
   return qs ? `${base}?${qs}` : base;
+}
+
+// Toggle de KPI: si clicas el mismo status que ya tienes, vuelve a all
+function buildKpiHref(base: string, current: QCSearchParams, kpiStatus: string) {
+  const cur = normalizeParams(current);
+  const nextStatus = cur.status === kpiStatus ? "all" : kpiStatus;
+  return buildHref(base, current, { status: nextStatus });
 }
 
 /* -------------------------------------------------
@@ -97,12 +101,7 @@ function buildHref(
 export default async function QCPage({
   searchParams,
 }: {
-  searchParams: {
-    status?: string;
-    customer?: string;
-    factory?: string;
-    overdue?: string;
-  };
+  searchParams: QCSearchParams;
 }) {
   /* -------------------------------------------------
    * 1) LOAD DATA
@@ -157,10 +156,11 @@ export default async function QCPage({
    * ------------------------------------------------- */
   let filtered = [...enriched];
 
-  const spStatus = searchParams.status ?? "all";
-  const spCustomer = searchParams.customer ?? "all";
-  const spFactory = searchParams.factory ?? "all";
-  const spOverdue = searchParams.overdue ?? "all";
+  const sp = normalizeParams(searchParams);
+  const spStatus = sp.status;
+  const spCustomer = sp.customer;
+  const spFactory = sp.factory;
+  const spOverdue = sp.overdue;
 
   if (spStatus !== "all") {
     filtered = filtered.filter((i) => i.computedStatus === spStatus);
@@ -200,10 +200,7 @@ export default async function QCPage({
   });
 
   /* -------------------------------------------------
-   * 5) COUNTERS (IMPORTANTE)
-   * - Para que los KPIs tengan sentido, lo normal es:
-   *   contadores sobre el dataset completo "enriched"
-   *   (y el KPI aplica el filtro "status")
+   * 5) COUNTERS (sobre dataset completo)
    * ------------------------------------------------- */
   const counters = {
     blocked: enriched.filter((i) => i.computedStatus === "blocked").length,
@@ -225,6 +222,8 @@ export default async function QCPage({
   /* -------------------------------------------------
    * RENDER
    * ------------------------------------------------- */
+  const activeKpiClass = "ring-2 ring-black/10";
+
   return (
     <div className="p-6 space-y-6">
       <Link href="/" className="text-sm text-blue-600 hover:underline">
@@ -236,33 +235,36 @@ export default async function QCPage({
       {/* KPIs (CLICKABLES) + RESET */}
       <div className="flex gap-4 items-stretch">
         <Link
-          href={buildHref("/qc", searchParams, { status: "blocked" })}
-          className="border rounded px-4 py-2 bg-red-50 hover:opacity-90 block w-28"
+          href={buildKpiHref("/qc", searchParams, "blocked")}
+          className={`border rounded px-4 py-2 bg-red-50 hover:opacity-90 block w-28 ${
+            spStatus === "blocked" ? activeKpiClass : ""
+          }`}
+          title="Click to filter (click again to clear)"
         >
           <div className="text-xs text-gray-500">Blocked</div>
-          <div className="text-xl font-semibold text-red-700">
-            {counters.blocked}
-          </div>
+          <div className="text-xl font-semibold text-red-700">{counters.blocked}</div>
         </Link>
 
         <Link
-          href={buildHref("/qc", searchParams, { status: "pending" })}
-          className="border rounded px-4 py-2 bg-orange-50 hover:opacity-90 block w-28"
+          href={buildKpiHref("/qc", searchParams, "pending")}
+          className={`border rounded px-4 py-2 bg-orange-50 hover:opacity-90 block w-28 ${
+            spStatus === "pending" ? activeKpiClass : ""
+          }`}
+          title="Click to filter (click again to clear)"
         >
           <div className="text-xs text-gray-500">Pending</div>
-          <div className="text-xl font-semibold text-orange-700">
-            {counters.pending}
-          </div>
+          <div className="text-xl font-semibold text-orange-700">{counters.pending}</div>
         </Link>
 
         <Link
-          href={buildHref("/qc", searchParams, { status: "ok" })}
-          className="border rounded px-4 py-2 bg-green-50 hover:opacity-90 block w-28"
+          href={buildKpiHref("/qc", searchParams, "ok")}
+          className={`border rounded px-4 py-2 bg-green-50 hover:opacity-90 block w-28 ${
+            spStatus === "ok" ? activeKpiClass : ""
+          }`}
+          title="Click to filter (click again to clear)"
         >
           <div className="text-xs text-gray-500">OK</div>
-          <div className="text-xl font-semibold text-green-700">
-            {counters.ok}
-          </div>
+          <div className="text-xl font-semibold text-green-700">{counters.ok}</div>
         </Link>
 
         <div className="flex-1" />
@@ -270,13 +272,14 @@ export default async function QCPage({
         <Link
           href="/qc"
           className="border rounded px-3 py-2 text-sm hover:bg-gray-50 self-center"
+          title="Clear all filters"
         >
           Reset filters
         </Link>
       </div>
 
-      {/* FILTERS (con APPLY) */}
-      <form method="GET" className="flex gap-3 items-end">
+      {/* FILTERS (con APPLY + RESET) */}
+      <form method="GET" className="flex gap-3 items-end flex-wrap">
         <div>
           <label className="text-xs">Status</label>
           <select
@@ -335,7 +338,16 @@ export default async function QCPage({
           </select>
         </div>
 
-        <button className="border rounded px-3 py-1 text-sm">Apply</button>
+        <button type="submit" className="border rounded px-3 py-1 text-sm">
+          Apply
+        </button>
+
+        <Link
+          href="/qc"
+          className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+        >
+          Reset
+        </Link>
       </form>
 
       {/* TABLE */}
