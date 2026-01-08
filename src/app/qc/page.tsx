@@ -53,6 +53,45 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 /* -------------------------------------------------
+ * QUERY HELPERS (KPIs clicables + reset)
+ * ------------------------------------------------- */
+function buildHref(
+  base: string,
+  current: {
+    status?: string;
+    customer?: string;
+    factory?: string;
+    overdue?: string;
+  },
+  patch: Partial<{
+    status: string;
+    customer: string;
+    factory: string;
+    overdue: string;
+  }>
+) {
+  const params = new URLSearchParams();
+
+  const next = {
+    status: current.status ?? "all",
+    customer: current.customer ?? "all",
+    factory: current.factory ?? "all",
+    overdue: current.overdue ?? "all",
+    ...patch,
+  };
+
+  // Guardamos solo los que no sean "all"
+  if (next.status && next.status !== "all") params.set("status", next.status);
+  if (next.customer && next.customer !== "all")
+    params.set("customer", next.customer);
+  if (next.factory && next.factory !== "all") params.set("factory", next.factory);
+  if (next.overdue && next.overdue !== "all") params.set("overdue", next.overdue);
+
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+/* -------------------------------------------------
  * PAGE
  * ------------------------------------------------- */
 export default async function QCPage({
@@ -68,22 +107,35 @@ export default async function QCPage({
   /* -------------------------------------------------
    * 1) LOAD DATA
    * ------------------------------------------------- */
-  const { data: inspections } = await supabase
+  const { data: inspections, error } = await supabase
     .from("qc_inspections")
-    .select(`
+    .select(
+      `
       *,
       qc_defects (*)
-    `)
+    `
+    )
     .order("inspection_date", { ascending: false });
 
-  if (!inspections) {
+  if (error) {
+    return (
+      <div className="p-6 space-y-2">
+        <div className="font-semibold text-red-600">Failed to load inspections</div>
+        <div className="text-sm text-gray-600">{error.message}</div>
+      </div>
+    );
+  }
+
+  const safeInspections = inspections ?? [];
+
+  if (safeInspections.length === 0) {
     return <div className="p-6">No inspections</div>;
   }
 
   /* -------------------------------------------------
    * 2) COMPUTE STATUS
    * ------------------------------------------------- */
-  const enriched = inspections.map((i: any) => {
+  const enriched = safeInspections.map((i: any) => {
     const computedStatus = computeInspectionStatus(i);
 
     const hasOverdue = i.qc_defects?.some(
@@ -105,47 +157,70 @@ export default async function QCPage({
    * ------------------------------------------------- */
   let filtered = [...enriched];
 
-  if (searchParams.status && searchParams.status !== "all") {
-    filtered = filtered.filter(
-      (i) => i.computedStatus === searchParams.status
-    );
+  const spStatus = searchParams.status ?? "all";
+  const spCustomer = searchParams.customer ?? "all";
+  const spFactory = searchParams.factory ?? "all";
+  const spOverdue = searchParams.overdue ?? "all";
+
+  if (spStatus !== "all") {
+    filtered = filtered.filter((i) => i.computedStatus === spStatus);
   }
 
-  if (searchParams.customer && searchParams.customer !== "all") {
-    filtered = filtered.filter(
-      (i) => i.customer === searchParams.customer
-    );
+  if (spCustomer !== "all") {
+    filtered = filtered.filter((i) => i.customer === spCustomer);
   }
 
-  if (searchParams.factory && searchParams.factory !== "all") {
-    filtered = filtered.filter(
-      (i) => i.factory === searchParams.factory
-    );
+  if (spFactory !== "all") {
+    filtered = filtered.filter((i) => i.factory === spFactory);
   }
 
-  if (searchParams.overdue === "yes") {
+  if (spOverdue === "yes") {
     filtered = filtered.filter((i) => i.hasOverdue);
   }
 
   /* -------------------------------------------------
-   * 4) COUNTERS (SOBRE FILTRADO)
+   * 4) SORT BY PRIORITY (blocked -> pending -> ok) + date desc
+   * ------------------------------------------------- */
+  const STATUS_ORDER: Record<string, number> = {
+    blocked: 1,
+    pending: 2,
+    ok: 3,
+  };
+
+  filtered = [...filtered].sort((a, b) => {
+    const sa = STATUS_ORDER[a.computedStatus] ?? 99;
+    const sb = STATUS_ORDER[b.computedStatus] ?? 99;
+    if (sa !== sb) return sa - sb;
+
+    const da = a.inspection_date ? new Date(a.inspection_date).getTime() : 0;
+    const db = b.inspection_date ? new Date(b.inspection_date).getTime() : 0;
+    if (da !== db) return db - da;
+
+    return String(a.id).localeCompare(String(b.id));
+  });
+
+  /* -------------------------------------------------
+   * 5) COUNTERS (IMPORTANTE)
+   * - Para que los KPIs tengan sentido, lo normal es:
+   *   contadores sobre el dataset completo "enriched"
+   *   (y el KPI aplica el filtro "status")
    * ------------------------------------------------- */
   const counters = {
-    blocked: filtered.filter((i) => i.computedStatus === "blocked").length,
-    pending: filtered.filter((i) => i.computedStatus === "pending").length,
-    ok: filtered.filter((i) => i.computedStatus === "ok").length,
+    blocked: enriched.filter((i) => i.computedStatus === "blocked").length,
+    pending: enriched.filter((i) => i.computedStatus === "pending").length,
+    ok: enriched.filter((i) => i.computedStatus === "ok").length,
   };
 
   /* -------------------------------------------------
-   * 5) UNIQUE FILTER VALUES
+   * 6) UNIQUE FILTER VALUES
    * ------------------------------------------------- */
   const customers = Array.from(
     new Set(enriched.map((i) => i.customer).filter(Boolean))
-  );
+  ).sort();
 
   const factories = Array.from(
     new Set(enriched.map((i) => i.factory).filter(Boolean))
-  );
+  ).sort();
 
   /* -------------------------------------------------
    * RENDER
@@ -158,37 +233,55 @@ export default async function QCPage({
 
       <h1 className="text-2xl font-bold">Quality Control (QC)</h1>
 
-      {/* COUNTERS */}
-      <div className="flex gap-4">
-        <div className="border rounded px-4 py-2 bg-red-50">
+      {/* KPIs (CLICKABLES) + RESET */}
+      <div className="flex gap-4 items-stretch">
+        <Link
+          href={buildHref("/qc", searchParams, { status: "blocked" })}
+          className="border rounded px-4 py-2 bg-red-50 hover:opacity-90 block w-28"
+        >
           <div className="text-xs text-gray-500">Blocked</div>
           <div className="text-xl font-semibold text-red-700">
             {counters.blocked}
           </div>
-        </div>
+        </Link>
 
-        <div className="border rounded px-4 py-2 bg-orange-50">
+        <Link
+          href={buildHref("/qc", searchParams, { status: "pending" })}
+          className="border rounded px-4 py-2 bg-orange-50 hover:opacity-90 block w-28"
+        >
           <div className="text-xs text-gray-500">Pending</div>
           <div className="text-xl font-semibold text-orange-700">
             {counters.pending}
           </div>
-        </div>
+        </Link>
 
-        <div className="border rounded px-4 py-2 bg-green-50">
+        <Link
+          href={buildHref("/qc", searchParams, { status: "ok" })}
+          className="border rounded px-4 py-2 bg-green-50 hover:opacity-90 block w-28"
+        >
           <div className="text-xs text-gray-500">OK</div>
           <div className="text-xl font-semibold text-green-700">
             {counters.ok}
           </div>
-        </div>
+        </Link>
+
+        <div className="flex-1" />
+
+        <Link
+          href="/qc"
+          className="border rounded px-3 py-2 text-sm hover:bg-gray-50 self-center"
+        >
+          Reset filters
+        </Link>
       </div>
 
-      {/* FILTERS */}
-      <form className="flex gap-3 items-end">
+      {/* FILTERS (con APPLY) */}
+      <form method="GET" className="flex gap-3 items-end">
         <div>
           <label className="text-xs">Status</label>
           <select
             name="status"
-            defaultValue={searchParams.status ?? "all"}
+            defaultValue={spStatus}
             className="border rounded px-2 py-1 text-sm"
           >
             <option value="all">All</option>
@@ -202,7 +295,7 @@ export default async function QCPage({
           <label className="text-xs">Customer</label>
           <select
             name="customer"
-            defaultValue={searchParams.customer ?? "all"}
+            defaultValue={spCustomer}
             className="border rounded px-2 py-1 text-sm"
           >
             <option value="all">All</option>
@@ -218,7 +311,7 @@ export default async function QCPage({
           <label className="text-xs">Factory</label>
           <select
             name="factory"
-            defaultValue={searchParams.factory ?? "all"}
+            defaultValue={spFactory}
             className="border rounded px-2 py-1 text-sm"
           >
             <option value="all">All</option>
@@ -234,7 +327,7 @@ export default async function QCPage({
           <label className="text-xs">Has overdue</label>
           <select
             name="overdue"
-            defaultValue={searchParams.overdue ?? "all"}
+            defaultValue={spOverdue}
             className="border rounded px-2 py-1 text-sm"
           >
             <option value="all">All</option>
@@ -242,9 +335,7 @@ export default async function QCPage({
           </select>
         </div>
 
-        <button className="border rounded px-3 py-1 text-sm">
-          Apply
-        </button>
+        <button className="border rounded px-3 py-1 text-sm">Apply</button>
       </form>
 
       {/* TABLE */}
@@ -274,9 +365,7 @@ export default async function QCPage({
                 <td className="p-2">
                   <StatusBadge status={i.computedStatus} />
                 </td>
-                <td className="p-2 text-right">
-                  {i.qc_defects?.length || 0}
-                </td>
+                <td className="p-2 text-right">{i.qc_defects?.length || 0}</td>
                 <td className="p-2 text-right">
                   <Link
                     href={`/qc/inspections/${i.id}`}
@@ -287,6 +376,14 @@ export default async function QCPage({
                 </td>
               </tr>
             ))}
+
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={8} className="p-6 text-center text-gray-500">
+                  No inspections match these filters.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
