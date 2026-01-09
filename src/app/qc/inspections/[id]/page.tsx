@@ -128,6 +128,13 @@ export default async function QCInspectionPage({
         <Link href="/" className="text-gray-600 hover:underline">
           Home
         </Link>
+<Link
+  href={`/api/qc/inspections/${params.id}/report`}
+  className="text-blue-600 hover:underline"
+>
+  Download PDF →
+</Link>
+
       </div>
 
       {/* HEADER */}
