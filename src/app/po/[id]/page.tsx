@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 // 🟦 NUEVO: importamos nuestras funciones oficiales
 import { getEstadoMuestra } from "@/utils/getEstadoMuestra";
 import { getEstadoColor, getEstadoIcon } from "@/utils/getEstadoColor";
-import { getSemaforoLinea } from "@/utils/getSemaforoLinea"; // ← IMPORT CORRECTO
+import { getSemaforoLinea } from "@/utils/getSemaforoLinea";
 import { getResumenPO } from "@/utils/getResumenPO";
 import { getColorFechaMuestra } from "@/utils/getColorFechaMuestra";
 
@@ -36,16 +36,13 @@ export default function VerPO() {
   if (loading)
     return <div className="p-6 text-gray-600">Cargando pedido...</div>;
   if (!po)
-    return (
-      <div className="p-6 text-red-500">
-        No se encontró el pedido.
-      </div>
-    );
+    return <div className="p-6 text-red-500">No se encontró el pedido.</div>;
+
+  const supplierNorm = String(po?.supplier ?? "").trim().toUpperCase();
+  const isBSG = supplierNorm === "BSG";
 
   const formatNumber = (n: number) =>
-    new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 }).format(
-      n || 0
-    );
+    new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 }).format(n || 0);
 
   const formatMoney = (n: number) =>
     (po.currency === "EUR" ? "€ " : "$ ") +
@@ -53,6 +50,14 @@ export default function VerPO() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(n || 0);
+
+  // ✅ Para valores que pueden venir null / string / number
+  const formatMoneyValue = (v: any) => {
+    if (v === null || v === undefined || v === "") return "-";
+    const n = typeof v === "number" ? v : Number(String(v).replace(",", "."));
+    if (!Number.isFinite(n)) return String(v);
+    return formatMoney(n);
+  };
 
   // 📌 Fecha: si hay real → real; si no → teórica (TEÓRICA)
   const formatSampleDate = (m: any) => {
@@ -63,16 +68,20 @@ export default function VerPO() {
 
   // Totales Numéricos
   const totalPairs =
-    po.lineas_pedido?.reduce(
-      (acc: number, l: any) => acc + (l.qty || 0),
-      0
-    ) || 0;
+    po.lineas_pedido?.reduce((acc: number, l: any) => acc + (l.qty || 0), 0) ||
+    0;
 
   const totalAmount =
     po.lineas_pedido?.reduce(
       (acc: number, l: any) => acc + (l.qty || 0) * (l.price || 0),
       0
     ) || 0;
+  const totalSelling =
+    po.lineas_pedido?.reduce((acc: number, l: any) => {
+      const v = l?.amount_selling;
+      const n = typeof v === "number" ? v : Number(String(v ?? "").replace(",", "."));
+      return Number.isFinite(n) ? acc + n : acc;
+    }, 0) || 0;
 
   return (
     <div className="p-8 space-y-6 bg-gray-50 min-h-screen">
@@ -106,9 +115,9 @@ export default function VerPO() {
           ["Closing", po.closing],
           ["Estado Insp.", po.estado_inspeccion],
         ].map(([label, value]) => (
-          <div key={label} className="text-sm">
+          <div key={label as string} className="text-sm">
             <span className="font-semibold text-gray-700">{label}:</span>{" "}
-            <span className="text-gray-800">{value || "-"}</span>
+            <span className="text-gray-800">{(value as any) || "-"}</span>
           </div>
         ))}
       </div>
@@ -116,7 +125,6 @@ export default function VerPO() {
       {/* LÍNEAS DE PEDIDO */}
       <div className="bg-white rounded-xl shadow p-5 border border-gray-200">
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-
           📦 Líneas de pedido
         </h2>
 
@@ -134,6 +142,12 @@ export default function VerPO() {
                   "Qty",
                   "Price",
                   "Total",
+
+                  // ✅ BSG en visor
+                  "PI BSG",
+                  "Selling Price",
+                  "Selling Amount",
+
                   "Trial U",
                   "Trial L",
                   "Lasting",
@@ -145,6 +159,7 @@ export default function VerPO() {
                 ))}
               </tr>
             </thead>
+
             <tbody>
               {po.lineas_pedido?.map((l: any, i: number) => (
                 <tr key={i} className="border-t hover:bg-gray-50">
@@ -154,15 +169,28 @@ export default function VerPO() {
                   <td className="px-2 py-1">{l.size_run}</td>
                   <td className="px-2 py-1">{l.category}</td>
                   <td className="px-2 py-1">{l.channel}</td>
+
                   <td className="px-2 py-1 text-center font-medium">
                     {formatNumber(l.qty)}
                   </td>
-                  <td className="px-2 py-1 text-center">
-                    {formatMoney(l.price)}
-                  </td>
+
+                  <td className="px-2 py-1 text-center">{formatMoney(l.price)}</td>
+
                   <td className="px-2 py-1 text-center font-semibold text-gray-700">
                     {formatMoney((l.qty || 0) * (l.price || 0))}
                   </td>
+
+                  {/* ✅ BSG: solo si supplier es BSG */}
+                  <td className="px-2 py-1 text-center">
+                    {isBSG ? (String(l.pi_bsg ?? "").trim() || "-") : "—"}
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    {isBSG ? formatMoneyValue(l.price_selling) : "—"}
+                  </td>
+                  <td className="px-2 py-1 text-center font-semibold text-gray-700">
+                    {isBSG ? formatMoneyValue(l.amount_selling) : "—"}
+                  </td>
+
                   <td className="px-2 py-1 text-center">{l.trial_upper || "-"}</td>
                   <td className="px-2 py-1 text-center">{l.trial_lasting || "-"}</td>
                   <td className="px-2 py-1 text-center">{l.lasting || "-"}</td>
@@ -179,42 +207,34 @@ export default function VerPO() {
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
           🧪 Muestras
         </h2>
-{(() => {
-  const { ok, enProceso, problemas } = getResumenPO(po.lineas_pedido);
 
-  return (
-    <div className="flex gap-6 text-sm font-semibold mb-4">
+        {(() => {
+          const { ok, enProceso, problemas } = getResumenPO(po.lineas_pedido);
 
-      {/* OK */}
-      <div className="flex items-center gap-1 text-green-600">
-        🟢 <span>{ok} OK</span>
-      </div>
-
-      {/* En proceso */}
-      <div className="flex items-center gap-1 text-yellow-600">
-        🟡 <span>{enProceso} en proceso</span>
-      </div>
-
-      {/* Problemas */}
-      <div className="flex items-center gap-1 text-red-600">
-        🔴 <span>{problemas} con problemas</span>
-      </div>
-
-    </div>
-  );
-})()}
+          return (
+            <div className="flex gap-6 text-sm font-semibold mb-4">
+              <div className="flex items-center gap-1 text-green-600">
+                🟢 <span>{ok} OK</span>
+              </div>
+              <div className="flex items-center gap-1 text-yellow-600">
+                🟡 <span>{enProceso} en proceso</span>
+              </div>
+              <div className="flex items-center gap-1 text-red-600">
+                🔴 <span>{problemas} con problemas</span>
+              </div>
+            </div>
+          );
+        })()}
 
         {po.lineas_pedido?.some((l: any) => l.muestras?.length) ? (
           <div className="space-y-4">
             {po.lineas_pedido.map(
               (l: any, i: number) =>
                 l.muestras?.length > 0 && (
-
                   <div
                     key={i}
                     className="border rounded-lg bg-gray-50 p-3 shadow-sm hover:shadow-md transition"
                   >
-                    {/* 🟢 SEMÁFORO GLOBAL POR LÍNEA */}
                     {(() => {
                       const semaforo = getSemaforoLinea(l.muestras);
 
@@ -254,7 +274,6 @@ export default function VerPO() {
 
                       <tbody>
                         {l.muestras.map((m: any, mi: number) => {
-
                           const estado = getEstadoMuestra({
                             fecha_muestra: m.fecha_muestra,
                             fecha_teorica: m.fecha_teorica,
@@ -266,14 +285,13 @@ export default function VerPO() {
                               <td className="px-2 py-1">{m.tipo_muestra}</td>
 
                               <td
-  className={`px-2 py-1 text-center ${getColorFechaMuestra(
-    m.fecha_muestra,
-    m.fecha_teorica
-  )}`}
->
-  {formatSampleDate(m)}
-</td>
-
+                                className={`px-2 py-1 text-center ${getColorFechaMuestra(
+                                  m.fecha_muestra,
+                                  m.fecha_teorica
+                                )}`}
+                              >
+                                {formatSampleDate(m)}
+                              </td>
 
                               <td
                                 className={`px-2 py-1 text-center font-medium ${getEstadoColor(
@@ -287,9 +305,7 @@ export default function VerPO() {
                                 {m.round || "-"}
                               </td>
 
-                              <td className="px-2 py-1">
-                                {m.notas || "-"}
-                              </td>
+                              <td className="px-2 py-1">{m.notas || "-"}</td>
                             </tr>
                           );
                         })}
@@ -309,7 +325,13 @@ export default function VerPO() {
       {/* TOTALES */}
       <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-xl p-4 font-semibold text-sm flex justify-between">
         <span>📊 Total Pares: {formatNumber(totalPairs)}</span>
-        <span>Total Importe: {formatMoney(totalAmount)}</span>
+
+        <div className="flex gap-6">
+          <span>Total Importe: {formatMoney(totalAmount)}</span>
+
+          {/* ✅ Solo si supplier es BSG mostramos total selling */}
+          {isBSG && <span>Total Selling: {formatMoney(totalSelling)}</span>}
+        </div>
       </div>
 
       <button
