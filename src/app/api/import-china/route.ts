@@ -118,15 +118,23 @@ export async function POST(req: Request) {
 
       // Obtener número de PO
       let poNumber = excelPO;
+      let poData: any = null;
+
       try {
-        const { data: poRow } = await supabase
+        const { data: poRow, error: poErr } = await supabase
           .from("pos")
           .select("po, inspection, booking, closing, shipping_date")
           .eq("id", linea.po_id)
           .single();
-        if (poRow?.po) poNumber = poRow.po;
 
-        linea.poData = poRow; // guardo PO para comparar antiguos
+        if (poErr) {
+          avisos.push(
+            `[PO ${excelPO}] [SCO ${lineaId}] No se pudo leer cabecera del PO (pos): ${poErr.message}`
+          );
+        } else {
+          poData = poRow;
+          if (poRow?.po) poNumber = poRow.po;
+        }
       } catch {}
 
       const refBD = linea.reference || excelRef;
@@ -136,7 +144,8 @@ export async function POST(req: Request) {
       posActualizados.add(linea.po_id);
 
       // -------------------------------------------------------------
-      // TRIALS & FINISH DATE
+      // TRIALS & FINISH DATE (China solo fechas)
+      // ⚠️ IMPORTANTE: NO modificar campos comerciales ni BSG.
       // -------------------------------------------------------------
       const newTrialUpper = parseDate(row.getCell(26).value);
       const newTrialLasting = parseDate(row.getCell(27).value);
@@ -179,14 +188,24 @@ export async function POST(req: Request) {
       }
 
       if (Object.keys(updateLinea).length > 0) {
-        await supabase.from("lineas_pedido").update(updateLinea).eq("id", lineaId);
-        lineasActualizadas++;
+        const { error: updErr } = await supabase
+          .from("lineas_pedido")
+          .update(updateLinea)
+          .eq("id", lineaId);
+
+        if (updErr) {
+          errores.push(
+            `[PO ${poNumber}] [Ref ${refBD}] Error actualizando lineas_pedido (${lineaId}): ${updErr.message}`
+          );
+        } else {
+          lineasActualizadas++;
+        }
       }
 
       // -------------------------------------------------------------
-      // MUESTRAS
+      // MUESTRAS (China solo fechas reales)
       // -------------------------------------------------------------
-      const muestraMapping = {
+      const muestraMapping: Record<string, string | null> = {
         CFMS: parseDate(row.getCell(15).value),
         COUNTERS: parseDate(row.getCell(17).value),
         FITTINGS: parseDate(row.getCell(19).value),
@@ -210,21 +229,26 @@ export async function POST(req: Request) {
         const oldFecha = existente.fecha_muestra;
 
         if (nuevaFecha !== oldFecha) {
-          await supabase
+          const { error: updMErr } = await supabase
             .from("muestras")
             .update({ fecha_muestra: nuevaFecha })
             .eq("id", existente.id);
 
-          muestrasActualizadas++;
-
-          cambios.push(
-            `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] Muestra ${tipo}: ${oldFecha || "—"} → ${nuevaFecha}`
-          );
+          if (updMErr) {
+            errores.push(
+              `[PO ${poNumber}] [Ref ${refBD}] Error actualizando muestra ${tipo} (${existente.id}): ${updMErr.message}`
+            );
+          } else {
+            muestrasActualizadas++;
+            cambios.push(
+              `[PO ${poNumber}] [Ref ${refBD}] [Style ${styleBD}] [Color ${colorBD}] Muestra ${tipo}: ${oldFecha || "—"} → ${nuevaFecha}`
+            );
+          }
         }
       }
 
       // -------------------------------------------------------------
-      // CAMPOS EDITABLES DEL PO
+      // CAMPOS EDITABLES DEL PO (China solo fechas)
       // -------------------------------------------------------------
       const inspection = parseDate(row.getCell(31).value);
       const booking = parseDate(row.getCell(32).value);
@@ -233,10 +257,10 @@ export async function POST(req: Request) {
 
       const updatePO: any = {};
 
-      const oldInspection = linea.poData?.inspection || null;
-      const oldBooking = linea.poData?.booking || null;
-      const oldClosing = linea.poData?.closing || null;
-      const oldShipping = linea.poData?.shipping_date || null;
+      const oldInspection = poData?.inspection || null;
+      const oldBooking = poData?.booking || null;
+      const oldClosing = poData?.closing || null;
+      const oldShipping = poData?.shipping_date || null;
 
       if (inspection && inspection !== oldInspection) {
         updatePO.inspection = inspection;
@@ -267,7 +291,16 @@ export async function POST(req: Request) {
       }
 
       if (Object.keys(updatePO).length > 0) {
-        await supabase.from("pos").update(updatePO).eq("id", linea.po_id);
+        const { error: updPoErr } = await supabase
+          .from("pos")
+          .update(updatePO)
+          .eq("id", linea.po_id);
+
+        if (updPoErr) {
+          errores.push(
+            `[PO ${poNumber}] Error actualizando cabecera PO (${linea.po_id}): ${updPoErr.message}`
+          );
+        }
       }
     }
 
