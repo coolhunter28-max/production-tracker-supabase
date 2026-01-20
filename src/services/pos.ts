@@ -4,7 +4,26 @@ import { PO } from "@/types";
 export async function fetchPOs(): Promise<PO[]> {
   const { data, error } = await supabase
     .from("pos")
-    .select("*")
+    .select(
+      `
+      *,
+      lineas_pedido (
+        id,
+        po_id,
+        reference,
+        style,
+        color,
+        size_run,
+        category,
+        qty,
+        price,
+        amount,
+        pi_bsg,
+        price_selling,
+        amount_selling
+      )
+    `
+    )
     .order("po_date", { ascending: false });
 
   if (error) {
@@ -20,5 +39,5 @@ export async function fetchPOs(): Promise<PO[]> {
     estado: po.estado || "Sin datos",
   }));
 
-  return enriched;
+  return enriched as PO[];
 }

@@ -18,10 +18,7 @@ import {
 } from "@/components/ui/table";
 
 import { Button } from "@/components/ui/button";
-
 import { PO } from "@/types";
-
-// 🟦 Importamos la nueva lógica de estado global del PO
 import { getEstadoPO } from "@/utils/getEstadoPO";
 
 export default function POsTable({ pos }: { pos: PO[] }) {
@@ -43,17 +40,14 @@ export default function POsTable({ pos }: { pos: PO[] }) {
                 <TableHead>Season</TableHead>
                 <TableHead>PO Date</TableHead>
                 <TableHead>ETD PI</TableHead>
-
-                {/* NUEVA COLUMNA */}
                 <TableHead>Estado</TableHead>
-
                 <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
               {pos.length > 0 ? (
-                pos.map((po) => {
+                pos.map((po: any) => {
                   const estado = getEstadoPO(po);
 
                   return (
@@ -62,14 +56,11 @@ export default function POsTable({ pos }: { pos: PO[] }) {
                       <TableCell>{po.supplier}</TableCell>
                       <TableCell>{po.customer}</TableCell>
                       <TableCell>{po.factory}</TableCell>
-                      <TableCell>{(po as any)?.season || "-"}</TableCell>
+                      <TableCell>{po?.season || "-"}</TableCell>
                       <TableCell>{po.po_date || "-"}</TableCell>
                       <TableCell>{po.etd_pi || "-"}</TableCell>
 
-                      {/* COLUMNA ESTADO */}
-                      <TableCell
-                        className={`font-semibold text-${estado.color}-600`}
-                      >
+                      <TableCell className={`font-semibold text-${estado.color}-600`}>
                         {estado.icon} {estado.estado}
                       </TableCell>
 

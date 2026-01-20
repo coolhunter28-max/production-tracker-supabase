@@ -21,6 +21,12 @@ type LineData = {
   qty: number;
   price: number;
   amount?: number;
+
+  // ✅ NUEVO (BSG / SELLING)
+  pi_bsg?: string | null;
+  price_selling?: number | null;
+  amount_selling?: number | null;
+
   trial_upper?: string | null;
   trial_lasting?: string | null;
   lasting?: string | null;
@@ -115,13 +121,20 @@ function calcFechaTeorica(
   finish_date: string | null | undefined
 ): string | null {
   switch (tipo) {
-    case "CFMS": return po_date ? addDays(po_date, 25) : null;
-    case "COUNTERS": return po_date ? addDays(po_date, 10) : null;
-    case "FITTINGS": return po_date ? addDays(po_date, 25) : null;
-    case "PPS": return po_date ? addDays(po_date, 45) : null;
-    case "TESTINGS": return finish_date ? subDays(finish_date, 14) : null;
-    case "SHIPPINGS": return finish_date ? subDays(finish_date, 7) : null;
-    default: return null;
+    case "CFMS":
+      return po_date ? addDays(po_date, 25) : null;
+    case "COUNTERS":
+      return po_date ? addDays(po_date, 10) : null;
+    case "FITTINGS":
+      return po_date ? addDays(po_date, 25) : null;
+    case "PPS":
+      return po_date ? addDays(po_date, 45) : null;
+    case "TESTINGS":
+      return finish_date ? subDays(finish_date, 14) : null;
+    case "SHIPPINGS":
+      return finish_date ? subDays(finish_date, 7) : null;
+    default:
+      return null;
   }
 }
 
@@ -132,22 +145,15 @@ function calcFechaTeorica(
  * - Fecha válida > hoy (futuro) → "Pendiente"
  */
 function calcEstado(fechaReal: string | null): "Enviado" | "Pendiente" {
-  if (!fechaReal || !fechaReal.trim()) {
-    return "Pendiente";
-  }
+  if (!fechaReal || !fechaReal.trim()) return "Pendiente";
 
   const d = new Date(fechaReal + "T00:00:00");
-  if (isNaN(d.getTime())) {
-    return "Pendiente";
-  }
+  if (isNaN(d.getTime())) return "Pendiente";
 
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
 
-  if (d.getTime() <= hoy.getTime()) {
-    return "Enviado";
-  }
-
+  if (d.getTime() <= hoy.getTime()) return "Enviado";
   return "Pendiente";
 }
 
@@ -157,7 +163,8 @@ function interpretApproval(
   if (!raw) return null;
   const s = raw.trim().toLowerCase();
   if (["cfm", "confirmed", "confirmada", "ok"].includes(s)) return "confirmada";
-  if (["n/cfm", "n/c", "no confirmada", "not confirmed"].includes(s)) return "no_confirmada";
+  if (["n/cfm", "n/c", "no confirmada", "not confirmed"].includes(s))
+    return "no_confirmada";
   return null;
 }
 
@@ -166,9 +173,8 @@ function buildApprovalNotes(
   date: string | null | undefined
 ): string | null {
   if (!status) return null;
-  if (status === "confirmada") {
+  if (status === "confirmada")
     return date ? `Confirmada ${date}` : "Confirmada sin fecha";
-  }
   return date ? `No confirmada ${date}` : "No confirmada sin fecha";
 }
 
@@ -183,7 +189,7 @@ function buildSampleRecord(tipo: string, line: LineData, header: POHeader) {
   let approvalDate: string | null | undefined = null;
 
   switch (tipo) {
-    case "CFMS": 
+    case "CFMS":
       roundRaw = line.cfm_round;
       fechaReal = line.cfm ?? null;
       approvalText = line.cfm_approval;
@@ -238,13 +244,9 @@ function buildSampleRecord(tipo: string, line: LineData, header: POHeader) {
   const interpreted = interpretApproval(approvalText);
 
   let estado_muestra: string;
-  if (interpreted === "confirmada") {
-    estado_muestra = "Aprobado";
-  } else if (interpreted === "no_confirmada") {
-    estado_muestra = "Rechazado";
-  } else {
-    estado_muestra = calcEstado(fecha_muestra);
-  }
+  if (interpreted === "confirmada") estado_muestra = "Aprobado";
+  else if (interpreted === "no_confirmada") estado_muestra = "Rechazado";
+  else estado_muestra = calcEstado(fecha_muestra);
 
   const notas = buildApprovalNotes(interpreted, approvalDate);
 
@@ -293,16 +295,11 @@ export async function POST(req: Request) {
         // 2A) Actualizar cabecera
         const cleanHeader = Object.fromEntries(
           Object.entries(header).filter(
-            ([k, v]) =>
-              v !== null && v !== "" && !skipFields.includes(k)
+            ([k, v]) => v !== null && v !== "" && !skipFields.includes(k)
           )
         );
 
-        await supabase
-          .from("pos")
-          .update(cleanHeader)
-          .eq("id", existing.id);
-
+        await supabase.from("pos").update(cleanHeader).eq("id", existing.id);
         poId = existing.id;
 
         // 2B) Borrar líneas + muestras antiguas
@@ -320,8 +317,7 @@ export async function POST(req: Request) {
         // 2C) Crear PO nuevo
         const insertHeader = Object.fromEntries(
           Object.entries(header).filter(
-            ([k, v]) =>
-              v !== null && v !== "" && !skipFields.includes(k)
+            ([k, v]) => v !== null && v !== "" && !skipFields.includes(k)
           )
         );
 
@@ -339,26 +335,46 @@ export async function POST(req: Request) {
         poId = inserted.id;
       }
 
-      // 3) Insertar líneas nuevas
+      // 3) Insertar líneas nuevas ✅ (con pi_bsg, price_selling, amount_selling)
       const { data: insertedLines, error: lineErr } = await supabase
         .from("lineas_pedido")
         .insert(
-          lines.map((l) => ({
-            po_id: poId,
-            reference: l.reference,
-            style: l.style,
-            color: l.color,
-            size_run: l.size_run,
-            category: l.category,
-            channel: l.channel,
-            qty: l.qty,
-            price: l.price,
-            amount: l.amount,
-            trial_upper: l.trial_upper,
-            trial_lasting: l.trial_lasting,
-            lasting: l.lasting,
-            finish_date: l.finish_date,
-          }))
+          lines.map((l) => {
+            // Importante: mantener null si viene vacío.
+            const priceSelling =
+              l.price_selling === undefined ? null : l.price_selling;
+
+            // Si no viene amount_selling pero sí price_selling, lo calculamos.
+            const computedAmountSelling =
+              l.amount_selling === undefined || l.amount_selling === null
+                ? priceSelling !== null
+                  ? Number(priceSelling) * Number(l.qty ?? 0)
+                  : null
+                : l.amount_selling;
+
+            return {
+              po_id: poId,
+              reference: l.reference,
+              style: l.style,
+              color: l.color,
+              size_run: l.size_run,
+              category: l.category,
+              channel: l.channel,
+              qty: l.qty,
+              price: l.price,
+              amount: l.amount,
+
+              // ✅ NUEVO
+              pi_bsg: l.pi_bsg ?? null,
+              price_selling: priceSelling,
+              amount_selling: computedAmountSelling,
+
+              trial_upper: l.trial_upper,
+              trial_lasting: l.trial_lasting,
+              lasting: l.lasting,
+              finish_date: l.finish_date,
+            };
+          })
         )
         .select("id, reference, style, color, size_run");
 

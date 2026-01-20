@@ -12,8 +12,8 @@ export function parseCSVText(csvText: string) {
     delimiter,
     transformHeader: (h) => (h || "").trim(),
   });
-  if (errors?.length) console.warn("⚠️ Errores PapaParse:", errors);
-  console.log(`🧩 Delimitador detectado: "${meta?.delimiter}"`);
+  if (errors?.length) console.warn("Errores PapaParse:", errors);
+console.log(`Delimitador detectado: "${meta?.delimiter}"`);
   return Array.isArray(data) ? data : [];
 }
 
@@ -121,32 +121,37 @@ function parseDateSmart(v: any, fallbackYear?: number | null): string | null {
 }
 
 /* ============================================================
-   4) MAPEO DE CAMPOS (incluye APPROVALS)
+   4) MAPEO DE CAMPOS (incluye APPROVALS + FINANCIAL BSG)
    ============================================================ */
 
 const MAP = {
-  po: ["PO"],
-  customer: ["CUSTOMER"],
-  factory: ["FACTORY"],
-  supplier: ["SUPPLIER"],
-  season: ["SEASON"],
-  category: ["CATEGORY"],
-  channel: ["CHANNEL"],
-  size_run: ["SIZE RUN", "SIZE", "SIZERUN"],
+  po: ["PO", "PO#", "PO NUMBER", "PO_NUMBER"],
+  customer: ["CUSTOMER", "Customer"],
+  factory: ["FACTORY", "Factory"],
+  supplier: ["SUPPLIER", "Supplier"],
+  season: ["SEASON", "Season"],
+  category: ["CATEGORY", "Category"],
+  channel: ["CHANNEL", "Channel"],
+  size_run: ["SIZE RUN", "SIZE_RUN", "SIZE", "SIZERUN", "Size Run"],
   pi: ["PI"],
 
-  po_date: ["PO DATE"],
-  etd_pi: ["ETD PI"],
-  booking: ["Booking"],
-  closing: ["Closing"],
-  shipping_date: ["Shipping Date"],
+  po_date: ["PO DATE", "PO_DATE"],
+  etd_pi: ["ETD PI", "ETD_PI"],
+  booking: ["BOOKING", "Booking"],
+  closing: ["CLOSING", "Closing"],
+  shipping_date: ["SHIPPING DATE", "SHIPPING_DATE", "Shipping Date", "Shipping"],
 
-  reference: ["REFERENCE"],
-  style: ["STYLE"],
-  color: ["COLOR"],
-  qty: ["QTY", "QUANTITY"],
-  price: ["PRICE"],
-  amount: ["AMOUNT"],
+  reference: ["REFERENCE", "Reference"],
+  style: ["STYLE", "Style"],
+  color: ["COLOR", "Color"],
+  qty: ["QTY", "QUANTITY", "Qty"],
+  price: ["PRICE", "Price"],
+  amount: ["AMOUNT", "Amount"],
+
+  // ✅ NUEVO: FINANCIAL (BSG)
+  pi_bsg: ["PI BSG", "PI_BSG", "PIBSG", "PI_BSG "],
+  price_selling: ["PRICE SELLING", "PRICE_SELLING", "PRICE SELLING "],
+  amount_selling: ["AMOUNT SELLING", "AMOUNT_SELLING", "AMOUNT SELLING "],
 
   /* === MUESTRAS FECHA === */
   cfm_date: ["CFMs", "CFM"],
@@ -187,10 +192,10 @@ const MAP = {
   inspection_approval_date: ["Inspection Approval Date"],
 
   /* PRODUCCIÓN */
-  trial_upper_date: ["Trial Upper"],
-  trial_lasting_date: ["Trial Lasting"],
+  trial_upper_date: ["Trial Upper", "Trial U"],
+  trial_lasting_date: ["Trial Lasting", "Trial L"],
   lasting_date: ["Lasting"],
-  finish_date: ["FINISH DATE", "Finish"],
+  finish_date: ["FINISH DATE", "FINISH", "Finish"],
 };
 
 function get(row: any, aliases: string[]) {
@@ -203,11 +208,12 @@ function get(row: any, aliases: string[]) {
 }
 
 /* ============================================================
-   6) AGRUPADOR PRINCIPAL (CORREGIDO)
+   6) AGRUPADOR PRINCIPAL
    ============================================================ */
 
 export function groupRowsByPO(rows: any[]) {
-  const map = new Map();
+  const map = new Map<string, any>();
+
   for (const row of rows) {
     const po = cleanStr(get(row, MAP.po));
     if (!po) continue;
@@ -234,7 +240,13 @@ export function groupRowsByPO(rows: any[]) {
       map.set(po, { header: h, lines: [] });
     }
 
-    const headerYear = (map.get(po).header.po_date ?? "").slice(0, 4) || null;
+    const headerYearStr = (map.get(po).header.po_date ?? "").slice(0, 4);
+    const headerYear = headerYearStr ? Number(headerYearStr) : null;
+
+    const qty = parseQty(get(row, MAP.qty));
+    const priceSelling = parseMoney(get(row, MAP.price_selling));
+    const amountSellingRaw = parseMoney(get(row, MAP.amount_selling));
+    const amountSelling = amountSellingRaw || (qty && priceSelling ? qty * priceSelling : 0);
 
     const line = {
       reference: cleanStr(get(row, MAP.reference)),
@@ -243,43 +255,48 @@ export function groupRowsByPO(rows: any[]) {
       size_run: cleanStr(get(row, MAP.size_run)),
       category: cleanStr(get(row, MAP.category)),
       channel: cleanStr(get(row, MAP.channel)),
-      qty: parseQty(get(row, MAP.qty)),
+      qty,
       price: parseMoney(get(row, MAP.price)),
       amount: parseMoney(get(row, MAP.amount)),
+
+      // ✅ NUEVO: FINANCIAL (BSG)
+      pi_bsg: cleanStr(get(row, MAP.pi_bsg)) || null,
+      price_selling: priceSelling || 0,
+      amount_selling: amountSelling || 0,
 
       /* === Muestras === */
       cfm: parseDateSmart(get(row, MAP.cfm_date), headerYear),
       cfm_round: cleanStr(get(row, MAP.cfm_round)) || null,
       cfm_approval: cleanStr(get(row, MAP.cfm_approval)) || null,
-      cfm_approval_date: parseDateSmart(get(row, MAP.cfm_approval_date)),
+      cfm_approval_date: parseDateSmart(get(row, MAP.cfm_approval_date), headerYear),
 
       counter_sample: parseDateSmart(get(row, MAP.counter_date), headerYear),
       counter_round: cleanStr(get(row, MAP.counter_round)) || null,
       counter_approval: cleanStr(get(row, MAP.counter_approval)) || null,
-      counter_approval_date: parseDateSmart(get(row, MAP.counter_approval_date)),
+      counter_approval_date: parseDateSmart(get(row, MAP.counter_approval_date), headerYear),
 
       fitting: parseDateSmart(get(row, MAP.fitting_date), headerYear),
       fitting_round: cleanStr(get(row, MAP.fitting_round)) || null,
       fitting_approval: cleanStr(get(row, MAP.fitting_approval)) || null,
-      fitting_approval_date: parseDateSmart(get(row, MAP.fitting_approval_date)),
+      fitting_approval_date: parseDateSmart(get(row, MAP.fitting_approval_date), headerYear),
 
       pps: parseDateSmart(get(row, MAP.pps_date), headerYear),
       pps_round: cleanStr(get(row, MAP.pps_round)) || null,
       pps_approval: cleanStr(get(row, MAP.pps_approval)) || null,
-      pps_approval_date: parseDateSmart(get(row, MAP.pps_approval_date)),
+      pps_approval_date: parseDateSmart(get(row, MAP.pps_approval_date), headerYear),
 
       testing_sample: parseDateSmart(get(row, MAP.testing_date), headerYear),
       testing_round: cleanStr(get(row, MAP.testing_round)) || null,
       testing_approval: cleanStr(get(row, MAP.testing_approval)) || null,
-      testing_approval_date: parseDateSmart(get(row, MAP.testing_approval_date)),
+      testing_approval_date: parseDateSmart(get(row, MAP.testing_approval_date), headerYear),
 
       shipping_sample: parseDateSmart(get(row, MAP.shipping_date_sample), headerYear),
       shipping_round: cleanStr(get(row, MAP.shipping_round)) || null,
       shipping_approval: cleanStr(get(row, MAP.shipping_approval)) || null,
-      shipping_approval_date: parseDateSmart(get(row, MAP.shipping_approval_date)),
+      shipping_approval_date: parseDateSmart(get(row, MAP.shipping_approval_date), headerYear),
 
       inspection_approval: cleanStr(get(row, MAP.inspection_approval)) || null,
-      inspection_approval_date: parseDateSmart(get(row, MAP.inspection_approval_date)),
+      inspection_approval_date: parseDateSmart(get(row, MAP.inspection_approval_date), headerYear),
 
       /* === Producción === */
       trial_upper: parseDateSmart(get(row, MAP.trial_upper_date), headerYear),

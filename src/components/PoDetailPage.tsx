@@ -4,12 +4,27 @@ import { useState } from "react";
 
 type PoDetailPageProps = {
   po: any;
-  onSave?: (po: any) => void;   // ✅ ahora opcionales
+  onSave?: (po: any) => void;
   onDelete?: (id: string) => void;
   onBack?: () => void;
 };
 
-export default function PoDetailPage({ po, onSave, onDelete, onBack }: PoDetailPageProps) {
+function formatNumber(v: any) {
+  if (v === null || v === undefined || v === "") return "-";
+  const n = typeof v === "number" ? v : Number(String(v).replace(",", "."));
+  if (!Number.isFinite(n)) return String(v);
+  return n.toLocaleString("es-ES", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export default function PoDetailPage({
+  po,
+  onSave,
+  onDelete,
+  onBack,
+}: PoDetailPageProps) {
   const [data, setData] = useState(po);
 
   const handleSave = () => {
@@ -20,63 +35,107 @@ export default function PoDetailPage({ po, onSave, onDelete, onBack }: PoDetailP
     if (onDelete) onDelete(po.id);
   };
 
+  const supplierNorm = String(po?.supplier ?? "").trim().toUpperCase();
+  const isBSG = supplierNorm === "BSG";
+
   return (
     <div className="p-4">
       <h1 className="text-xl font-bold mb-4">Detalles del PO {po.po}</h1>
 
       <div className="grid grid-cols-2 gap-4 mb-6">
-        <div><b>Proveedor:</b> {po.supplier}</div>
-        <div><b>Cliente:</b> {po.customer}</div>
-        <div><b>Factory:</b> {po.factory}</div>
-        <div><b>Canal:</b> {po.channel}</div>
-        <div><b>PO Date:</b> {po.po_date || "-"}</div>
-        <div><b>ETD PI:</b> {po.etd_pi || "-"}</div>
-        <div><b>Booking:</b> {po.booking || "-"}</div>
-        <div><b>Closing:</b> {po.closing || "-"}</div>
-        <div><b>Shipping Date:</b> {po.shipping_date || "-"}</div>
+        <div>
+          <b>Proveedor:</b> {po.supplier}
+        </div>
+        <div>
+          <b>Cliente:</b> {po.customer}
+        </div>
+        <div>
+          <b>Factory:</b> {po.factory}
+        </div>
+        <div>
+          <b>Canal:</b> {po.channel}
+        </div>
+        <div>
+          <b>PO Date:</b> {po.po_date || "-"}
+        </div>
+        <div>
+          <b>ETD PI:</b> {po.etd_pi || "-"}
+        </div>
+        <div>
+          <b>Booking:</b> {po.booking || "-"}
+        </div>
+        <div>
+          <b>Closing:</b> {po.closing || "-"}
+        </div>
+        <div>
+          <b>Shipping Date:</b> {po.shipping_date || "-"}
+        </div>
       </div>
 
       <h2 className="font-semibold mb-2">Líneas de pedido</h2>
-      <table className="w-full border text-sm mb-6">
-        <thead>
-          <tr className="bg-gray-100">
-            <th>Referencia</th>
-            <th>Style</th>
-            <th>Color</th>
-            <th>Size Run</th>
-            <th>Qty</th>
-            <th>Price</th>
-            <th>Amount</th>
-            <th>Category</th>
-            <th>Trial Upper</th>
-            <th>Trial Lasting</th>
-            <th>Lasting</th>
-            <th>Finish Date</th>
-            <th>Inspection</th>
-            <th>Estado Inspección</th>
-          </tr>
-        </thead>
-        <tbody>
-          {po.lineas_pedido?.map((l: any) => (
-            <tr key={l.id} className="border-t">
-              <td>{l.reference}</td>
-              <td>{l.style}</td>
-              <td>{l.color}</td>
-              <td>{l.size_run}</td>
-              <td>{l.qty}</td>
-              <td>{l.price}</td>
-              <td>{l.amount}</td>
-              <td>{l.category}</td>
-              <td>{l.trial_upper || "-"}</td>
-              <td>{l.trial_lasting || "-"}</td>
-              <td>{l.lasting || "-"}</td>
-              <td>{l.finish_date || "-"}</td>
-              <td>{l.inspection || "-"}</td>
-              <td>{l.estado_inspeccion || "-"}</td>
+
+      <div className="overflow-x-auto">
+        <table className="w-full border text-sm mb-6">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="p-2 text-left">Referencia</th>
+              <th className="p-2 text-left">Style</th>
+              <th className="p-2 text-left">Color</th>
+              <th className="p-2 text-left">Size Run</th>
+              <th className="p-2 text-right">Qty</th>
+              <th className="p-2 text-right">Price</th>
+              <th className="p-2 text-right">Amount</th>
+
+              {/* ✅ BSG (solo aplica si Supplier=BSG) */}
+              <th className="p-2 text-left">PI BSG</th>
+              <th className="p-2 text-right">Selling Price</th>
+              <th className="p-2 text-right">Selling Amount</th>
+
+              <th className="p-2 text-left">Category</th>
+              <th className="p-2 text-left">Trial Upper</th>
+              <th className="p-2 text-left">Trial Lasting</th>
+              <th className="p-2 text-left">Lasting</th>
+              <th className="p-2 text-left">Finish Date</th>
+              <th className="p-2 text-left">Inspection</th>
+              <th className="p-2 text-left">Estado Inspección</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+
+          <tbody>
+            {po.lineas_pedido?.map((l: any) => (
+              <tr key={l.id} className="border-t">
+                <td className="p-2">{l.reference}</td>
+                <td className="p-2">{l.style}</td>
+                <td className="p-2">{l.color}</td>
+                <td className="p-2">{l.size_run}</td>
+
+                <td className="p-2 text-right">{l.qty}</td>
+                <td className="p-2 text-right">{formatNumber(l.price)}</td>
+                <td className="p-2 text-right">{formatNumber(l.amount)}</td>
+
+                {/* ✅ BSG por línea */}
+                <td className="p-2">
+                  {isBSG ? (String(l.pi_bsg ?? "").trim() || "-") : "—"}
+                </td>
+                <td className="p-2 text-right">
+                  {isBSG ? formatNumber(l.price_selling) : "—"}
+                </td>
+                <td className="p-2 text-right">
+                  {isBSG ? formatNumber(l.amount_selling) : "—"}
+                </td>
+
+                <td className="p-2">{l.category}</td>
+                <td className="p-2">{l.trial_upper || "-"}</td>
+                <td className="p-2">{l.trial_lasting || "-"}</td>
+                <td className="p-2">{l.lasting || "-"}</td>
+                <td className="p-2">{l.finish_date || "-"}</td>
+                <td className="p-2">{l.inspection || "-"}</td>
+                <td className="p-2">{l.estado_inspeccion || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <h2 className="font-semibold mb-2">Muestras</h2>
       {po.lineas_pedido?.map((l: any) => (
@@ -88,27 +147,27 @@ export default function PoDetailPage({ po, onSave, onDelete, onBack }: PoDetailP
             <table className="w-full border text-sm">
               <thead>
                 <tr className="bg-gray-100">
-                  <th>Tipo</th>
-                  <th>Fecha</th>
-                  <th>Estado</th>
-                  <th>Round</th>
-                  <th>Notas</th>
+                  <th className="p-2 text-left">Tipo</th>
+                  <th className="p-2 text-left">Fecha</th>
+                  <th className="p-2 text-left">Estado</th>
+                  <th className="p-2 text-left">Round</th>
+                  <th className="p-2 text-left">Notas</th>
                 </tr>
               </thead>
               <tbody>
                 {l.muestras.map((m: any) => (
                   <tr key={m.id} className="border-t">
-                    <td>{m.tipo_muestra}</td>
-                    <td>
+                    <td className="p-2">{m.tipo_muestra}</td>
+                    <td className="p-2">
                       {m.fecha_muestra
                         ? new Date(m.fecha_muestra).toLocaleDateString()
                         : m.fecha_teorica
                         ? `(Est.) ${new Date(m.fecha_teorica).toLocaleDateString()}`
                         : "-"}
                     </td>
-                    <td>{m.estado_muestra}</td>
-                    <td>{m.round}</td>
-                    <td>{m.notas || "-"}</td>
+                    <td className="p-2">{m.estado_muestra}</td>
+                    <td className="p-2">{m.round}</td>
+                    <td className="p-2">{m.notas || "-"}</td>
                   </tr>
                 ))}
               </tbody>

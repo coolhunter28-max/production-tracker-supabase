@@ -17,7 +17,26 @@ export const createLineaPedido = async (linea: Omit<LineaPedido, 'id' | 'created
   const { data, error } = await supabase
     .from('lineas_pedido')
     .insert([linea])
-    .select()
+    .select(.select(`id,
+  po_id,
+  reference,
+  style,
+  color,
+  size_run,
+  qty,
+  category,
+  price,
+  amount,
+  pi_bsg,
+  price_selling,
+  amount_selling,
+  trial_upper,
+  trial_lasting,
+  lasting,
+  finish_date,
+  created_at,
+  updated_at
+`)
     .single();
   
   if (error) throw error;
