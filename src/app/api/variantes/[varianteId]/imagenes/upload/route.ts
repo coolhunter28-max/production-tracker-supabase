@@ -1,3 +1,4 @@
+// src/app/api/variantes/[varianteId]/imagenes/upload/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
@@ -9,7 +10,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// ---------------- helpers ----------------
+// -------------------------------------------------------------
+// ENV + Helpers
+// -------------------------------------------------------------
 function assertEnv() {
   const required = [
     "NEXT_PUBLIC_SUPABASE_URL",
@@ -51,26 +54,24 @@ function isAllowedMime(mime: string) {
   return mime === "image/jpeg" || mime === "image/png" || mime === "image/webp";
 }
 
-// ---------------- POST ----------------
-// POST /api/modelos/:id/imagenes/upload
-// -> SOLO MAIN (opción A)
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { varianteId: string } }
 ) {
   try {
     assertEnv();
 
-    const modeloId = params.id;
-    if (!modeloId) {
-      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    const varianteId = params.varianteId;
+    if (!varianteId) {
+      return NextResponse.json({ error: "varianteId is required" }, { status: 400 });
     }
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
-    // IMPORTANTE: ignoramos kind del cliente y forzamos main
-    const kind = "main";
+    // permitimos kind por si mañana quieres "main" de variante, por ahora: default gallery
+    const kindRaw = (formData.get("kind") as string | null) ?? "gallery";
+    const kind = ["main", "gallery", "tech", "other"].includes(kindRaw) ? kindRaw : "gallery";
 
     if (!file) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -85,41 +86,43 @@ export async function POST(
 
     const MAX_MB = 15;
     if (file.size > MAX_MB * 1024 * 1024) {
-      return NextResponse.json(
-        { error: `Imagen demasiado grande. Máx ${MAX_MB}MB.` },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: `Imagen demasiado grande. Máx ${MAX_MB}MB.` }, { status: 400 });
     }
 
-    // 1) Verificar modelo y obtener style
-    const { data: modelo, error: modeloErr } = await supabase
-      .from("modelos")
-      .select("id, style")
-      .eq("id", modeloId)
+    // 1) Cargar variante + modelo (para path bonito)
+    const { data: variante, error: vErr } = await supabase
+      .from("modelo_variantes")
+      .select("id, modelo_id, season, color")
+      .eq("id", varianteId)
       .single();
 
-    if (modeloErr || !modelo) {
+    if (vErr || !variante) {
+      return NextResponse.json({ error: "Variante no existe" }, { status: 404 });
+    }
+
+    const { data: modelo, error: mErr } = await supabase
+      .from("modelos")
+      .select("id, style")
+      .eq("id", variante.modelo_id)
+      .single();
+
+    if (mErr || !modelo) {
       return NextResponse.json({ error: "Modelo no existe" }, { status: 404 });
     }
 
-    const style = String(modelo.style || modeloId);
-    const safeStyle = sanitizeFilename(style);
+    const safeStyle = sanitizeFilename(String(modelo.style || modelo.id));
+    const safeSeason = sanitizeFilename(String(variante.season || "season"));
+    const safeColor = sanitizeFilename(String(variante.color || "color"));
 
     // 2) Subir a R2
     const r2 = getR2Client();
     const bucket = process.env.R2_BUCKET_NAME!;
 
-    const ext =
-      file.type === "image/png"
-        ? "png"
-        : file.type === "image/webp"
-        ? "webp"
-        : "jpg";
-
+    const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
     const original = sanitizeFilename(file.name || `image.${ext}`);
     const stamp = Date.now();
-    const fileKey = `modelos/${safeStyle}/main/${stamp}_${original || `img.${ext}`}`;
 
+    const fileKey = `variantes/${safeStyle}/${safeSeason}_${safeColor}/${kind}/${stamp}_${original || `img.${ext}`}`;
     const body = Buffer.from(await file.arrayBuffer());
 
     await r2.send(
@@ -134,23 +137,22 @@ export async function POST(
 
     const publicUrl = `${normalizeBaseUrl(process.env.R2_PUBLIC_URL!)}/${fileKey}`;
 
-    // 3) Si existía main anterior (del modelo), lo degradamos a gallery? NO.
-    // Opción A: el modelo solo tiene main, así que borramos/convertimos anteriores main a "gallery" NO tendría sentido.
-    // Aquí lo más seguro: borrar anteriores main del modelo en BD (no en R2). Para no liarla, lo hacemos simple:
-    await supabase
-      .from("modelo_imagenes")
-      .delete()
-      .eq("modelo_id", modeloId)
-      .is("variante_id", null)
-      .eq("kind", "main");
+    // 3) Guardar en BD: modelo_imagenes (ligado SIEMPRE a variante_id)
+    // Si es main de variante: degradamos anteriores main -> gallery en esa variante
+    if (kind === "main") {
+      await supabase
+        .from("modelo_imagenes")
+        .update({ kind: "gallery" })
+        .eq("variante_id", varianteId)
+        .eq("kind", "main");
+    }
 
-    // 4) Insertar en modelo_imagenes con variante_id NULL
     const { data: inserted, error: insErr } = await supabase
       .from("modelo_imagenes")
       .insert([
         {
-          modelo_id: modeloId,
-          variante_id: null,
+          modelo_id: variante.modelo_id,
+          variante_id: varianteId,
           file_key: fileKey,
           public_url: publicUrl,
           kind,
@@ -166,19 +168,16 @@ export async function POST(
       return NextResponse.json({ error: insErr.message }, { status: 500 });
     }
 
-    // 5) actualizar modelos.picture_url
-    await supabase.from("modelos").update({ picture_url: publicUrl }).eq("id", modeloId);
-
     return NextResponse.json({
       status: "ok",
-      modelo_id: modeloId,
+      variante_id: varianteId,
       kind,
       file_key: fileKey,
       public_url: publicUrl,
       record: inserted,
     });
   } catch (e: any) {
-    console.error("upload modelo main error:", e);
+    console.error("upload variante image error:", e);
     return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });
   }
 }

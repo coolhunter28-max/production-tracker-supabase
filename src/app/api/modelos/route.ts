@@ -1,3 +1,4 @@
+// src/app/api/modelos/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -13,7 +14,9 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from("modelos")
-      .select("id, style, customer, supplier, status, size_range, factory, updated_at, created_at")
+      .select(
+        "id, style, customer, supplier, status, size_range, factory, updated_at, created_at"
+      )
       .order("updated_at", { ascending: false });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -23,7 +26,7 @@ export async function GET() {
   }
 }
 
-// POST /api/modelos -> crea modelo
+// POST /api/modelos -> crea modelo (+ primera variante)
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -33,7 +36,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "style is required" }, { status: 400 });
     }
 
-    // whitelist campos (para no liarla)
+    // ✅ Primera variante: season obligatorio
+    const firstSeason = String(body?.first_season || "").trim();
+    if (!firstSeason) {
+      return NextResponse.json(
+        { error: "first_season is required (para crear la primera variante)" },
+        { status: 400 }
+      );
+    }
+
+    // Color opcional -> si viene vacío, usamos BASE para evitar NULLs repetibles
+    const firstColorRaw = body?.first_color;
+    const firstColor =
+      firstColorRaw === undefined || firstColorRaw === null
+        ? "BASE"
+        : String(firstColorRaw || "").trim() || "BASE";
+
+    const firstFactory =
+      body?.first_factory !== undefined ? String(body.first_factory || "").trim() : "";
+
+    const firstStatus =
+      body?.first_status !== undefined ? String(body.first_status || "").trim() : "activo";
+
+    const firstNotes =
+      body?.first_notes !== undefined ? String(body.first_notes || "").trim() : "";
+
+    // whitelist campos modelo (para no liarla)
     const allowed = [
       "style",
       "description",
@@ -59,15 +87,47 @@ export async function POST(req: Request) {
     insert.style = style;
     if (!insert.reference) insert.reference = style;
 
-    const { data, error } = await supabase
+    // 1) Insert MODELO
+    const { data: modelo, error: mErr } = await supabase
       .from("modelos")
       .insert([insert])
       .select("*")
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (mErr || !modelo) {
+      return NextResponse.json({ error: mErr?.message || "Error creando modelo" }, { status: 500 });
+    }
 
-    return NextResponse.json({ status: "ok", modelo: data });
+    // 2) Insert PRIMERA VARIANTE (siempre)
+    const { data: variante, error: vErr } = await supabase
+      .from("modelo_variantes")
+      .insert([
+        {
+          modelo_id: modelo.id,
+          season: firstSeason,
+          color: firstColor, // "BASE" si no hay color
+          factory: firstFactory ? firstFactory : null,
+          status: firstStatus || "activo",
+          notes: firstNotes ? firstNotes : null,
+        },
+      ])
+      .select("*")
+      .single();
+
+    if (vErr || !variante) {
+      // 🔥 Importante: no podemos “rollback” sin RPC/transaction, pero al menos devolvemos info clara
+      return NextResponse.json(
+        {
+          error:
+            "Modelo creado, pero falló la creación de la primera variante: " +
+            (vErr?.message || "unknown"),
+          modelo,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ status: "ok", modelo, first_variante: variante });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });
   }

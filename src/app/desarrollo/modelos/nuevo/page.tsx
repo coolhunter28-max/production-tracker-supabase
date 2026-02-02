@@ -45,6 +45,7 @@ export default function NuevoModeloPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
+  // MODELO
   const [style, setStyle] = useState("");
   const [reference, setReference] = useState("");
   const [customer, setCustomer] = useState("");
@@ -59,7 +60,15 @@ export default function NuevoModeloPage() {
   const [status, setStatus] = useState("en_desarrollo");
   const [description, setDescription] = useState("");
 
+  // PRIMERA VARIANTE
+  const [firstSeason, setFirstSeason] = useState("");
+  const [firstColor, setFirstColor] = useState("");
+  const [firstFactory, setFirstFactory] = useState(""); // opcional: si vacío, usaremos factory del modelo
+  const [firstStatus, setFirstStatus] = useState("activo");
+  const [firstNotes, setFirstNotes] = useState("");
+
   const styleOk = useMemo(() => !!normalizeText(style), [style]);
+  const firstSeasonOk = useMemo(() => !!normalizeText(firstSeason), [firstSeason]);
 
   const create = async () => {
     if (saving) return;
@@ -70,9 +79,15 @@ export default function NuevoModeloPage() {
       return;
     }
 
+    if (!firstSeasonOk) {
+      setMsg("❌ First season (primera variante) es obligatoria. Ej: SS26");
+      return;
+    }
+
     setSaving(true);
     try {
       const payload: any = {
+        // --- MODELO ---
         style: normalizeText(style),
         reference: normalizeText(reference) ?? normalizeText(style), // si reference vacío -> style
         customer: normalizeText(customer),
@@ -89,6 +104,13 @@ export default function NuevoModeloPage() {
           packagingPrice === "" || packagingPrice === null || packagingPrice === undefined
             ? null
             : Number(packagingPrice),
+
+        // --- PRIMERA VARIANTE ---
+        first_season: normalizeText(firstSeason),
+        first_color: normalizeText(firstColor), // si es null/vacío, backend lo convertirá a "BASE"
+        first_factory: normalizeText(firstFactory) ?? normalizeText(factory), // por defecto = factory del modelo
+        first_status: normalizeText(firstStatus) ?? "activo",
+        first_notes: normalizeText(firstNotes),
       };
 
       const res = await fetch("/api/modelos", {
@@ -100,11 +122,20 @@ export default function NuevoModeloPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Error creando modelo");
 
-      const newId = json?.modelo?.id;
-      if (!newId) throw new Error("Modelo creado pero no se recibió el id.");
+      const newModeloId = json?.modelo?.id;
+      const firstVarId = json?.first_variante?.id;
 
-      setMsg("✅ Modelo creado.");
-      router.push(`/desarrollo/modelos/${newId}`);
+      if (!newModeloId) throw new Error("Modelo creado pero no se recibió el id.");
+
+      setMsg("✅ Modelo + primera variante creados.");
+
+      // ✅ Mejor UX: ir directo a la variante recién creada
+      if (firstVarId) {
+        router.push(`/desarrollo/variantes/${firstVarId}`);
+      } else {
+        // fallback
+        router.push(`/desarrollo/modelos/${newModeloId}`);
+      }
       router.refresh();
     } catch (e: any) {
       setMsg("❌ " + (e?.message || "Error"));
@@ -128,9 +159,15 @@ export default function NuevoModeloPage() {
 
           <button
             onClick={create}
-            disabled={saving || !styleOk}
+            disabled={saving || !styleOk || !firstSeasonOk}
             className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 transition text-sm disabled:opacity-60"
-            title={!styleOk ? "Style es obligatorio" : ""}
+            title={
+              !styleOk
+                ? "Style es obligatorio"
+                : !firstSeasonOk
+                ? "First season (primera variante) es obligatoria"
+                : ""
+            }
           >
             {saving ? "Creando..." : "Crear"}
           </button>
@@ -139,7 +176,10 @@ export default function NuevoModeloPage() {
 
       {msg ? <div className="text-sm bg-gray-50 border rounded p-3">{msg}</div> : null}
 
+      {/* -------- MODELO -------- */}
       <div className="bg-white rounded-xl shadow p-5 border border-gray-200 space-y-4">
+        <div className="text-sm font-semibold">Datos del modelo</div>
+
         <div className="grid md:grid-cols-2 gap-4">
           <InputRow
             label="Style"
@@ -249,6 +289,63 @@ export default function NuevoModeloPage() {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Notas del modelo..."
           />
+        </div>
+      </div>
+
+      {/* -------- PRIMERA VARIANTE -------- */}
+      <div className="bg-white rounded-xl shadow p-5 border border-gray-200 space-y-4">
+        <div className="text-sm font-semibold">Primera variante (se crea automáticamente)</div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <InputRow
+            label="Season"
+            required
+            value={firstSeason}
+            onChange={setFirstSeason}
+            placeholder="SS26"
+          />
+
+          <InputRow
+            label="Color"
+            value={firstColor}
+            onChange={setFirstColor}
+            placeholder='CHI (si vacío, se usará "BASE")'
+          />
+
+          <InputRow
+            label="Factory (variante)"
+            value={firstFactory}
+            onChange={setFirstFactory}
+            placeholder="(si vacío, usará Factory del modelo)"
+          />
+
+          <div className="space-y-1">
+            <div className="text-[12px] font-semibold text-gray-700">Status (variante)</div>
+            <select
+              className="w-full border rounded px-3 py-2 text-sm bg-white"
+              value={firstStatus}
+              onChange={(e) => setFirstStatus(e.target.value)}
+            >
+              <option value="activo">activo</option>
+              <option value="inactivo">inactivo</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <div className="text-[12px] font-semibold text-gray-700">Notes (variante)</div>
+          <textarea
+            className="w-full border rounded px-3 py-2 text-sm bg-white"
+            value={firstNotes}
+            onChange={(e) => setFirstNotes(e.target.value)}
+            rows={2}
+            placeholder="(opcional)"
+          />
+        </div>
+
+        <div className="text-xs text-gray-600">
+          Nota: al crear, te llevaré directamente a la variante para que puedas añadir
+          composición, precios e imágenes.
         </div>
       </div>
     </div>

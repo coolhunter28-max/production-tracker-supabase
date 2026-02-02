@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
@@ -35,21 +36,23 @@ type Precio = {
   updated_at?: string;
 };
 
+type VarianteImagen = {
+  id: string;
+  modelo_id: string;
+  variante_id: string;
+  public_url: string;
+  file_key: string;
+  kind: "main" | "gallery" | "tech" | "other";
+  size_bytes?: number | null;
+  mime_type?: string | null;
+  created_at?: string;
+};
+
 const KINDS = ["upper", "lining", "insole", "shoelace", "outsole", "packaging", "other"];
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <div className="text-[12px] font-semibold text-gray-600">{label}</div>
-      {children}
-    </div>
-  );
+function formatMB(bytes?: number | null) {
+  if (!bytes) return "-";
+  return (bytes / (1024 * 1024)).toFixed(2) + " MB";
 }
 
 export default function VariantePage() {
@@ -57,11 +60,12 @@ export default function VariantePage() {
   const varianteId = params?.varianteId || "";
   const router = useRouter();
 
-  const [tab, setTab] = useState<"componentes" | "precios">("componentes");
+  const [tab, setTab] = useState<"componentes" | "precios" | "imagenes">("componentes");
 
   const [variante, setVariante] = useState<Variante | null>(null);
   const [componentes, setComponentes] = useState<Componente[]>([]);
   const [precios, setPrecios] = useState<Precio[]>([]);
+  const [imagenes, setImagenes] = useState<VarianteImagen[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
 
@@ -94,6 +98,9 @@ export default function VariantePage() {
 
   const [editingPrecioId, setEditingPrecioId] = useState<string | null>(null);
   const [precioDraft, setPrecioDraft] = useState<any>({});
+
+  // Upload imágenes
+  const [imgFile, setImgFile] = useState<File | null>(null);
 
   const title = useMemo(() => {
     if (!variante) return "Variante";
@@ -139,11 +146,21 @@ export default function VariantePage() {
       } catch {
         setPrecios([]);
       }
+
+      // Imágenes
+      try {
+        const iRes = await fetch(`/api/variantes/${varianteId}/imagenes`, { cache: "no-store" });
+        const iJson = await iRes.json();
+        setImagenes(iRes.ok ? (Array.isArray(iJson) ? iJson : iJson?.data || []) : []);
+      } catch {
+        setImagenes([]);
+      }
     } catch (e: any) {
       setMsg("❌ " + (e?.message || "Error"));
       setVariante(null);
       setComponentes([]);
       setPrecios([]);
+      setImagenes([]);
     } finally {
       setLoading(false);
     }
@@ -339,7 +356,6 @@ export default function VariantePage() {
         notes: String(precioDraft.notes || "").trim() || null,
       };
 
-      // Si valid_from viene vacío, no lo mandamos
       if (!body.valid_from) delete body.valid_from;
 
       const res = await fetch(`/api/variantes/${varianteId}/precios/${precioId}`, {
@@ -372,6 +388,50 @@ export default function VariantePage() {
       if (!res.ok) throw new Error(json?.error || "Error eliminando precio");
 
       setMsg("🗑️ Precio eliminado.");
+      await load();
+    } catch (e: any) {
+      setMsg("❌ " + (e?.message || "Error"));
+    }
+  };
+
+  // ----------------- IMÁGENES -----------------
+  const uploadImagen = async () => {
+    if (!imgFile) return;
+    setMsg("");
+    try {
+      const form = new FormData();
+      form.append("kind", "gallery");
+      form.append("file", imgFile);
+
+      const res = await fetch(`/api/variantes/${varianteId}/imagenes/upload`, {
+        method: "POST",
+        body: form,
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Error subiendo imagen");
+
+      setMsg("✅ Imagen añadida a la variante.");
+      setImgFile(null);
+      await load();
+    } catch (e: any) {
+      setMsg("❌ " + (e?.message || "Error"));
+    }
+  };
+
+  const deleteImagen = async (imageId: string) => {
+    const ok = confirm("¿Eliminar esta imagen de la variante?");
+    if (!ok) return;
+
+    setMsg("");
+    try {
+      const res = await fetch(`/api/variantes/${varianteId}/imagenes/${imageId}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Error eliminando imagen");
+
+      setMsg("🗑️ Imagen eliminada.");
       await load();
     } catch (e: any) {
       setMsg("❌ " + (e?.message || "Error"));
@@ -435,7 +495,6 @@ export default function VariantePage() {
               <button
                 onClick={() => {
                   setEditVar(false);
-                  // restaurar desde variante actual
                   setVSeason(variante.season || "");
                   setVColor(variante.color || "");
                   setVFactory(variante.factory || "");
@@ -463,35 +522,36 @@ export default function VariantePage() {
             ) : null}
           </div>
         ) : (
-          <div className="grid md:grid-cols-4 gap-3">
-            <Field label="Season">
+          <div className="grid md:grid-cols-4 gap-2">
+            <div className="space-y-1">
+              <div className="text-[11px] text-gray-600">Season *</div>
               <input
                 value={vSeason}
                 onChange={(e) => setVSeason(e.target.value)}
                 className="w-full px-3 py-2 border rounded bg-white text-sm"
-                placeholder="SS26"
+                placeholder="season"
               />
-            </Field>
-
-            <Field label="Color">
+            </div>
+            <div className="space-y-1">
+              <div className="text-[11px] text-gray-600">Color</div>
               <input
                 value={vColor}
                 onChange={(e) => setVColor(e.target.value)}
                 className="w-full px-3 py-2 border rounded bg-white text-sm"
-                placeholder="CHI"
+                placeholder="color"
               />
-            </Field>
-
-            <Field label="Factory">
+            </div>
+            <div className="space-y-1">
+              <div className="text-[11px] text-gray-600">Factory</div>
               <input
                 value={vFactory}
                 onChange={(e) => setVFactory(e.target.value)}
                 className="w-full px-3 py-2 border rounded bg-white text-sm"
                 placeholder="factory"
               />
-            </Field>
-
-            <Field label="Status">
+            </div>
+            <div className="space-y-1">
+              <div className="text-[11px] text-gray-600">Status</div>
               <select
                 value={vStatus}
                 onChange={(e) => setVStatus(e.target.value)}
@@ -500,18 +560,16 @@ export default function VariantePage() {
                 <option value="activo">activo</option>
                 <option value="inactivo">inactivo</option>
               </select>
-            </Field>
-
-            <div className="md:col-span-4">
-              <Field label="Notes">
-                <textarea
-                  value={vNotes}
-                  onChange={(e) => setVNotes(e.target.value)}
-                  className="w-full px-3 py-2 border rounded bg-white text-sm"
-                  rows={3}
-                  placeholder="notes"
-                />
-              </Field>
+            </div>
+            <div className="md:col-span-4 space-y-1">
+              <div className="text-[11px] text-gray-600">Notes</div>
+              <textarea
+                value={vNotes}
+                onChange={(e) => setVNotes(e.target.value)}
+                className="w-full px-3 py-2 border rounded bg-white text-sm"
+                rows={2}
+                placeholder="notes"
+              />
             </div>
           </div>
         )}
@@ -535,6 +593,14 @@ export default function VariantePage() {
         >
           Precios
         </button>
+        <button
+          onClick={() => setTab("imagenes")}
+          className={`px-4 py-2 rounded text-sm border ${
+            tab === "imagenes" ? "bg-black text-white" : "bg-white hover:bg-gray-50"
+          }`}
+        >
+          Imágenes
+        </button>
       </div>
 
       {/* COMPONENTES */}
@@ -544,8 +610,9 @@ export default function VariantePage() {
 
           {/* Form nuevo */}
           <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-            <div className="grid md:grid-cols-5 gap-3 items-end">
-              <Field label="Kind">
+            <div className="grid md:grid-cols-5 gap-2">
+              <div className="space-y-1">
+                <div className="text-[11px] text-gray-600">Kind</div>
                 <select
                   value={cKind}
                   onChange={(e) => setCKind(e.target.value)}
@@ -557,56 +624,61 @@ export default function VariantePage() {
                     </option>
                   ))}
                 </select>
-              </Field>
+              </div>
 
-              <Field label="Slot">
+              <div className="space-y-1">
+                <div className="text-[11px] text-gray-600">Slot</div>
                 <input
                   type="number"
                   value={cSlot}
                   min={1}
                   onChange={(e) => setCSlot(Number(e.target.value))}
                   className="w-full px-3 py-2 border rounded bg-white text-sm"
-                  placeholder="1"
+                  placeholder="slot"
                 />
-              </Field>
+              </div>
 
-              <Field label="Material">
+              <div className="space-y-1">
+                <div className="text-[11px] text-gray-600">Material</div>
                 <input
                   value={cMaterial}
                   onChange={(e) => setCMaterial(e.target.value)}
                   className="w-full px-3 py-2 border rounded bg-white text-sm"
-                  placeholder="material_text (opcional)"
+                  placeholder="material_text"
                 />
-              </Field>
+              </div>
 
-              <Field label="%">
+              <div className="space-y-1">
+                <div className="text-[11px] text-gray-600">%</div>
                 <input
                   type="number"
                   value={cPercentage}
-                  onChange={(e) =>
-                    setCPercentage(e.target.value === "" ? "" : Number(e.target.value))
-                  }
+                  onChange={(e) => setCPercentage(e.target.value === "" ? "" : Number(e.target.value))}
                   className="w-full px-3 py-2 border rounded bg-white text-sm"
-                  placeholder="% (opcional)"
+                  placeholder="%"
                 />
-              </Field>
+              </div>
 
-              <button
-                onClick={addComponente}
-                className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 text-sm"
-              >
-                ➕ Añadir
-              </button>
+              <div className="space-y-1">
+                <div className="text-[11px] text-gray-600">&nbsp;</div>
+                <button
+                  onClick={addComponente}
+                  className="w-full px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 text-sm"
+                >
+                  ➕ Añadir
+                </button>
+              </div>
             </div>
 
-            <Field label="Extra">
+            <div className="space-y-1">
+              <div className="text-[11px] text-gray-600">Extra</div>
               <input
                 value={cExtra}
                 onChange={(e) => setCExtra(e.target.value)}
-                className="px-3 py-2 border rounded bg-white text-sm w-full"
-                placeholder="extra (opcional)"
+                className="w-full px-3 py-2 border rounded bg-white text-sm"
+                placeholder="extra"
               />
-            </Field>
+            </div>
 
             <div className="text-xs text-gray-600">
               unique por (variante_id, kind, slot). Si repites slot te dará error.
@@ -635,9 +707,7 @@ export default function VariantePage() {
                         {editing ? (
                           <select
                             value={compDraft.kind}
-                            onChange={(e) =>
-                              setCompDraft((d: any) => ({ ...d, kind: e.target.value }))
-                            }
+                            onChange={(e) => setCompDraft((d: any) => ({ ...d, kind: e.target.value }))}
                             className="px-2 py-1 border rounded bg-white text-sm"
                           >
                             {KINDS.map((k) => (
@@ -657,12 +727,7 @@ export default function VariantePage() {
                             type="number"
                             min={1}
                             value={compDraft.slot}
-                            onChange={(e) =>
-                              setCompDraft((d: any) => ({
-                                ...d,
-                                slot: Number(e.target.value),
-                              }))
-                            }
+                            onChange={(e) => setCompDraft((d: any) => ({ ...d, slot: Number(e.target.value) }))}
                             className="w-20 px-2 py-1 border rounded bg-white text-sm"
                           />
                         ) : (
@@ -673,28 +738,25 @@ export default function VariantePage() {
                       <td className="p-3">
                         {editing ? (
                           <div className="space-y-2">
-                            <input
-                              value={compDraft.material_text}
-                              onChange={(e) =>
-                                setCompDraft((d: any) => ({
-                                  ...d,
-                                  material_text: e.target.value,
-                                }))
-                              }
-                              className="w-full px-2 py-1 border rounded bg-white text-sm"
-                              placeholder="material_text"
-                            />
-                            <input
-                              value={compDraft.extra}
-                              onChange={(e) =>
-                                setCompDraft((d: any) => ({
-                                  ...d,
-                                  extra: e.target.value,
-                                }))
-                              }
-                              className="w-full px-2 py-1 border rounded bg-white text-sm"
-                              placeholder="extra"
-                            />
+                            <div className="space-y-1">
+                              <div className="text-[11px] text-gray-500">Material</div>
+                              <input
+                                value={compDraft.material_text}
+                                onChange={(e) => setCompDraft((d: any) => ({ ...d, material_text: e.target.value }))}
+                                className="w-full px-2 py-1 border rounded bg-white text-sm"
+                                placeholder="material_text"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="text-[11px] text-gray-500">Extra</div>
+                              <input
+                                value={compDraft.extra}
+                                onChange={(e) => setCompDraft((d: any) => ({ ...d, extra: e.target.value }))}
+                                className="w-full px-2 py-1 border rounded bg-white text-sm"
+                                placeholder="extra"
+                              />
+                            </div>
                           </div>
                         ) : (
                           <div className="space-y-1">
@@ -780,8 +842,9 @@ export default function VariantePage() {
 
           {/* Form nuevo */}
           <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-            <div className="grid md:grid-cols-6 gap-3 items-end">
-              <Field label="Buy price">
+            <div className="grid md:grid-cols-6 gap-2">
+              <div className="space-y-1">
+                <div className="text-[11px] text-gray-600">Buy</div>
                 <input
                   type="number"
                   value={pBuy}
@@ -789,9 +852,10 @@ export default function VariantePage() {
                   className="w-full px-3 py-2 border rounded bg-white text-sm"
                   placeholder="buy_price"
                 />
-              </Field>
+              </div>
 
-              <Field label="Sell price">
+              <div className="space-y-1">
+                <div className="text-[11px] text-gray-600">Sell</div>
                 <input
                   type="number"
                   value={pSell}
@@ -799,27 +863,30 @@ export default function VariantePage() {
                   className="w-full px-3 py-2 border rounded bg-white text-sm"
                   placeholder="sell_price"
                 />
-              </Field>
+              </div>
 
-              <Field label="Currency">
+              <div className="space-y-1">
+                <div className="text-[11px] text-gray-600">Currency</div>
                 <input
                   value={pCurrency}
                   onChange={(e) => setPCurrency(e.target.value)}
                   className="w-full px-3 py-2 border rounded bg-white text-sm"
-                  placeholder="EUR"
+                  placeholder="currency"
                 />
-              </Field>
+              </div>
 
-              <Field label="Season">
+              <div className="space-y-1">
+                <div className="text-[11px] text-gray-600">Season *</div>
                 <input
                   value={pSeason}
                   onChange={(e) => setPSeason(e.target.value)}
                   className="w-full px-3 py-2 border rounded bg-white text-sm"
-                  placeholder="SS26"
+                  placeholder="season"
                 />
-              </Field>
+              </div>
 
-              <Field label="Valid from">
+              <div className="space-y-1">
+                <div className="text-[11px] text-gray-600">Valid from</div>
                 <input
                   type="date"
                   value={pValidFrom}
@@ -827,30 +894,34 @@ export default function VariantePage() {
                   className="w-full px-3 py-2 border rounded bg-white text-sm"
                   title="valid_from (si lo dejas vacío, será hoy y puede duplicar)"
                 />
-              </Field>
+              </div>
 
-              <button
-                onClick={addPrecio}
-                className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 text-sm disabled:opacity-50"
-                disabled={pBuy === "" || !pSeason.trim()}
-                title="Requiere buy_price y season"
-              >
-                ➕ Añadir
-              </button>
+              <div className="space-y-1">
+                <div className="text-[11px] text-gray-600">&nbsp;</div>
+                <button
+                  onClick={addPrecio}
+                  className="w-full px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 text-sm disabled:opacity-50"
+                  disabled={pBuy === "" || !pSeason.trim()}
+                  title="Requiere buy_price y season"
+                >
+                  ➕ Añadir
+                </button>
+              </div>
             </div>
 
-            <Field label="Notes">
+            <div className="space-y-1">
+              <div className="text-[11px] text-gray-600">Notes</div>
               <input
                 value={pNotes}
                 onChange={(e) => setPNotes(e.target.value)}
-                className="px-3 py-2 border rounded bg-white text-sm w-full"
-                placeholder="notes (opcional)"
+                className="w-full px-3 py-2 border rounded bg-white text-sm"
+                placeholder="notes"
               />
-            </Field>
+            </div>
 
             <div className="text-xs text-gray-600">
               Regla: 1 precio por variante y día (unique: variante_id + valid_from).
-              Si quieres “cambiar precio hoy”, edita el registro de hoy (botón Editar).
+              Si quieres “cambiar precio hoy”, edita el registro de hoy.
             </div>
           </div>
 
@@ -879,12 +950,7 @@ export default function VariantePage() {
                           <input
                             type="date"
                             value={precioDraft.valid_from}
-                            onChange={(e) =>
-                              setPrecioDraft((d: any) => ({
-                                ...d,
-                                valid_from: e.target.value,
-                              }))
-                            }
+                            onChange={(e) => setPrecioDraft((d: any) => ({ ...d, valid_from: e.target.value }))}
                             className="px-2 py-1 border rounded bg-white text-sm"
                           />
                         ) : (
@@ -896,9 +962,7 @@ export default function VariantePage() {
                         {editing ? (
                           <input
                             value={precioDraft.season}
-                            onChange={(e) =>
-                              setPrecioDraft((d: any) => ({ ...d, season: e.target.value }))
-                            }
+                            onChange={(e) => setPrecioDraft((d: any) => ({ ...d, season: e.target.value }))}
                             className="px-2 py-1 border rounded bg-white text-sm"
                           />
                         ) : (
@@ -946,12 +1010,7 @@ export default function VariantePage() {
                         {editing ? (
                           <input
                             value={precioDraft.currency}
-                            onChange={(e) =>
-                              setPrecioDraft((d: any) => ({
-                                ...d,
-                                currency: e.target.value,
-                              }))
-                            }
+                            onChange={(e) => setPrecioDraft((d: any) => ({ ...d, currency: e.target.value }))}
                             className="w-20 px-2 py-1 border rounded bg-white text-sm"
                           />
                         ) : (
@@ -963,9 +1022,7 @@ export default function VariantePage() {
                         {editing ? (
                           <input
                             value={precioDraft.notes}
-                            onChange={(e) =>
-                              setPrecioDraft((d: any) => ({ ...d, notes: e.target.value }))
-                            }
+                            onChange={(e) => setPrecioDraft((d: any) => ({ ...d, notes: e.target.value }))}
                             className="w-full px-2 py-1 border rounded bg-white text-sm"
                             placeholder="notes"
                           />
@@ -1020,6 +1077,84 @@ export default function VariantePage() {
                 ) : null}
               </tbody>
             </table>
+          </div>
+        </div>
+      ) : null}
+
+      {/* IMÁGENES */}
+      {tab === "imagenes" ? (
+        <div className="bg-white rounded-xl shadow p-5 border border-gray-200 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">🖼️ Imágenes de la variante</h2>
+            <button
+              onClick={load}
+              className="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm"
+            >
+              ↻ Recargar
+            </button>
+          </div>
+
+          {/* Upload */}
+          <div className="border rounded-lg p-4 bg-gray-50 space-y-2">
+            <div className="text-sm font-semibold">Añadir imagen</div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setImgFile(e.target.files?.[0] || null)}
+              />
+              <button
+                onClick={uploadImagen}
+                disabled={!imgFile}
+                className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 text-sm disabled:opacity-50"
+              >
+                Subir a variante
+              </button>
+            </div>
+
+            <div className="text-xs text-gray-600">
+              Estas imágenes quedan ligadas a <b>variante_id</b> (no pueden ser “random”).
+            </div>
+          </div>
+
+          {/* Grid */}
+          <div className="border rounded-lg p-3 bg-gray-50">
+            {imagenes.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {imagenes.map((img) => (
+                  <div
+                    key={img.id}
+                    className="border rounded bg-white overflow-hidden p-2 space-y-2"
+                  >
+                    <div className="relative w-full h-[140px] bg-white">
+                      <Image
+                        src={img.public_url}
+                        alt="Variante"
+                        fill
+                        className="object-contain"
+                      />
+                    </div>
+
+                    <div className="text-[11px] text-gray-700">
+                      <div><span className="font-semibold">Kind:</span> {img.kind}</div>
+                      <div><span className="font-semibold">Size:</span> {formatMB(img.size_bytes)}</div>
+                    </div>
+
+                    <button
+                      onClick={() => deleteImagen(img.id)}
+                      className="w-full px-2 py-1 rounded bg-red-600 text-white hover:bg-red-500 text-xs"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-600 italic">
+                Aún no hay imágenes en esta variante.
+              </div>
+            )}
           </div>
         </div>
       ) : null}

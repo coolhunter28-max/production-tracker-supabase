@@ -11,6 +11,7 @@ type Modelo = any;
 type ModeloImagen = {
   id: string;
   modelo_id: string;
+  variante_id?: string | null;
   public_url: string;
   file_key: string;
   kind: "main" | "gallery";
@@ -46,9 +47,8 @@ export default function ModeloDetailPage() {
   const [variantes, setVariantes] = useState<Variante[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Upload states
+  // Upload states (solo MAIN)
   const [mainFile, setMainFile] = useState<File | null>(null);
-  const [galleryFile, setGalleryFile] = useState<File | null>(null);
 
   // Variantes form (crear)
   const [vSeason, setVSeason] = useState("");
@@ -61,21 +61,10 @@ export default function ModeloDetailPage() {
   const [editingVarId, setEditingVarId] = useState<string | null>(null);
   const [varDraft, setVarDraft] = useState<any>({});
 
-  // ✅ FEEDER states
-  const [feedSource, setFeedSource] = useState<string>("");
-  const [feedTargets, setFeedTargets] = useState<string[]>([]);
-  const [feedComp, setFeedComp] = useState(true);
-  const [feedPrices, setFeedPrices] = useState(true);
-
   const [msg, setMsg] = useState<string>("");
 
   const mainImage = useMemo(
     () => imagenes.find((i) => i.kind === "main") || null,
-    [imagenes]
-  );
-
-  const gallery = useMemo(
-    () => imagenes.filter((i) => i.kind === "gallery"),
     [imagenes]
   );
 
@@ -92,7 +81,7 @@ export default function ModeloDetailPage() {
       if (!mRes.ok) throw new Error(mJson?.error || "Error cargando modelo");
       setModelo(mJson);
 
-      // 2) Cargar IMÁGENES
+      // 2) Cargar IMÁGENES (SOLO MODELO: variante_id IS NULL)
       try {
         const iRes = await fetch(`/api/modelos/${id}/imagenes`, {
           cache: "no-store",
@@ -119,14 +108,7 @@ export default function ModeloDetailPage() {
           console.warn("⚠️ No se pudieron cargar variantes:", vJson?.error);
           setVariantes([]);
         } else {
-          const rows = Array.isArray(vJson) ? vJson : vJson?.data || [];
-          setVariantes(rows);
-
-          // (Opcional) si la source no existe ya, resetear
-          if (feedSource && !rows.find((x: Variante) => x.id === feedSource)) {
-            setFeedSource("");
-            setFeedTargets([]);
-          }
+          setVariantes(Array.isArray(vJson) ? vJson : vJson?.data || []);
         }
       } catch (e) {
         console.warn("⚠️ Error cargando variantes:", e);
@@ -148,15 +130,16 @@ export default function ModeloDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const upload = async (kind: "main" | "gallery", file: File | null) => {
-    if (!file) return;
+  // Subir MAIN (en el backend ahora se fuerza a main igualmente)
+  const uploadMain = async () => {
+    if (!mainFile) return;
 
     setMsg("");
 
     try {
       const form = new FormData();
-      form.append("kind", kind);
-      form.append("file", file);
+      form.append("kind", "main"); // aunque el backend lo ignora y fuerza main
+      form.append("file", mainFile);
 
       const res = await fetch(`/api/modelos/${id}/imagenes/upload`, {
         method: "POST",
@@ -166,22 +149,16 @@ export default function ModeloDetailPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Error subiendo imagen");
 
-      setMsg(
-        kind === "main"
-          ? "✅ Imagen principal actualizada."
-          : "✅ Imagen añadida a galería."
-      );
-
+      setMsg("✅ Imagen principal actualizada.");
       setMainFile(null);
-      setGalleryFile(null);
       await load();
     } catch (e: any) {
       setMsg("❌ " + (e?.message || "Error"));
     }
   };
 
-  const deleteImage = async (imageId: string) => {
-    const ok = confirm("¿Seguro que quieres eliminar esta imagen?");
+  const deleteMainImage = async (imageId: string) => {
+    const ok = confirm("¿Seguro que quieres eliminar la imagen principal?");
     if (!ok) return;
 
     setMsg("");
@@ -296,45 +273,7 @@ export default function ModeloDetailPage() {
 
       setMsg("🗑️ Variante eliminada.");
       if (editingVarId === varId) cancelEditVar();
-
-      // limpiar selección feeder si estaba involucrada
-      if (feedSource === varId) {
-        setFeedSource("");
-        setFeedTargets([]);
-      } else if (feedTargets.includes(varId)) {
-        setFeedTargets((prev) => prev.filter((x) => x !== varId));
-      }
-
       await load();
-    } catch (e: any) {
-      setMsg("❌ " + (e?.message || "Error"));
-    }
-  };
-
-  // ✅ FEEDER action
-  const runFeeder = async () => {
-    setMsg("");
-    try {
-      const res = await fetch("/api/variantes/feeder", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sourceVarianteId: feedSource,
-          targetVarianteIds: feedTargets,
-          copy: { componentes: feedComp, precios: feedPrices },
-        }),
-      });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Error ejecutando feeder");
-
-      setMsg(
-        `✅ Feeder OK · Componentes: ${json.report?.componentes?.copied ?? 0} copiados, ${
-          json.report?.componentes?.skipped ?? 0
-        } saltados · Precios: ${json.report?.precios?.copied ?? 0} copiados, ${
-          json.report?.precios?.skipped ?? 0
-        } saltados`
-      );
     } catch (e: any) {
       setMsg("❌ " + (e?.message || "Error"));
     }
@@ -406,8 +345,7 @@ export default function ModeloDetailPage() {
             {modelo.factory || "-"}
           </div>
           <div>
-            <span className="font-semibold">Status:</span>{" "}
-            {modelo.status || "-"}
+            <span className="font-semibold">Status:</span> {modelo.status || "-"}
           </div>
           <div>
             <span className="font-semibold">Size range:</span>{" "}
@@ -416,10 +354,10 @@ export default function ModeloDetailPage() {
         </div>
       </div>
 
-      {/* IMÁGENES */}
+      {/* IMÁGEN PRINCIPAL (MODELO) */}
       <div className="bg-white rounded-xl shadow p-5 border border-gray-200 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">🖼️ Imágenes del modelo</h2>
+          <h2 className="text-lg font-semibold">🖼️ Imagen principal del modelo</h2>
           <button
             onClick={load}
             className="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm"
@@ -428,119 +366,60 @@ export default function ModeloDetailPage() {
           </button>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* MAIN */}
-          <div className="space-y-3">
-            <h3 className="font-semibold">Imagen principal</h3>
-
-            <div className="border rounded-lg p-3 bg-gray-50">
-              {mainImage ? (
-                <div className="space-y-2">
-                  <div className="relative w-full h-[260px] bg-white rounded overflow-hidden">
-                    <Image
-                      src={mainImage.public_url}
-                      alt="Main"
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
-
-                  <div className="text-xs text-gray-700">
-                    <div>
-                      <span className="font-semibold">Key:</span>{" "}
-                      {mainImage.file_key}
-                    </div>
-                    <div>
-                      <span className="font-semibold">Tamaño:</span>{" "}
-                      {formatMB(mainImage.size_bytes)}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => deleteImage(mainImage.id)}
-                    className="px-3 py-2 rounded bg-red-600 text-white hover:bg-red-500 text-sm"
-                  >
-                    🗑️ Eliminar MAIN
-                  </button>
+        <div className="space-y-3">
+          <div className="border rounded-lg p-3 bg-gray-50">
+            {mainImage ? (
+              <div className="space-y-2">
+                <div className="relative w-full h-[260px] bg-white rounded overflow-hidden">
+                  <Image
+                    src={mainImage.public_url}
+                    alt="Main"
+                    fill
+                    className="object-contain"
+                  />
                 </div>
-              ) : (
-                <div className="text-sm text-gray-600 italic">
-                  No hay imagen principal todavía.
-                </div>
-              )}
-            </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setMainFile(e.target.files?.[0] || null)}
-              />
-              <button
-                onClick={() => upload("main", mainFile)}
-                className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 text-sm disabled:opacity-50"
-                disabled={!mainFile}
-              >
-                Subir MAIN
-              </button>
-            </div>
+                <div className="text-xs text-gray-700">
+                  <div>
+                    <span className="font-semibold">Key:</span> {mainImage.file_key}
+                  </div>
+                  <div>
+                    <span className="font-semibold">Tamaño:</span>{" "}
+                    {formatMB(mainImage.size_bytes)}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => deleteMainImage(mainImage.id)}
+                  className="px-3 py-2 rounded bg-red-600 text-white hover:bg-red-500 text-sm"
+                >
+                  🗑️ Eliminar MAIN
+                </button>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-600 italic">
+                No hay imagen principal todavía.
+              </div>
+            )}
           </div>
 
-          {/* GALLERY */}
-          <div className="space-y-3">
-            <h3 className="font-semibold">Galería</h3>
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setMainFile(e.target.files?.[0] || null)}
+            />
+            <button
+              onClick={uploadMain}
+              className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 text-sm disabled:opacity-50"
+              disabled={!mainFile}
+            >
+              Subir MAIN
+            </button>
+          </div>
 
-            <div className="border rounded-lg p-3 bg-gray-50">
-              {gallery.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3">
-                  {gallery.map((img) => (
-                    <div
-                      key={img.id}
-                      className="border rounded bg-white overflow-hidden p-2 space-y-2"
-                    >
-                      <div className="relative w-full h-[120px]">
-                        <Image
-                          src={img.public_url}
-                          alt="Gallery"
-                          fill
-                          className="object-contain"
-                        />
-                      </div>
-
-                      <div className="text-[11px] text-gray-700">
-                        {formatMB(img.size_bytes)}
-                      </div>
-
-                      <button
-                        onClick={() => deleteImage(img.id)}
-                        className="w-full px-2 py-1 rounded bg-red-600 text-white hover:bg-red-500 text-xs"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-gray-600 italic">
-                  Aún no hay imágenes en la galería.
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setGalleryFile(e.target.files?.[0] || null)}
-              />
-              <button
-                onClick={() => upload("gallery", galleryFile)}
-                className="px-3 py-2 rounded bg-gray-800 text-white hover:bg-gray-700 text-sm disabled:opacity-50"
-                disabled={!galleryFile}
-              >
-                Añadir a galería
-              </button>
-            </div>
+          <div className="text-xs text-gray-600">
+            Nota: la galería ya no vive en el modelo. Las imágenes se suben dentro de cada variante.
           </div>
         </div>
       </div>
@@ -654,16 +533,11 @@ export default function ModeloDetailPage() {
                     <td className="p-3 font-semibold">
                       {editing ? (
                         <div className="space-y-1">
-                          <div className="text-[11px] text-gray-500">
-                            Season *
-                          </div>
+                          <div className="text-[11px] text-gray-500">Season *</div>
                           <input
                             value={varDraft.season}
                             onChange={(e) =>
-                              setVarDraft((d: any) => ({
-                                ...d,
-                                season: e.target.value,
-                              }))
+                              setVarDraft((d: any) => ({ ...d, season: e.target.value }))
                             }
                             className="w-32 px-2 py-1 border rounded bg-white text-sm"
                           />
@@ -680,10 +554,7 @@ export default function ModeloDetailPage() {
                           <input
                             value={varDraft.color}
                             onChange={(e) =>
-                              setVarDraft((d: any) => ({
-                                ...d,
-                                color: e.target.value,
-                              }))
+                              setVarDraft((d: any) => ({ ...d, color: e.target.value }))
                             }
                             className="w-28 px-2 py-1 border rounded bg-white text-sm"
                           />
@@ -696,16 +567,11 @@ export default function ModeloDetailPage() {
                     <td className="p-3">
                       {editing ? (
                         <div className="space-y-1">
-                          <div className="text-[11px] text-gray-500">
-                            Factory
-                          </div>
+                          <div className="text-[11px] text-gray-500">Factory</div>
                           <input
                             value={varDraft.factory}
                             onChange={(e) =>
-                              setVarDraft((d: any) => ({
-                                ...d,
-                                factory: e.target.value,
-                              }))
+                              setVarDraft((d: any) => ({ ...d, factory: e.target.value }))
                             }
                             className="w-40 px-2 py-1 border rounded bg-white text-sm"
                           />
@@ -722,10 +588,7 @@ export default function ModeloDetailPage() {
                           <select
                             value={varDraft.status}
                             onChange={(e) =>
-                              setVarDraft((d: any) => ({
-                                ...d,
-                                status: e.target.value,
-                              }))
+                              setVarDraft((d: any) => ({ ...d, status: e.target.value }))
                             }
                             className="w-28 px-2 py-1 border rounded bg-white text-sm"
                           >
@@ -791,97 +654,6 @@ export default function ModeloDetailPage() {
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* ✅ FEEDER */}
-      <div className="bg-white rounded-xl shadow p-5 border border-gray-200 space-y-4">
-        <h2 className="text-lg font-semibold">🔁 Feeder (copiar entre variantes)</h2>
-
-        <div className="grid md:grid-cols-2 gap-4 text-sm">
-          <div className="space-y-1">
-            <div className="text-[11px] text-gray-600">Variante origen *</div>
-            <select
-              value={feedSource}
-              onChange={(e) => {
-                const next = e.target.value;
-                setFeedSource(next);
-                // si la source cambia, quitamos del target por seguridad
-                setFeedTargets((prev) => prev.filter((x) => x !== next));
-              }}
-              className="w-full border rounded px-3 py-2 bg-white"
-            >
-              <option value="">— selecciona —</option>
-              {variantes.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.season} · {v.color || "-"}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1">
-            <div className="text-[11px] text-gray-600">Variantes destino *</div>
-            <div className="space-y-1 max-h-[160px] overflow-auto border rounded p-2 bg-white">
-              {variantes
-                .filter((v) => v.id !== feedSource)
-                .map((v) => (
-                  <label key={v.id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={feedTargets.includes(v.id)}
-                      onChange={(e) =>
-                        setFeedTargets((prev) =>
-                          e.target.checked
-                            ? [...prev, v.id]
-                            : prev.filter((x) => x !== v.id)
-                        )
-                      }
-                    />
-                    <span>
-                      {v.season} · {v.color || "-"}
-                    </span>
-                  </label>
-                ))}
-
-              {variantes.length === 0 ? (
-                <div className="text-xs text-gray-500">No hay variantes.</div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-4 text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={feedComp}
-              onChange={(e) => setFeedComp(e.target.checked)}
-            />
-            Componentes
-          </label>
-
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={feedPrices}
-              onChange={(e) => setFeedPrices(e.target.checked)}
-            />
-            Precios
-          </label>
-        </div>
-
-        <div className="text-xs text-gray-600">
-          Por seguridad, este feeder <b>NO sobrescribe</b>: si el destino ya tiene un
-          (kind+slot) o un precio en el mismo día, lo saltará (skipped).
-        </div>
-
-        <button
-          onClick={runFeeder}
-          disabled={!feedSource || feedTargets.length === 0 || (!feedComp && !feedPrices)}
-          className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800 text-sm disabled:opacity-50"
-        >
-          Ejecutar feeder
-        </button>
       </div>
     </div>
   );
