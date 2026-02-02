@@ -1,3 +1,4 @@
+// src/app/api/variantes/[varianteId]/componentes/[compId]/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -18,6 +19,32 @@ const ALLOWED_KINDS = [
   "other",
 ] as const;
 
+export async function GET(
+  _req: Request,
+  { params }: { params: { varianteId: string; compId: string } }
+) {
+  try {
+    const { varianteId, compId } = params;
+    if (!varianteId || !compId) {
+      return NextResponse.json({ error: "Missing params" }, { status: 400 });
+    }
+
+    const { data, error } = await supabase
+      .from("modelo_componentes")
+      .select("*")
+      .eq("id", compId)
+      .eq("variante_id", varianteId)
+      .single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data) return NextResponse.json({ error: "Componente no encontrado" }, { status: 404 });
+
+    return NextResponse.json(data);
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: { varianteId: string; compId: string } }
@@ -25,20 +52,33 @@ export async function PATCH(
   try {
     const { varianteId, compId } = params;
     if (!varianteId || !compId) {
-      return NextResponse.json(
-        { error: "varianteId and compId are required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing params" }, { status: 400 });
     }
 
     const body = await req.json();
 
     // whitelist
-    const updates: any = {};
+    const allowed = [
+      "kind",
+      "slot",
+      "catalogo_id",
+      "percentage",
+      "quality",
+      "material_text",
+      "extra",
+    ] as const;
 
-    if (body.kind !== undefined) {
-      const kind = String(body.kind || "").trim();
-      if (!kind || !ALLOWED_KINDS.includes(kind as any)) {
+    const updates: any = {};
+    for (const k of allowed) {
+      if (body[k] !== undefined) {
+        updates[k] = body[k] === "" ? null : body[k];
+      }
+    }
+
+    // Validaciones mínimas
+    if (updates.kind !== undefined) {
+      const kind = String(updates.kind).trim();
+      if (!ALLOWED_KINDS.includes(kind as any)) {
         return NextResponse.json(
           { error: `kind inválido. Usa: ${ALLOWED_KINDS.join(", ")}` },
           { status: 400 }
@@ -47,47 +87,26 @@ export async function PATCH(
       updates.kind = kind;
     }
 
-    if (body.slot !== undefined) {
-      const slot = Number(body.slot);
+    if (updates.slot !== undefined) {
+      const slot = Number(updates.slot);
       if (!Number.isFinite(slot) || slot < 1) {
-        return NextResponse.json(
-          { error: "slot must be a number >= 1" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "slot must be a number >= 1" }, { status: 400 });
       }
       updates.slot = slot;
     }
 
-    if (body.catalogo_id !== undefined) updates.catalogo_id = body.catalogo_id || null;
-
-    if (body.percentage !== undefined) {
-      if (body.percentage === "" || body.percentage === null) {
-        updates.percentage = null;
-      } else {
-        const p = Number(body.percentage);
-        if (!Number.isFinite(p)) {
-          return NextResponse.json(
-            { error: "percentage debe ser numérico" },
-            { status: 400 }
-          );
-        }
-        updates.percentage = p;
+    if (updates.percentage !== undefined && updates.percentage !== null) {
+      const p = Number(updates.percentage);
+      if (!Number.isFinite(p)) {
+        return NextResponse.json({ error: "percentage debe ser numérico" }, { status: 400 });
       }
+      updates.percentage = p;
     }
-
-    if (body.quality !== undefined) updates.quality = body.quality === "" ? null : body.quality;
-    if (body.material_text !== undefined)
-      updates.material_text = body.material_text === "" ? null : body.material_text;
-    if (body.extra !== undefined) updates.extra = body.extra === "" ? null : body.extra;
 
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json(
-        { error: "No fields to update" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    // seguridad: aseguramos que pertenece a la variante
     const { data, error } = await supabase
       .from("modelo_componentes")
       .update(updates)
@@ -97,14 +116,10 @@ export async function PATCH(
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    if (!data) return NextResponse.json({ error: "Componente no encontrado" }, { status: 404 });
 
     return NextResponse.json({ status: "ok", componente: data });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || "Unknown error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });
   }
 }
 
@@ -115,10 +130,7 @@ export async function DELETE(
   try {
     const { varianteId, compId } = params;
     if (!varianteId || !compId) {
-      return NextResponse.json(
-        { error: "varianteId and compId are required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing params" }, { status: 400 });
     }
 
     const { data, error } = await supabase
@@ -130,12 +142,8 @@ export async function DELETE(
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
     return NextResponse.json({ status: "ok", deleted: data });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || "Unknown error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });
   }
 }

@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 type Modelo = {
@@ -22,20 +22,30 @@ type Modelo = {
   status: string | null;
 };
 
+function normalizeText(v: any) {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
 function InputRow({
   label,
   value,
   onChange,
   placeholder,
+  required,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  required?: boolean;
 }) {
   return (
     <div className="space-y-1">
-      <div className="text-sm font-semibold text-gray-700">{label}</div>
+      <div className="text-[12px] font-semibold text-gray-700">
+        {label} {required ? <span className="text-red-600">*</span> : null}
+      </div>
       <input
         className="w-full border rounded px-3 py-2 text-sm bg-white"
         value={value}
@@ -71,6 +81,10 @@ export default function EditModeloPage() {
     packaging_price: null,
     status: "en_desarrollo",
   });
+
+  const styleOk = useMemo(() => {
+    return !!normalizeText(form.style);
+  }, [form.style]);
 
   const load = async () => {
     if (!id) return;
@@ -114,23 +128,32 @@ export default function EditModeloPage() {
 
   const save = async () => {
     if (!id) return;
-    setSaving(true);
+    if (saving) return;
+
     setMsg("");
+
+    // Validación mínima
+    if (!styleOk) {
+      setMsg("❌ Style es obligatorio.");
+      return;
+    }
+
+    setSaving(true);
 
     try {
       const payload: any = {
-        style: form.style,
-        description: form.description,
-        supplier: form.supplier,
-        customer: form.customer,
-        factory: form.factory,
-        merchandiser_factory: form.merchandiser_factory,
-        construction: form.construction,
-        reference: form.reference,
-        size_range: form.size_range,
-        last_no: form.last_no,
-        last_name: form.last_name,
-        status: form.status,
+        style: normalizeText(form.style),
+        description: normalizeText(form.description),
+        supplier: normalizeText(form.supplier),
+        customer: normalizeText(form.customer),
+        factory: normalizeText(form.factory),
+        merchandiser_factory: normalizeText(form.merchandiser_factory),
+        construction: normalizeText(form.construction),
+        reference: normalizeText(form.reference) ?? normalizeText(form.style), // si reference vacío -> style
+        size_range: normalizeText(form.size_range),
+        last_no: normalizeText(form.last_no),
+        last_name: normalizeText(form.last_name),
+        status: normalizeText(form.status) ?? "en_desarrollo",
         packaging_price:
           form.packaging_price === null || form.packaging_price === undefined
             ? null
@@ -147,7 +170,6 @@ export default function EditModeloPage() {
       if (!res.ok) throw new Error(json?.error || "Error guardando modelo");
 
       setMsg("✅ Modelo actualizado.");
-      // Vuelve a la ficha (con refresco)
       router.push(`/desarrollo/modelos/${id}`);
       router.refresh();
     } catch (e: any) {
@@ -173,9 +195,20 @@ export default function EditModeloPage() {
           </Link>
 
           <button
+            onClick={() => {
+              setMsg("");
+              router.push(`/desarrollo/modelos/${id}`);
+            }}
+            className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 transition text-sm"
+          >
+            Cancelar
+          </button>
+
+          <button
             onClick={save}
-            disabled={saving}
+            disabled={saving || !styleOk}
             className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 transition text-sm disabled:opacity-60"
+            title={!styleOk ? "Style es obligatorio" : ""}
           >
             {saving ? "Guardando..." : "Guardar"}
           </button>
@@ -190,6 +223,7 @@ export default function EditModeloPage() {
         <div className="grid md:grid-cols-2 gap-4">
           <InputRow
             label="Style"
+            required
             value={form.style || ""}
             onChange={(v) => setForm((p) => ({ ...p, style: v }))}
             placeholder="MINATO"
@@ -199,7 +233,7 @@ export default function EditModeloPage() {
             label="Reference"
             value={form.reference || ""}
             onChange={(v) => setForm((p) => ({ ...p, reference: v }))}
-            placeholder="MINATO"
+            placeholder="(si vacío, usará Style)"
           />
 
           <InputRow
@@ -220,13 +254,15 @@ export default function EditModeloPage() {
             label="Factory"
             value={form.factory || ""}
             onChange={(v) => setForm((p) => ({ ...p, factory: v }))}
-            placeholder="ND"
+            placeholder="BUKE / ND / ..."
           />
 
           <InputRow
             label="Merchandiser (Factory)"
             value={form.merchandiser_factory || ""}
-            onChange={(v) => setForm((p) => ({ ...p, merchandiser_factory: v }))}
+            onChange={(v) =>
+              setForm((p) => ({ ...p, merchandiser_factory: v }))
+            }
             placeholder="RITA"
           />
 
@@ -259,7 +295,9 @@ export default function EditModeloPage() {
           />
 
           <div className="space-y-1">
-            <div className="text-sm font-semibold text-gray-700">Packaging price</div>
+            <div className="text-[12px] font-semibold text-gray-700">
+              Packaging price
+            </div>
             <input
               type="number"
               step="0.01"
@@ -274,14 +312,19 @@ export default function EditModeloPage() {
               }
               placeholder="0.00"
             />
+            <div className="text-[11px] text-gray-500">
+              (opcional) Precio packaging base del modelo.
+            </div>
           </div>
 
           <div className="space-y-1">
-            <div className="text-sm font-semibold text-gray-700">Status</div>
+            <div className="text-[12px] font-semibold text-gray-700">Status</div>
             <select
               className="w-full border rounded px-3 py-2 text-sm bg-white"
               value={form.status || ""}
-              onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, status: e.target.value }))
+              }
             >
               <option value="en_desarrollo">en_desarrollo</option>
               <option value="activo">activo</option>
@@ -292,11 +335,15 @@ export default function EditModeloPage() {
         </div>
 
         <div className="space-y-1">
-          <div className="text-sm font-semibold text-gray-700">Description</div>
+          <div className="text-[12px] font-semibold text-gray-700">
+            Description
+          </div>
           <textarea
             className="w-full border rounded px-3 py-2 text-sm bg-white min-h-[90px]"
             value={form.description || ""}
-            onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, description: e.target.value }))
+            }
             placeholder="Notas del modelo..."
           />
         </div>
