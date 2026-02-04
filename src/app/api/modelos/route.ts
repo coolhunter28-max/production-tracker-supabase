@@ -9,18 +9,63 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// GET /api/modelos  -> lista modelos
-export async function GET() {
+// GET /api/modelos?q=...&supplier=...&customer=...&factory=...&status=...&limit=20&offset=0
+export async function GET(req: Request) {
   try {
-    const { data, error } = await supabase
+    const { searchParams } = new URL(req.url);
+
+    const q = String(searchParams.get("q") || "").trim();
+    const supplier = String(searchParams.get("supplier") || "").trim();
+    const customer = String(searchParams.get("customer") || "").trim();
+    const factory = String(searchParams.get("factory") || "").trim();
+    const status = String(searchParams.get("status") || "").trim();
+
+    const limitRaw = searchParams.get("limit");
+    const offsetRaw = searchParams.get("offset");
+
+    let limit = 20;
+    let offset = 0;
+
+    if (limitRaw) {
+      const n = Number(limitRaw);
+      if (!Number.isNaN(n) && Number.isFinite(n)) limit = Math.floor(n);
+    }
+    if (offsetRaw) {
+      const n = Number(offsetRaw);
+      if (!Number.isNaN(n) && Number.isFinite(n)) offset = Math.floor(n);
+    }
+
+    if (limit < 1) limit = 1;
+    if (limit > 200) limit = 200;
+    if (offset < 0) offset = 0;
+
+    let query = supabase
       .from("modelos")
       .select(
-        "id, style, customer, supplier, status, size_range, factory, updated_at, created_at"
+        "id, style, customer, supplier, factory, status, size_range, reference, updated_at, created_at",
+        { count: "exact" }
       )
-      .order("updated_at", { ascending: false });
+      .order("updated_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (q) {
+      query = query.or(`style.ilike.%${q}%,reference.ilike.%${q}%`);
+    }
+    if (supplier) query = query.eq("supplier", supplier);
+    if (customer) query = query.eq("customer", customer);
+    if (factory) query = query.eq("factory", factory);
+    if (status) query = query.eq("status", status);
+
+    const { data, error, count } = await query;
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json(data || []);
+
+    return NextResponse.json({
+      data: data || [],
+      count: count ?? 0,
+      limit,
+      offset
+    });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });
   }
@@ -105,7 +150,7 @@ export async function POST(req: Request) {
         {
           modelo_id: modelo.id,
           season: firstSeason,
-          color: firstColor, // "BASE" si no hay color
+          color: firstColor,
           factory: firstFactory ? firstFactory : null,
           status: firstStatus || "activo",
           notes: firstNotes ? firstNotes : null,
@@ -115,7 +160,6 @@ export async function POST(req: Request) {
       .single();
 
     if (vErr || !variante) {
-      // 🔥 Importante: no podemos “rollback” sin RPC/transaction, pero al menos devolvemos info clara
       return NextResponse.json(
         {
           error:
