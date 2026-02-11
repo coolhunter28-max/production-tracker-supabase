@@ -1,59 +1,64 @@
 // src/app/api/master/resolve-variante/route.ts
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 
-export const runtime = "nodejs";
+function norm(s: string | null) {
+  return (s ?? "").trim();
+}
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-/**
- * GET /api/master/resolve-variante?modelo_id=...&season=...&color=...
- * Devuelve:
- *  - { found: true, variante_id: "..." }
- *  - { found: false, variante_id: null }
- */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
-    const modeloId = String(searchParams.get("modelo_id") || "").trim();
-    const season = String(searchParams.get("season") || "").trim();
-    const color = String(searchParams.get("color") || "").trim();
+    const modelo_id = norm(searchParams.get("modelo_id"));
+    const season = norm(searchParams.get("season"));
+    const color = norm(searchParams.get("color"));
+    const reference = norm(searchParams.get("reference")); // <-- NUEVO
 
-    if (!modeloId) {
-      return NextResponse.json({ error: "modelo_id is required" }, { status: 400 });
-    }
-    if (!season) {
-      return NextResponse.json({ error: "season is required" }, { status: 400 });
-    }
-    if (!color) {
-      return NextResponse.json({ error: "color is required" }, { status: 400 });
+    if (!modelo_id || !season || !color) {
+      return NextResponse.json(
+        { error: "Missing modelo_id/season/color" },
+        { status: 400 }
+      );
     }
 
-    const { data, error } = await supabase
+    // 1) Intento exacto por modelo+season+color+reference (reference puede ser '')
+    const q1 = supabase
       .from("modelo_variantes")
-      .select("id")
-      .eq("modelo_id", modeloId)
+      .select("*")
+      .eq("modelo_id", modelo_id)
       .eq("season", season)
-      .eq("color", color)
-      .limit(1);
+      .ilike("color", color) // tu color suele ser exacto, pero dejo ilike por seguridad
+      .eq("reference", reference || ""); // si no viene, buscamos '' (normalizado)
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const { data: exact, error: e1 } = await q1.limit(1).maybeSingle();
+    if (e1) throw e1;
+
+    if (exact) {
+      return NextResponse.json({ variante: exact, match: "modelo+season+color+reference" });
     }
 
-    const varianteId = data?.[0]?.id ?? null;
+    // 2) Fallback: si no hay por reference, probamos sin reference (por si hay variantes antiguas sin ref)
+    const { data: fallback, error: e2 } = await supabase
+      .from("modelo_variantes")
+      .select("*")
+      .eq("modelo_id", modelo_id)
+      .eq("season", season)
+      .ilike("color", color)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (e2) throw e2;
 
     return NextResponse.json({
-      found: Boolean(varianteId),
-      variante_id: varianteId
+      variante: fallback || null,
+      match: fallback ? "modelo+season+color (fallback)" : "none",
     });
-  } catch (e: any) {
+  } catch (err: any) {
+    console.error("❌ resolve-variante error:", err);
     return NextResponse.json(
-      { error: e?.message || "Unknown error" },
+      { error: err?.message || "resolve-variante failed" },
       { status: 500 }
     );
   }

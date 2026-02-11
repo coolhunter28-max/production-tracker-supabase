@@ -73,6 +73,7 @@ export default function VariantePage() {
   const [editVar, setEditVar] = useState(false);
   const [vSeason, setVSeason] = useState("");
   const [vColor, setVColor] = useState("");
+  const [vReference, setVReference] = useState(""); // ✅ NUEVO
   const [vFactory, setVFactory] = useState("");
   const [vStatus, setVStatus] = useState("activo");
   const [vNotes, setVNotes] = useState("");
@@ -124,6 +125,7 @@ export default function VariantePage() {
       // sincronizar draft cabecera
       setVSeason(vJson?.season || "");
       setVColor(vJson?.color || "");
+      setVReference(vJson?.reference || ""); // ✅ NUEVO
       setVFactory(vJson?.factory || "");
       setVStatus(vJson?.status || "activo");
       setVNotes(vJson?.notes || "");
@@ -179,6 +181,7 @@ export default function VariantePage() {
       const body = {
         season: vSeason.trim(),
         color: vColor.trim() || null,
+        reference: vReference.trim() || null, // ✅ NUEVO
         factory: vFactory.trim() || null,
         status: vStatus.trim() || "activo",
         notes: vNotes.trim() || null,
@@ -497,6 +500,7 @@ export default function VariantePage() {
                   setEditVar(false);
                   setVSeason(variante.season || "");
                   setVColor(variante.color || "");
+                  setVReference(variante.reference || ""); // ✅ NUEVO
                   setVFactory(variante.factory || "");
                   setVStatus(variante.status || "activo");
                   setVNotes(variante.notes || "");
@@ -510,19 +514,21 @@ export default function VariantePage() {
         </div>
 
         {!editVar ? (
-          <div className="grid md:grid-cols-4 gap-3">
+          <div className="grid md:grid-cols-5 gap-3">
             <div><span className="font-semibold">Season:</span> {variante.season}</div>
             <div><span className="font-semibold">Color:</span> {variante.color || "-"}</div>
+            <div><span className="font-semibold">Reference:</span> {variante.reference || "-"}</div>
             <div><span className="font-semibold">Factory:</span> {variante.factory || "-"}</div>
             <div><span className="font-semibold">Status:</span> {variante.status || "-"}</div>
+
             {variante.notes ? (
-              <div className="md:col-span-4 text-gray-700">
+              <div className="md:col-span-5 text-gray-700">
                 <span className="font-semibold">Notes:</span> {variante.notes}
               </div>
             ) : null}
           </div>
         ) : (
-          <div className="grid md:grid-cols-4 gap-2">
+          <div className="grid md:grid-cols-5 gap-2">
             <div className="space-y-1">
               <div className="text-[11px] text-gray-600">Season *</div>
               <input
@@ -532,6 +538,7 @@ export default function VariantePage() {
                 placeholder="season"
               />
             </div>
+
             <div className="space-y-1">
               <div className="text-[11px] text-gray-600">Color</div>
               <input
@@ -541,6 +548,17 @@ export default function VariantePage() {
                 placeholder="color"
               />
             </div>
+
+            <div className="space-y-1">
+              <div className="text-[11px] text-gray-600">Reference</div>
+              <input
+                value={vReference}
+                onChange={(e) => setVReference(e.target.value)}
+                className="w-full px-3 py-2 border rounded bg-white text-sm"
+                placeholder="reference"
+              />
+            </div>
+
             <div className="space-y-1">
               <div className="text-[11px] text-gray-600">Factory</div>
               <input
@@ -550,6 +568,7 @@ export default function VariantePage() {
                 placeholder="factory"
               />
             </div>
+
             <div className="space-y-1">
               <div className="text-[11px] text-gray-600">Status</div>
               <select
@@ -561,7 +580,8 @@ export default function VariantePage() {
                 <option value="inactivo">inactivo</option>
               </select>
             </div>
-            <div className="md:col-span-4 space-y-1">
+
+            <div className="md:col-span-5 space-y-1">
               <div className="text-[11px] text-gray-600">Notes</div>
               <textarea
                 value={vNotes}
@@ -653,7 +673,9 @@ export default function VariantePage() {
                 <input
                   type="number"
                   value={cPercentage}
-                  onChange={(e) => setCPercentage(e.target.value === "" ? "" : Number(e.target.value))}
+                  onChange={(e) =>
+                    setCPercentage(e.target.value === "" ? "" : Number(e.target.value))
+                  }
                   className="w-full px-3 py-2 border rounded bg-white text-sm"
                   placeholder="%"
                 />
@@ -707,7 +729,9 @@ export default function VariantePage() {
                         {editing ? (
                           <select
                             value={compDraft.kind}
-                            onChange={(e) => setCompDraft((d: any) => ({ ...d, kind: e.target.value }))}
+                            onChange={(e) =>
+                              setCompDraft((d: any) => ({ ...d, kind: e.target.value }))
+                            }
                             className="px-2 py-1 border rounded bg-white text-sm"
                           >
                             {KINDS.map((k) => (
@@ -727,7 +751,12 @@ export default function VariantePage() {
                             type="number"
                             min={1}
                             value={compDraft.slot}
-                            onChange={(e) => setCompDraft((d: any) => ({ ...d, slot: Number(e.target.value) }))}
+                            onChange={(e) =>
+                              setCompDraft((d: any) => ({
+                                ...d,
+                                slot: Number(e.target.value),
+                              }))
+                            }
                             className="w-20 px-2 py-1 border rounded bg-white text-sm"
                           />
                         ) : (
@@ -742,7 +771,12 @@ export default function VariantePage() {
                               <div className="text-[11px] text-gray-500">Material</div>
                               <input
                                 value={compDraft.material_text}
-                                onChange={(e) => setCompDraft((d: any) => ({ ...d, material_text: e.target.value }))}
+                                onChange={(e) =>
+                                  setCompDraft((d: any) => ({
+                                    ...d,
+                                    material_text: e.target.value,
+                                  }))
+                                }
                                 className="w-full px-2 py-1 border rounded bg-white text-sm"
                                 placeholder="material_text"
                               />
@@ -752,7 +786,9 @@ export default function VariantePage() {
                               <div className="text-[11px] text-gray-500">Extra</div>
                               <input
                                 value={compDraft.extra}
-                                onChange={(e) => setCompDraft((d: any) => ({ ...d, extra: e.target.value }))}
+                                onChange={(e) =>
+                                  setCompDraft((d: any) => ({ ...d, extra: e.target.value }))
+                                }
                                 className="w-full px-2 py-1 border rounded bg-white text-sm"
                                 placeholder="extra"
                               />
@@ -761,7 +797,9 @@ export default function VariantePage() {
                         ) : (
                           <div className="space-y-1">
                             <div>{c.material_text || "-"}</div>
-                            {c.extra ? <div className="text-xs text-gray-600">{c.extra}</div> : null}
+                            {c.extra ? (
+                              <div className="text-xs text-gray-600">{c.extra}</div>
+                            ) : null}
                           </div>
                         )}
                       </td>
@@ -774,7 +812,8 @@ export default function VariantePage() {
                             onChange={(e) =>
                               setCompDraft((d: any) => ({
                                 ...d,
-                                percentage: e.target.value === "" ? "" : Number(e.target.value),
+                                percentage:
+                                  e.target.value === "" ? "" : Number(e.target.value),
                               }))
                             }
                             className="w-24 px-2 py-1 border rounded bg-white text-sm"
@@ -848,7 +887,9 @@ export default function VariantePage() {
                 <input
                   type="number"
                   value={pBuy}
-                  onChange={(e) => setPBuy(e.target.value === "" ? "" : Number(e.target.value))}
+                  onChange={(e) =>
+                    setPBuy(e.target.value === "" ? "" : Number(e.target.value))
+                  }
                   className="w-full px-3 py-2 border rounded bg-white text-sm"
                   placeholder="buy_price"
                 />
@@ -859,7 +900,9 @@ export default function VariantePage() {
                 <input
                   type="number"
                   value={pSell}
-                  onChange={(e) => setPSell(e.target.value === "" ? "" : Number(e.target.value))}
+                  onChange={(e) =>
+                    setPSell(e.target.value === "" ? "" : Number(e.target.value))
+                  }
                   className="w-full px-3 py-2 border rounded bg-white text-sm"
                   placeholder="sell_price"
                 />
@@ -950,7 +993,12 @@ export default function VariantePage() {
                           <input
                             type="date"
                             value={precioDraft.valid_from}
-                            onChange={(e) => setPrecioDraft((d: any) => ({ ...d, valid_from: e.target.value }))}
+                            onChange={(e) =>
+                              setPrecioDraft((d: any) => ({
+                                ...d,
+                                valid_from: e.target.value,
+                              }))
+                            }
                             className="px-2 py-1 border rounded bg-white text-sm"
                           />
                         ) : (
@@ -962,7 +1010,9 @@ export default function VariantePage() {
                         {editing ? (
                           <input
                             value={precioDraft.season}
-                            onChange={(e) => setPrecioDraft((d: any) => ({ ...d, season: e.target.value }))}
+                            onChange={(e) =>
+                              setPrecioDraft((d: any) => ({ ...d, season: e.target.value }))
+                            }
                             className="px-2 py-1 border rounded bg-white text-sm"
                           />
                         ) : (
@@ -978,7 +1028,8 @@ export default function VariantePage() {
                             onChange={(e) =>
                               setPrecioDraft((d: any) => ({
                                 ...d,
-                                buy_price: e.target.value === "" ? "" : Number(e.target.value),
+                                buy_price:
+                                  e.target.value === "" ? "" : Number(e.target.value),
                               }))
                             }
                             className="w-24 px-2 py-1 border rounded bg-white text-sm"
@@ -996,7 +1047,8 @@ export default function VariantePage() {
                             onChange={(e) =>
                               setPrecioDraft((d: any) => ({
                                 ...d,
-                                sell_price: e.target.value === "" ? "" : Number(e.target.value),
+                                sell_price:
+                                  e.target.value === "" ? "" : Number(e.target.value),
                               }))
                             }
                             className="w-24 px-2 py-1 border rounded bg-white text-sm"
@@ -1010,7 +1062,12 @@ export default function VariantePage() {
                         {editing ? (
                           <input
                             value={precioDraft.currency}
-                            onChange={(e) => setPrecioDraft((d: any) => ({ ...d, currency: e.target.value }))}
+                            onChange={(e) =>
+                              setPrecioDraft((d: any) => ({
+                                ...d,
+                                currency: e.target.value,
+                              }))
+                            }
                             className="w-20 px-2 py-1 border rounded bg-white text-sm"
                           />
                         ) : (
@@ -1022,7 +1079,9 @@ export default function VariantePage() {
                         {editing ? (
                           <input
                             value={precioDraft.notes}
-                            onChange={(e) => setPrecioDraft((d: any) => ({ ...d, notes: e.target.value }))}
+                            onChange={(e) =>
+                              setPrecioDraft((d: any) => ({ ...d, notes: e.target.value }))
+                            }
                             className="w-full px-2 py-1 border rounded bg-white text-sm"
                             placeholder="notes"
                           />

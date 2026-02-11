@@ -1,3 +1,4 @@
+// src/app/api/variantes/[varianteId]/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -15,7 +16,10 @@ export async function GET(
   try {
     const varianteId = params.varianteId;
     if (!varianteId) {
-      return NextResponse.json({ error: "varianteId is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "varianteId is required" },
+        { status: 400 }
+      );
     }
 
     const { data, error } = await supabase
@@ -47,13 +51,17 @@ export async function PATCH(
   try {
     const varianteId = params.varianteId;
     if (!varianteId) {
-      return NextResponse.json({ error: "varianteId is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "varianteId is required" },
+        { status: 400 }
+      );
     }
 
     const body = await req.json();
 
     // whitelist (para no liarla)
-    const allowed = ["season", "color", "factory", "status", "notes"] as const;
+    // ✅ añadimos "reference"
+    const allowed = ["season", "color", "factory", "status", "notes", "reference"] as const;
 
     const updates: any = {};
     for (const k of allowed) {
@@ -94,7 +102,10 @@ export async function DELETE(
   try {
     const varianteId = params.varianteId;
     if (!varianteId) {
-      return NextResponse.json({ error: "varianteId is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "varianteId is required" },
+        { status: 400 }
+      );
     }
 
     // ON DELETE CASCADE se encarga de componentes/precios si tienen variante_id

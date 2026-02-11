@@ -24,7 +24,7 @@ export async function GET(
 function cleanObject(obj: Record<string, any>) {
   const cleaned: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (value === undefined) continue; // <-- clave: no pisar con null si no viene
+    if (value === undefined) continue; // no pisar con null si no viene
     cleaned[key] = value === "" ? null : value;
   }
   return cleaned;
@@ -38,23 +38,17 @@ function parseMoneyLike(v: any): number | null {
   const s0 = String(v).trim();
   if (!s0) return null;
 
-  // quita símbolos y espacios
   let s = s0.replace(/[^\d.,-]/g, "");
 
-  // Si tiene coma y punto, asumimos miles + decimal:
-  // "9.917,60" -> miles "." y decimal ","
   if (s.includes(",") && s.includes(".")) {
     const lastComma = s.lastIndexOf(",");
     const lastDot = s.lastIndexOf(".");
     if (lastComma > lastDot) {
-      // formato ES: 9.917,60
       s = s.replace(/\./g, "").replace(",", ".");
     } else {
-      // formato US: 9,917.60
       s = s.replace(/,/g, "");
     }
   } else if (s.includes(",")) {
-    // solo coma: "18,40" -> "18.40"
     s = s.replace(",", ".");
   }
 
@@ -85,7 +79,7 @@ export async function PUT(
       estado_inspeccion: body.estado_inspeccion,
       currency: body.currency || "USD",
       pi: body.pi ?? null,
-      channel: body.channel ?? undefined, // por si lo usas
+      channel: body.channel ?? undefined,
     });
 
     const { error: poError } = await supabase
@@ -99,9 +93,11 @@ export async function PUT(
       for (const linea of body.lineas_pedido) {
         const { id: lineaId, muestras, ...lineaData } = linea;
 
-        // 🔒 Normaliza los 3 campos BSG si vienen
+        // 🔒 Normaliza BSG + numericos si vienen
         const normalizedLinea = {
           ...lineaData,
+
+          // BSG
           price_selling:
             lineaData.price_selling !== undefined
               ? parseMoneyLike(lineaData.price_selling)
@@ -110,13 +106,19 @@ export async function PUT(
             lineaData.amount_selling !== undefined
               ? parseMoneyLike(lineaData.amount_selling)
               : undefined,
-          // pi_bsg lo dejamos tal cual (texto)
           pi_bsg: lineaData.pi_bsg !== undefined ? lineaData.pi_bsg : undefined,
+
+          // Coste / amount (por si viene en string desde UI)
+          price:
+            lineaData.price !== undefined ? parseMoneyLike(lineaData.price) : undefined,
+          amount:
+            lineaData.amount !== undefined ? parseMoneyLike(lineaData.amount) : undefined,
         };
 
         const cleanLinea = cleanObject(normalizedLinea);
         let lineaIdReal = lineaId;
 
+        // 1) Upsert línea
         if (lineaIdReal) {
           const { error: updateError } = await supabase
             .from("lineas_pedido")
@@ -135,6 +137,25 @@ export async function PUT(
           lineaIdReal = inserted.id;
         }
 
+        // ✅ 2) SNAPSHOT MASTER (si hay variante_id)
+        // Esto hace que el sistema sea autosuficiente: aunque cambies variante/precio, el snapshot se recalcula al guardar.
+        const varianteId = lineaData?.variante_id ?? cleanLinea?.variante_id;
+        if (varianteId) {
+          const { data: snapRes, error: snapErr } = await supabase.rpc(
+            "apply_master_snapshot_for_line",
+            { p_linea_id: lineaIdReal }
+          );
+
+          if (snapErr) {
+            console.error("❌ Error snapshot master (RPC):", snapErr);
+            // No lo hacemos fatal-error para no bloquear el guardado del PO.
+            // Pero lo dejamos registrado para depurar.
+          } else if (snapRes?.ok !== true) {
+            console.warn("⚠️ Snapshot no aplicado:", snapRes);
+          }
+        }
+
+        // 3) Muestras
         if (Array.isArray(muestras)) {
           for (const m of muestras) {
             const { id: muestraId, ...muestraData } = m;
