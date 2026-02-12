@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+export const runtime = "nodejs";
+
 // GET: obtener un PO con líneas + muestras
 export async function GET(
   req: Request,
@@ -30,6 +32,17 @@ function cleanObject(obj: Record<string, any>) {
   return cleaned;
 }
 
+function normText(v: any): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
+function isXiamenSupplier(supplier: any): boolean {
+  const s = String(supplier || "").toUpperCase();
+  return s.includes("XIAMEN DIC");
+}
+
 // Convierte "18,40" / "9.917,60" / "$9,917.60" -> number
 function parseMoneyLike(v: any): number | null {
   if (v === null || v === undefined) return null;
@@ -54,6 +67,147 @@ function parseMoneyLike(v: any): number | null {
 
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
+}
+
+async function ensureModeloId(opts: {
+  style: string | null;
+  customer: string | null;
+  supplier: string | null;
+  factory?: string | null;
+}) {
+  const style = normText(opts.style);
+  const customer = normText(opts.customer);
+  const supplier = normText(opts.supplier);
+  const factory = normText(opts.factory);
+
+  if (!style) return null;
+
+  const { data: found, error: findErr } = await supabase
+    .from("modelos")
+    .select("id")
+    .eq("style", style)
+    .eq("customer", customer)
+    .eq("supplier", supplier)
+    .limit(1)
+    .maybeSingle();
+
+  if (findErr) throw findErr;
+  if (found?.id) return found.id as string;
+
+  const { data: created, error: createErr } = await supabase
+    .from("modelos")
+    .insert({
+      style,
+      customer,
+      supplier,
+      factory: factory || null,
+      status: "activo",
+      notes: "Auto-created from manual PO edit (style match)",
+    })
+    .select("id")
+    .single();
+
+  if (createErr) throw createErr;
+  return created.id as string;
+}
+
+async function ensureVarianteId(opts: {
+  modelo_id: string | null;
+  season: string | null;
+  color: string | null;
+  reference: string | null;
+  factory?: string | null;
+}) {
+  const modelo_id = opts.modelo_id;
+  const season = normText(opts.season);
+  const color = normText(opts.color);
+  const reference = normText(opts.reference);
+  const factory = normText(opts.factory);
+
+  if (!modelo_id || !season) return null;
+
+  let q = supabase
+    .from("modelo_variantes")
+    .select("id")
+    .eq("modelo_id", modelo_id)
+    .eq("season", season);
+
+  if (color === null) q = q.is("color", null);
+  else q = q.eq("color", color);
+
+  if (reference === null) q = q.is("reference", null);
+  else q = q.eq("reference", reference);
+
+  const { data: found, error: findErr } = await q.limit(1).maybeSingle();
+  if (findErr) throw findErr;
+  if (found?.id) return found.id as string;
+
+  const { data: created, error: createErr } = await supabase
+    .from("modelo_variantes")
+    .insert({
+      modelo_id,
+      season,
+      color,
+      reference,
+      factory: factory || null,
+      status: "activo",
+      notes: "Auto-created from manual PO edit (by reference)",
+    })
+    .select("id")
+    .single();
+
+  if (!createErr) return created.id as string;
+
+  if (String((createErr as any)?.code || "") === "23505") {
+    const { data: again, error: againErr } = await q.limit(1).maybeSingle();
+    if (againErr) throw againErr;
+    if (again?.id) return again.id as string;
+  }
+
+  throw createErr;
+}
+
+async function applySnapshotAndMaybeFillPrice(opts: {
+  linea_id: string;
+  supplier: string | null;
+}) {
+  const { data: snapRes, error: snapErr } = await supabase.rpc(
+    "apply_master_snapshot_for_line",
+    { p_linea_id: opts.linea_id }
+  );
+
+  if (snapErr) {
+    console.error("❌ Error snapshot master (RPC):", snapErr);
+    return;
+  }
+  if ((snapRes as any)?.ok !== true) {
+    console.warn("⚠️ Snapshot no aplicado:", snapRes);
+    return;
+  }
+
+  const { data: linea, error: lineaErr } = await supabase
+    .from("lineas_pedido")
+    .select("id, price, master_buy_price_used, master_sell_price_used")
+    .eq("id", opts.linea_id)
+    .single();
+
+  if (lineaErr) {
+    console.error("❌ Error leyendo línea tras snapshot:", lineaErr);
+    return;
+  }
+
+  if (linea?.price !== null && linea?.price !== undefined) return;
+
+  const useSell = isXiamenSupplier(opts.supplier);
+  const nextPrice = useSell ? linea?.master_sell_price_used : linea?.master_buy_price_used;
+  if (nextPrice === null || nextPrice === undefined) return;
+
+  const { error: updErr } = await supabase
+    .from("lineas_pedido")
+    .update({ price: nextPrice })
+    .eq("id", opts.linea_id);
+
+  if (updErr) console.error("❌ Error rellenando price desde snapshot:", updErr);
 }
 
 // PUT: actualizar PO + líneas + muestras
@@ -89,6 +243,11 @@ export async function PUT(
 
     if (poError) throw poError;
 
+    const poSeason = normText(body.season);
+    const poCustomer = normText(body.customer);
+    const poSupplier = normText(body.supplier);
+    const poFactory = normText(body.factory);
+
     if (Array.isArray(body.lineas_pedido)) {
       for (const linea of body.lineas_pedido) {
         const { id: lineaId, muestras, ...lineaData } = linea;
@@ -118,6 +277,35 @@ export async function PUT(
         const cleanLinea = cleanObject(normalizedLinea);
         let lineaIdReal = lineaId;
 
+        // ✅ Autofill modelo_id + variante_id (si hay style)
+        const style = normText(lineaData?.style);
+        const color = normText(lineaData?.color);
+        const reference = normText(lineaData?.reference);
+
+        let modeloId = cleanLinea?.modelo_id ?? lineaData?.modelo_id ?? null;
+        let varianteId = cleanLinea?.variante_id ?? lineaData?.variante_id ?? null;
+
+        if (style) {
+          modeloId = await ensureModeloId({
+            style,
+            customer: poCustomer,
+            supplier: poSupplier,
+            factory: poFactory,
+          });
+
+          varianteId = await ensureVarianteId({
+            modelo_id: modeloId,
+            season: poSeason,
+            color,
+            reference,
+            factory: poFactory,
+          });
+
+          // Forzamos el link correcto (para que no dependa del usuario)
+          cleanLinea.modelo_id = modeloId;
+          cleanLinea.variante_id = varianteId;
+        }
+
         // 1) Upsert línea
         if (lineaIdReal) {
           const { error: updateError } = await supabase
@@ -138,21 +326,12 @@ export async function PUT(
         }
 
         // ✅ 2) SNAPSHOT MASTER (si hay variante_id)
-        // Esto hace que el sistema sea autosuficiente: aunque cambies variante/precio, el snapshot se recalcula al guardar.
-        const varianteId = lineaData?.variante_id ?? cleanLinea?.variante_id;
-        if (varianteId) {
-          const { data: snapRes, error: snapErr } = await supabase.rpc(
-            "apply_master_snapshot_for_line",
-            { p_linea_id: lineaIdReal }
-          );
-
-          if (snapErr) {
-            console.error("❌ Error snapshot master (RPC):", snapErr);
-            // No lo hacemos fatal-error para no bloquear el guardado del PO.
-            // Pero lo dejamos registrado para depurar.
-          } else if (snapRes?.ok !== true) {
-            console.warn("⚠️ Snapshot no aplicado:", snapRes);
-          }
+        const finalVarianteId = varianteId ?? cleanLinea?.variante_id;
+        if (finalVarianteId) {
+          await applySnapshotAndMaybeFillPrice({
+            linea_id: lineaIdReal,
+            supplier: poSupplier,
+          });
         }
 
         // 3) Muestras

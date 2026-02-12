@@ -1,19 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-type ModeloMini = {
+type TModelo = {
   id: string;
   style: string;
-  reference?: string | null;
-  supplier?: string | null;
-  customer?: string | null;
-  factory?: string | null;
-  status?: string | null;
+  customer: string | null;
+  supplier: string | null;
+  factory: string | null;
+  reference: string | null;
+  status: string | null;
 };
 
-type PrecioMaster = {
+type TVariante = {
+  id: string;
+  modelo_id: string;
+  season: string;
+  color: string | null;
+  reference: string | null;
+  factory: string | null;
+  status: string | null;
+};
+
+type TMasterPrecio = {
   id: string;
   variante_id: string;
   season: string;
@@ -24,691 +34,805 @@ type PrecioMaster = {
   notes: string | null;
 };
 
-export default function EditarPO() {
-  const params = useParams<{ id: string }>();
-  const id = params?.id;
-  const router = useRouter();
+type TMuestra = {
+  id?: string;
+  tipo_muestra?: string;
+  fecha_muestra?: string;
+  estado_muestra?: string;
+  round?: string | number;
+  notas?: string;
+  fecha_teorica?: string | null;
+};
 
-  const [po, setPO] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [openLines, setOpenLines] = useState<number[]>([]);
-  const [openSamples, setOpenSamples] = useState<{ [key: number]: boolean }>(
-    {}
+type TLinea = {
+  id?: string;
+
+  modelo_id?: string | null;
+  variante_id?: string | null;
+
+  reference?: string;
+  style?: string;
+  color?: string;
+  size_run?: string;
+  category?: string;
+  channel?: string;
+
+  qty?: number;
+  price?: number;
+
+  price_selling?: number | null;
+  amount_selling?: number | null;
+  pi_bsg?: string | null;
+
+  trial_upper?: string | null;
+  trial_lasting?: string | null;
+  lasting?: string | null;
+  finish_date?: string | null;
+
+  muestras?: TMuestra[];
+
+  // UI helpers
+  variantes?: TVariante[];
+  master_price?: TMasterPrecio | null;
+  master_price_status?: "idle" | "loading" | "ok" | "none" | "error";
+  master_price_error?: string | null;
+};
+
+type TPO = {
+  id?: string;
+
+  season?: string;
+  po?: string;
+  customer?: string;
+  supplier?: string;
+  factory?: string;
+
+  pi?: string | null;
+  proforma_invoice?: string | null;
+
+  po_date?: string | null;
+  etd_pi?: string | null;
+  booking?: string | null;
+  closing?: string | null;
+  shipping_date?: string | null;
+  inspection?: string | null;
+
+  estado_inspeccion?: string | null;
+  currency?: "USD" | "EUR";
+  channel?: string | null;
+
+  lineas_pedido?: TLinea[];
+};
+
+function toISODateOrEmpty(v: any): string {
+  if (!v) return "";
+  const s = String(v).trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return s;
+}
+
+function safeNum(v: any): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+export default function EditarPOPage() {
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const idParam = params?.id;
+
+  // Si entras por /po/nuevo que renderiza este componente:
+  const isNew = !idParam || idParam === "nuevo";
+
+  const [po, setPO] = useState<TPO>({
+    currency: "USD",
+    lineas_pedido: [],
+  });
+
+  // master modelos
+  const [modelos, setModelos] = useState<TModelo[]>([]);
+  const [modelosLoading, setModelosLoading] = useState(false);
+  const [modelosError, setModelosError] = useState<string | null>(null);
+  const [modeloQ, setModeloQ] = useState("");
+
+  const poDateISO = useMemo(() => toISODateOrEmpty(po.po_date), [po.po_date]);
+
+  const fmt = (v: number) =>
+    new Intl.NumberFormat("es-ES", {
+      style: "currency",
+      currency: po.currency || "USD",
+      minimumFractionDigits: 2,
+    }).format(v);
+
+  const totalPairs = useMemo(
+    () => (po.lineas_pedido ?? []).reduce((a, l) => a + (l.qty || 0), 0),
+    [po.lineas_pedido]
   );
 
-  // MASTER
-  const [modelos, setModelos] = useState<ModeloMini[]>([]);
-  const [masterLoading, setMasterLoading] = useState(false);
+  const totalAmount = useMemo(
+    () => (po.lineas_pedido ?? []).reduce((a, l) => a + (l.qty || 0) * (l.price || 0), 0),
+    [po.lineas_pedido]
+  );
 
-  // cache: por linea -> {varianteId, price, source, error}
-  const [lineMasterInfo, setLineMasterInfo] = useState<
-    Record<
-      number,
-      {
-        varianteId?: string | null;
-        price?: PrecioMaster | null;
-        source?: string;
-        error?: string | null;
-      }
-    >
-  >({});
+  // ------------------ LOAD PO (solo editar) ------------------
+  const loadPO = async () => {
+    if (isNew) return;
+
+    const poId = idParam!;
+    const res = await fetch(`/api/po/${poId}`, { cache: "no-store" });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json?.error || "Error cargando PO");
+
+    const normalized: TPO = {
+      ...json,
+      proforma_invoice: json?.proforma_invoice ?? json?.pi ?? null,
+      pi: json?.pi ?? json?.proforma_invoice ?? null,
+      lineas_pedido: Array.isArray(json?.lineas_pedido) ? json.lineas_pedido : [],
+    };
+
+    normalized.lineas_pedido = (normalized.lineas_pedido || []).map((l: any) => ({
+      ...l,
+      modelo_id: l.modelo_id ?? null,
+      variante_id: l.variante_id ?? null,
+      variantes: [],
+      master_price: null,
+      master_price_status: "idle",
+      master_price_error: null,
+      muestras: Array.isArray(l.muestras) ? l.muestras : [],
+    }));
+
+    setPO({
+      currency: "USD",
+      ...normalized,
+      currency: (normalized.currency as any) || "USD",
+    });
+  };
 
   useEffect(() => {
-    const fetchPO = async () => {
+    (async () => {
       try {
-        const res = await fetch(`/api/po/${id}`);
-        const data = await res.json();
-
-        const linesWithData = (data?.lineas_pedido
-          ?.map((l: any, i: number) =>
-            Object.values(l).some(
-              (v) =>
-                v !== null &&
-                v !== "" &&
-                v !== 0 &&
-                (!Array.isArray(v) || v.length > 0)
-            )
-              ? i
-              : null
-          )
-          .filter((i: number | null) => i !== null) as number[]) || [];
-
-        setOpenLines(linesWithData);
-
-        const initialSamples: Record<number, boolean> = {};
-        data?.lineas_pedido?.forEach((l: any, i: number) => {
-          if (l.muestras && l.muestras.length > 0) initialSamples[i] = true;
-        });
-
-        setOpenSamples(initialSamples);
-        setPO(data);
-      } catch (err) {
-        console.error("❌ Error cargando PO:", err);
-      } finally {
-        setLoading(false);
+        await loadPO();
+      } catch (e: any) {
+        console.error(e);
       }
-    };
-    if (id) fetchPO();
-  }, [id]);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idParam]);
 
-  // Cargar modelos para dropdown
-  useEffect(() => {
-    const loadModelos = async () => {
-      try {
-        setMasterLoading(true);
-        const res = await fetch("/api/master/modelos-mini");
-        const json = await res.json();
-        setModelos(Array.isArray(json?.items) ? json.items : []);
-      } catch (e) {
-        console.error("❌ Error cargando modelos:", e);
-      } finally {
-        setMasterLoading(false);
-      }
-    };
-    loadModelos();
-  }, []);
+  // ------------------ LOAD MODELOS ------------------
+  const loadModelos = async () => {
+    setModelosLoading(true);
+    setModelosError(null);
 
-  const modelosById = useMemo(() => {
-    const m = new Map<string, ModeloMini>();
-    modelos.forEach((x) => m.set(x.id, x));
-    return m;
-  }, [modelos]);
-
-  const guardar = async () => {
     try {
-      const res = await fetch(`/api/po/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(po),
+      const params = new URLSearchParams();
+      params.set("limit", "200");
+      params.set("offset", "0");
+
+      const q = modeloQ.trim();
+      if (q) params.set("q", q);
+
+      const customer = (po.customer || "").trim();
+      const supplier = (po.supplier || "").trim();
+      const factory = (po.factory || "").trim();
+
+      if (customer) params.set("customer", customer);
+      if (supplier) params.set("supplier", supplier);
+      if (factory) params.set("factory", factory);
+
+      const res = await fetch(`/api/modelos?${params.toString()}`, { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Error cargando modelos");
+
+      setModelos(Array.isArray(json?.data) ? json.data : []);
+    } catch (e: any) {
+      setModelos([]);
+      setModelosError(e?.message || "Error");
+    } finally {
+      setModelosLoading(false);
+    }
+  };
+
+  // ✅ DEBOUNCE: recarga modelos cuando cambian filtros, pero no en cada tecla
+  const debounceRef = useRef<any>(null);
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      loadModelos();
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [po.customer, po.supplier, po.factory]);
+
+  // ------------------ VARIANTES por línea ------------------
+  const loadVariantesForLine = async (lineIndex: number, modeloId: string) => {
+    const season = (po.season || "").trim();
+
+    if (!modeloId || !season) {
+      setPO((prev) => {
+        const copy = [...(prev.lineas_pedido ?? [])];
+        if (!copy[lineIndex]) return prev;
+        copy[lineIndex] = { ...copy[lineIndex], variantes: [], variante_id: null };
+        return { ...prev, lineas_pedido: copy };
       });
-      if (!res.ok) throw new Error("Error al guardar");
-      alert("✅ PO guardado correctamente");
-      router.push(`/po/${id}`);
-    } catch (err) {
-      console.error("❌ Error al guardar:", err);
-      alert("Error al guardar");
-    }
-  };
-
-  const eliminar = async () => {
-    if (!confirm("¿Seguro que quieres eliminar este PO?")) return;
-    try {
-      const res = await fetch(`/api/po/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Error al eliminar");
-      alert("PO eliminado");
-      router.push("/");
-    } catch (err) {
-      console.error("❌ Error al eliminar:", err);
-      alert("Error al eliminar");
-    }
-  };
-
-  // --- helpers master (resolver variante + precio) ---
-  const resolveVariante = async (lineIndex: number) => {
-    const l = po?.lineas_pedido?.[lineIndex];
-    if (!po || !l) return;
-
-    const modeloId = String(l.modelo_id || "").trim();
-    const season = String(po.season || "").trim();
-    const color = String(l.color || "").trim();
-    const reference = String(l.reference || "").trim(); // ✅ CLAVE
-
-    if (!modeloId || !season || !color) {
-      setLineMasterInfo((prev) => ({
-        ...prev,
-        [lineIndex]: {
-          varianteId: null,
-          price: null,
-          source: "",
-          error: "Falta modelo/season/color",
-        },
-      }));
       return;
     }
 
-    try {
-      setLineMasterInfo((prev) => ({
-        ...prev,
-        [lineIndex]: { ...(prev[lineIndex] || {}), error: null },
-      }));
+    // reset variantes de esa línea
+    setPO((prev) => {
+      const copy = [...(prev.lineas_pedido ?? [])];
+      if (!copy[lineIndex]) return prev;
+      copy[lineIndex] = { ...copy[lineIndex], variantes: [], variante_id: null };
+      return { ...prev, lineas_pedido: copy };
+    });
 
+    try {
       const res = await fetch(
-        `/api/master/resolve-variante?modelo_id=${encodeURIComponent(
-          modeloId
-        )}&season=${encodeURIComponent(season)}&color=${encodeURIComponent(
-          color
-        )}&reference=${encodeURIComponent(reference)}`
+        `/api/modelos/${modeloId}/variantes?season=${encodeURIComponent(season)}`,
+        { cache: "no-store" }
       );
       const json = await res.json();
-      const varianteId = json?.variante?.id || null;
+      if (!res.ok) throw new Error(json?.error || "Error cargando variantes");
 
-      // Guardamos variante_id en la línea
-      const copy = [...po.lineas_pedido];
-      copy[lineIndex].variante_id = varianteId;
-      setPO({ ...po, lineas_pedido: copy });
+      const variantes: TVariante[] = Array.isArray(json?.data) ? json.data : [];
 
-      setLineMasterInfo((prev) => ({
-        ...prev,
-        [lineIndex]: {
-          ...(prev[lineIndex] || {}),
-          varianteId,
-          error: varianteId
-            ? null
-            : "No existe variante para ese color/season/reference",
-        },
-      }));
+      setPO((prev) => {
+        const copy = [...(prev.lineas_pedido ?? [])];
+        if (!copy[lineIndex]) return prev;
+        copy[lineIndex] = { ...copy[lineIndex], variantes };
+        return { ...prev, lineas_pedido: copy };
+      });
+    } catch (e) {
+      setPO((prev) => {
+        const copy = [...(prev.lineas_pedido ?? [])];
+        if (!copy[lineIndex]) return prev;
+        copy[lineIndex] = { ...copy[lineIndex], variantes: [] };
+        return { ...prev, lineas_pedido: copy };
+      });
+    }
+  };
 
-      if (!varianteId) return;
+  // ------------------ MASTER PRICE recomendado ------------------
+  const loadMasterPriceForLine = async (lineIndex: number, varianteId: string) => {
+    const season = (po.season || "").trim();
 
-      // Ahora traemos precio recomendado
-      const baseDate = po.po_date ? String(po.po_date) : ""; // si no hay, endpoint usa hoy
-      const res2 = await fetch(
-        `/api/master/variante-precio?variante_id=${encodeURIComponent(
-          varianteId
-        )}&season=${encodeURIComponent(season)}&base_date=${encodeURIComponent(
-          baseDate
-        )}`
-      );
-      const json2 = await res2.json();
+    if (!varianteId || !season) {
+      setPO((prev) => {
+        const copy = [...(prev.lineas_pedido ?? [])];
+        if (!copy[lineIndex]) return prev;
+        copy[lineIndex] = {
+          ...copy[lineIndex],
+          master_price: null,
+          master_price_status: "idle",
+          master_price_error: null,
+        };
+        return { ...prev, lineas_pedido: copy };
+      });
+      return;
+    }
 
-      setLineMasterInfo((prev) => ({
-        ...prev,
-        [lineIndex]: {
-          ...(prev[lineIndex] || {}),
-          varianteId,
-          price: json2?.price || null,
-          source: json2?.source || "",
-          error: json2?.price
-            ? null
-            : "No hay precio master para esa variante/season",
-        },
-      }));
+    setPO((prev) => {
+      const copy = [...(prev.lineas_pedido ?? [])];
+      if (!copy[lineIndex]) return prev;
+      copy[lineIndex] = {
+        ...copy[lineIndex],
+        master_price_status: "loading",
+        master_price_error: null,
+      };
+      return { ...prev, lineas_pedido: copy };
+    });
+
+    try {
+      const params = new URLSearchParams();
+      params.set("varianteId", varianteId);
+      params.set("season", season);
+      if (poDateISO) params.set("baseDate", poDateISO);
+
+      const res = await fetch(`/api/master/precio?${params.toString()}`, { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Error cargando master price");
+
+      const mp: TMasterPrecio | null = json?.data ?? null;
+
+      setPO((prev) => {
+        const copy = [...(prev.lineas_pedido ?? [])];
+        if (!copy[lineIndex]) return prev;
+        copy[lineIndex] = {
+          ...copy[lineIndex],
+          master_price: mp,
+          master_price_status: mp ? "ok" : "none",
+        };
+        return { ...prev, lineas_pedido: copy };
+      });
     } catch (e: any) {
-      setLineMasterInfo((prev) => ({
-        ...prev,
-        [lineIndex]: {
-          varianteId: null,
-          price: null,
-          source: "",
-          error: e?.message || "Error resolviendo master",
+      setPO((prev) => {
+        const copy = [...(prev.lineas_pedido ?? [])];
+        if (!copy[lineIndex]) return prev;
+        copy[lineIndex] = {
+          ...copy[lineIndex],
+          master_price: null,
+          master_price_status: "error",
+          master_price_error: e?.message || "Error",
+        };
+        return { ...prev, lineas_pedido: copy };
+      });
+    }
+  };
+
+  const applyMasterPriceToLine = (lineIndex: number) => {
+    setPO((prev) => {
+      const copy = [...(prev.lineas_pedido ?? [])];
+      const linea = copy[lineIndex];
+      if (!linea?.master_price) return prev;
+
+      const mp = linea.master_price;
+      const supplier = (prev.supplier || "").toLowerCase();
+      const isBSG = supplier.includes("bsg");
+
+      const recommendedBuy = safeNum(mp.buy_price);
+      const recommendedSell = safeNum(mp.sell_price);
+      const qty = safeNum(linea.qty) ?? 0;
+
+      const next = { ...linea };
+
+      if (isBSG) {
+        next.price = (recommendedBuy ?? next.price ?? 0) as number;
+        next.price_selling = recommendedSell ?? next.price_selling ?? null;
+        next.amount_selling =
+          next.price_selling !== null
+            ? Number((qty * (next.price_selling || 0)).toFixed(2))
+            : null;
+      } else {
+        // XIAMEN / intermediario: usar SELL, fallback BUY
+        const p = recommendedSell ?? recommendedBuy;
+        if (p !== null) next.price = p;
+      }
+
+      copy[lineIndex] = next;
+      return { ...prev, lineas_pedido: copy };
+    });
+  };
+
+  // ------------------ Guardar: POST nuevo / PUT editar ------------------
+  const guardar = async () => {
+    try {
+      if (isNew) {
+        const payload = {
+          ...po,
+          proforma_invoice: po.proforma_invoice ?? po.pi ?? null,
+        };
+
+        const res = await fetch("/api/po/nuevo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || "Error creando PO");
+
+        alert("✅ PO creado");
+        router.push(`/po/${data.id}/editar`);
+      } else {
+        const payload = {
+          ...po,
+          pi: po.pi ?? po.proforma_invoice ?? null,
+        };
+
+        const res = await fetch(`/api/po/${idParam}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || "Error actualizando PO");
+
+        alert("✅ PO actualizado");
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert("❌ Error guardando PO (mira consola)");
+    }
+  };
+
+  const addLinea = () => {
+    setPO((prev) => ({
+      ...prev,
+      lineas_pedido: [
+        ...(prev.lineas_pedido ?? []),
+        {
+          qty: 0,
+          price: 0,
+          muestras: [],
+          modelo_id: null,
+          variante_id: null,
+          variantes: [],
+          master_price: null,
+          master_price_status: "idle",
+          master_price_error: null,
         },
-      }));
-    }
+      ],
+    }));
   };
 
-  const aplicarPrecioMaster = (lineIndex: number) => {
-    const info = lineMasterInfo[lineIndex];
-    const price = info?.price;
-    if (!price) return;
-
-    const copy = [...po.lineas_pedido];
-    // Aplicamos buy_price a price (coste)
-    copy[lineIndex].price = Number(price.buy_price) || 0;
-
-    // Si quieres también sell:
-    if (price.sell_price !== null && price.sell_price !== undefined) {
-      copy[lineIndex].price_selling = Number(price.sell_price) || 0;
-    }
-
-    setPO({ ...po, lineas_pedido: copy });
-  };
-
-  if (loading) return <div className="p-6 text-gray-600">Cargando...</div>;
-  if (!po) return <div className="p-6 text-red-500">No se encontró el PO</div>;
-
-  const formatMoney = (n: number) =>
-    (po.currency === "EUR" ? "€ " : "$ ") +
-    new Intl.NumberFormat("es-ES", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n || 0);
-
+  // ------------------ RENDER ------------------
   return (
-    <div className="p-8 space-y-6 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl font-bold text-gray-800 mb-4">
-        ✏️ Editar PO {po.po || "(sin número)"}
-      </h1>
+    <div className="max-w-6xl mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">✏️ {isNew ? "Nuevo PO" : "Editar PO"}</h1>
 
-      {/* CABECERA */}
-      <div className="grid md:grid-cols-3 gap-4 bg-white rounded-xl shadow p-5 border border-gray-200">
-        {[
-          ["Season", "season"],
-          ["PO", "po"],
-          ["Customer", "customer"],
-          ["Supplier", "supplier"],
-          ["Factory", "factory"],
-          ["P.I", "P.I"],
-          ["PO Date", "po_date", "date"],
-          ["ETD PI", "etd_pi", "date"],
-          ["Booking", "booking", "date"],
-          ["Closing", "closing", "date"],
-          ["Shipping", "shipping_date", "date"],
-          ["Inspection", "inspection", "date"],
-        ].map(([label, key, type]) => (
-          <label key={key} className="text-sm font-medium text-gray-700">
-            {label}
-            <input
-              type={(type as string) || "text"}
-              value={(po as any)[key] || ""}
-              onChange={(e) => setPO({ ...po, [key!]: e.target.value })}
-              className="mt-1 border rounded px-2 py-1 w-full"
-            />
-          </label>
-        ))}
-
-        <label className="text-sm font-medium text-gray-700">
-          Estado Insp.
-          <select
-            value={po.estado_inspeccion || ""}
-            onChange={(e) =>
-              setPO({ ...po, estado_inspeccion: e.target.value })
-            }
-            className="mt-1 border rounded px-2 py-1 w-full"
-          >
-            <option value="">-- Seleccionar --</option>
-            <option value="Aprobada">Aprobada</option>
-            <option value="Rechazada">Rechazada</option>
-            <option value="N/N">N/N</option>
-          </select>
-        </label>
-
-        <label className="text-sm font-medium text-gray-700">
-          Moneda
-          <select
-            value={po.currency || "USD"}
-            onChange={(e) => setPO({ ...po, currency: e.target.value })}
-            className="mt-1 border rounded px-2 py-1 w-full"
-          >
-            <option value="USD">USD ($)</option>
-            <option value="EUR">EUR (€)</option>
-          </select>
-        </label>
+        <div className="flex gap-2">
+          <button onClick={guardar} className="bg-blue-600 text-white px-4 py-2 rounded text-sm">
+            💾 Guardar
+          </button>
+          <button onClick={() => router.back()} className="bg-gray-200 px-4 py-2 rounded text-sm">
+            ← Cancelar
+          </button>
+        </div>
       </div>
 
-      {/* LÍNEAS DE PEDIDO */}
-      <div className="bg-white rounded-xl shadow p-5 border border-gray-200">
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-          📦 Líneas de pedido
-        </h2>
+      {/* Cabecera */}
+      <div className="bg-white border rounded-xl p-4 space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <label className="space-y-1">
+            <div className="text-xs text-gray-600">Season *</div>
+            <input
+              value={po.season || ""}
+              onChange={(e) => setPO((prev) => ({ ...prev, season: e.target.value }))}
+              className="border w-full px-2 py-2 rounded"
+            />
+          </label>
 
-        {po.lineas_pedido?.map((l: any, i: number) => {
-          const isOpen = openLines.includes(i);
-          const info = lineMasterInfo[i];
-          const modeloSel = l.modelo_id ? modelosById.get(l.modelo_id) : null;
+          <label className="space-y-1">
+            <div className="text-xs text-gray-600">PO *</div>
+            <input
+              value={po.po || ""}
+              onChange={(e) => setPO((prev) => ({ ...prev, po: e.target.value }))}
+              className="border w-full px-2 py-2 rounded"
+            />
+          </label>
+
+          <label className="space-y-1">
+            <div className="text-xs text-gray-600">Customer</div>
+            <input
+              value={po.customer || ""}
+              onChange={(e) => setPO((prev) => ({ ...prev, customer: e.target.value }))}
+              className="border w-full px-2 py-2 rounded"
+            />
+            <div className="text-[11px] text-gray-500">(filtra modelos)</div>
+          </label>
+
+          <label className="space-y-1">
+            <div className="text-xs text-gray-600">Supplier</div>
+            <input
+              value={po.supplier || ""}
+              onChange={(e) => setPO((prev) => ({ ...prev, supplier: e.target.value }))}
+              className="border w-full px-2 py-2 rounded"
+            />
+            <div className="text-[11px] text-gray-500">(filtra modelos)</div>
+          </label>
+
+          <label className="space-y-1">
+            <div className="text-xs text-gray-600">Factory</div>
+            <input
+              value={po.factory || ""}
+              onChange={(e) => setPO((prev) => ({ ...prev, factory: e.target.value }))}
+              className="border w-full px-2 py-2 rounded"
+            />
+            <div className="text-[11px] text-gray-500">(filtra modelos)</div>
+          </label>
+
+          <label className="space-y-1">
+            <div className="text-xs text-gray-600">P.I</div>
+            <input
+              value={(po.proforma_invoice ?? po.pi ?? "") || ""}
+              onChange={(e) =>
+                setPO((prev) => ({
+                  ...prev,
+                  proforma_invoice: e.target.value,
+                  pi: e.target.value,
+                }))
+              }
+              className="border w-full px-2 py-2 rounded"
+            />
+          </label>
+
+          <label className="space-y-1">
+            <div className="text-xs text-gray-600">PO Date</div>
+            <input
+              type="date"
+              value={poDateISO}
+              onChange={(e) => setPO((prev) => ({ ...prev, po_date: e.target.value }))}
+              className="border w-full px-2 py-2 rounded"
+            />
+            <div className="text-[11px] text-gray-500">(afecta al master price)</div>
+          </label>
+
+          <label className="space-y-1">
+            <div className="text-xs text-gray-600">Moneda</div>
+            <select
+              value={po.currency || "USD"}
+              onChange={(e) => setPO((prev) => ({ ...prev, currency: e.target.value as any }))}
+              className="border w-full px-2 py-2 rounded"
+            >
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+            </select>
+          </label>
+        </div>
+
+        {/* Buscar modelo */}
+        <div className="flex items-center gap-2 text-sm">
+          <input
+            value={modeloQ}
+            onChange={(e) => setModeloQ(e.target.value)}
+            className="border px-3 py-2 rounded w-full"
+            placeholder="Buscar modelo (style/ref)..."
+          />
+          <button
+            onClick={loadModelos}
+            className="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200"
+            type="button"
+          >
+            {modelosLoading ? "Cargando..." : "Buscar"}
+          </button>
+        </div>
+
+        {modelosError ? (
+          <div className="text-sm text-red-600">❌ {modelosError}</div>
+        ) : (
+          <div className="text-xs text-gray-600">
+            Modelos cargados: <b>{modelos.length}</b>
+            {modelosLoading ? <span className="ml-2 text-gray-400">· cargando…</span> : null}
+          </div>
+        )}
+      </div>
+
+      {/* Líneas */}
+      <div className="bg-white border rounded-xl p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-md font-bold">📦 Líneas de pedido</h2>
+          <button
+            onClick={addLinea}
+            className="border px-3 py-2 text-sm rounded bg-gray-50 hover:bg-gray-100"
+            type="button"
+          >
+            ➕ Añadir línea
+          </button>
+        </div>
+
+        {(po.lineas_pedido ?? []).map((l, i) => {
+          const variantes = l.variantes ?? [];
+          const mp = l.master_price;
+
+          const masterLabel =
+            l.master_price_status === "loading"
+              ? "Cargando precio master..."
+              : l.master_price_status === "none"
+              ? "No hay precio master elegible"
+              : l.master_price_status === "error"
+              ? `Error: ${l.master_price_error || "?"}`
+              : mp
+              ? `OK · ${mp.currency} · BUY ${mp.buy_price} · SELL ${mp.sell_price ?? "-"} · desde ${mp.valid_from}`
+              : "—";
+
+          const canApply = Boolean(mp && po.season && l.modelo_id && l.variante_id);
 
           return (
-            <div key={i} className="mb-4 border rounded-lg bg-gray-50 shadow-sm">
-              <button
-                onClick={() =>
-                  setOpenLines((prev) =>
-                    prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]
-                  )
-                }
-                className="w-full text-left p-3 flex justify-between items-center font-semibold bg-gray-100 rounded-t-lg hover:bg-gray-200"
-              >
-                <span>
-                  {l.reference || "Nueva línea"} • {l.style || ""} •{" "}
-                  {l.color || ""}
-                </span>
-                <span>{isOpen ? "▲" : "▼"}</span>
-              </button>
+            <div key={i} className="border rounded-xl p-4 bg-gray-50 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold text-sm">Línea #{i + 1}</div>
+                <button
+                  className="text-red-600 text-sm"
+                  type="button"
+                  onClick={() =>
+                    setPO((prev) => {
+                      const copy = [...(prev.lineas_pedido ?? [])];
+                      copy.splice(i, 1);
+                      return { ...prev, lineas_pedido: copy };
+                    })
+                  }
+                >
+                  ❌ Eliminar
+                </button>
+              </div>
 
-              {isOpen && (
-                <div className="p-4 border-t space-y-4">
-                  {/* BLOQUE MASTER */}
-                  <div className="border rounded-lg bg-white p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-semibold">
-                        🔗 Master (Modelo/Variante/Precio)
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {masterLoading
-                          ? "Cargando modelos…"
-                          : `${modelos.length} modelos`}
-                      </div>
-                    </div>
+              <div className="grid md:grid-cols-4 gap-3 text-sm">
+                <label className="space-y-1">
+                  <div className="text-xs text-gray-600">Modelo</div>
+                  <select
+                    value={l.modelo_id ?? ""}
+                    onChange={async (e) => {
+                      const modeloId = e.target.value;
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mt-2 text-sm">
-                      {/* Modelo */}
-                      <label className="flex flex-col">
-                        <span className="font-medium text-gray-600">Modelo</span>
-                        <select
-                          value={l.modelo_id || ""}
-                          onChange={(e) => {
-                            const copy = [...po.lineas_pedido];
-                            copy[i].modelo_id = e.target.value || null;
+                      setPO((prev) => {
+                        const copy = [...(prev.lineas_pedido ?? [])];
+                        const modelo = modelos.find((m) => m.id === modeloId) || null;
 
-                            const mm = modelosById.get(e.target.value);
-                            if (mm?.style) copy[i].style = mm.style;
+                        copy[i] = {
+                          ...copy[i],
+                          modelo_id: modeloId || null,
+                          variante_id: null,
+                          variantes: [],
+                          master_price: null,
+                          master_price_status: "idle",
+                          master_price_error: null,
+                          style: modelo?.style || copy[i].style || "",
+                        };
 
-                            // al cambiar modelo, borramos variante
-                            copy[i].variante_id = null;
+                        return { ...prev, lineas_pedido: copy };
+                      });
 
-                            setPO({ ...po, lineas_pedido: copy });
-
-                            setTimeout(() => resolveVariante(i), 0);
-                          }}
-                          className="mt-1 border rounded px-2 py-1"
-                        >
-                          <option value="">-- Seleccionar modelo --</option>
-                          {modelos.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.style}
-                            </option>
-                          ))}
-                        </select>
-                        {modeloSel ? (
-                          <span className="text-xs text-gray-500 mt-1">
-                            {modeloSel.customer || "-"} ·{" "}
-                            {modeloSel.supplier || "-"} ·{" "}
-                            {modeloSel.factory || "-"}
-                          </span>
-                        ) : null}
-                      </label>
-
-                      {/* Variante (auto) */}
-                      <label className="flex flex-col">
-                        <span className="font-medium text-gray-600">
-                          Variante (auto)
-                        </span>
-                        <input
-                          readOnly
-                          value={l.variante_id ? "✅ asignada" : "—"}
-                          className="mt-1 border rounded px-2 py-1 bg-gray-50"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => resolveVariante(i)}
-                          className="mt-2 text-xs border px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                        >
-                          🔄 Recalcular variante/precio
-                        </button>
-                      </label>
-
-                      {/* Precio master recomendado */}
-                      <label className="flex flex-col">
-                        <span className="font-medium text-gray-600">
-                          Precio master recomendado
-                        </span>
-                        <input
-                          readOnly
-                          value={
-                            info?.price
-                              ? `${info.price.buy_price} ${info.price.currency} (from ${info.price.valid_from})`
-                              : "—"
-                          }
-                          className="mt-1 border rounded px-2 py-1 bg-gray-50"
-                        />
-                        <span className="text-xs text-gray-500 mt-1">
-                          {info?.source ? `source: ${info.source}` : ""}
-                        </span>
-                      </label>
-
-                      {/* Aplicar */}
-                      <label className="flex flex-col">
-                        <span className="font-medium text-gray-600">Aplicar</span>
-                        <button
-                          type="button"
-                          disabled={!info?.price}
-                          onClick={() => aplicarPrecioMaster(i)}
-                          className={`mt-1 px-3 py-2 rounded text-sm ${
-                            info?.price
-                              ? "bg-black text-white hover:bg-gray-800"
-                              : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                          }`}
-                        >
-                          Aplicar precio master
-                        </button>
-                        {info?.error ? (
-                          <span className="text-xs text-red-600 mt-2">
-                            {info.error}
-                          </span>
-                        ) : null}
-                      </label>
-                    </div>
-
-                    <div className="text-xs text-gray-500 mt-2">
-                      Al guardar, la línea quedará enlazada a master por{" "}
-                      <b>modelo_id</b> y <b>variante_id</b>. El botón “Aplicar”
-                      solo te rellena el campo <b>price</b> (y opcionalmente sell).
-                    </div>
-                  </div>
-
-                  {/* CAMPOS DE LINEA */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                    {[
-                      ["Ref", "reference"],
-                      ["Style", "style"],
-                      ["Color", "color"],
-                      ["Size", "size_run"],
-                      ["Category", "category"],
-                      ["Channel", "channel"],
-                      ["Qty", "qty", "number"],
-                      ["Price", "price", "number"],
-                      ["Trial U", "trial_upper", "date"],
-                      ["Trial L", "trial_lasting", "date"],
-                      ["Lasting", "lasting", "date"],
-                      ["Finish", "finish_date", "date"],
-                    ].map(([label, key, type]) => (
-                      <label key={key} className="flex flex-col">
-                        <span className="font-medium text-gray-600">{label}</span>
-                        <input
-                          type={(type as string) || "text"}
-                          value={(l as any)[key] || ""}
-                          onChange={(e) => {
-                            const copy = [...po.lineas_pedido];
-
-                            copy[i][key!] =
-                              type === "number"
-                                ? parseFloat(e.target.value) || 0
-                                : e.target.value;
-
-                            setPO({ ...po, lineas_pedido: copy });
-
-                            // ✅ si cambia COLOR o REF recalculamos master
-                            if (
-                              (key === "color" || key === "reference") &&
-                              copy[i].modelo_id
-                            ) {
-                              setTimeout(() => resolveVariante(i), 0);
-                            }
-                          }}
-                          className="mt-1 border rounded px-2 py-1"
-                        />
-                      </label>
+                      if (modeloId) await loadVariantesForLine(i, modeloId);
+                    }}
+                    className="border w-full px-2 py-2 rounded bg-white"
+                    // ✅ NO lo deshabilitamos: si no, “parece” que no deja seleccionar nunca
+                    disabled={false}
+                  >
+                    <option value="">-- Seleccionar modelo --</option>
+                    {modelos.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.style}
+                      </option>
                     ))}
-                  </div>
+                  </select>
+                </label>
 
-                  {/* MUESTRAS */}
-                  <div>
+                <label className="space-y-1">
+                  <div className="text-xs text-gray-600">Variante (color)</div>
+                  <select
+                    value={l.variante_id ?? ""}
+                    onChange={async (e) => {
+                      const varianteId = e.target.value;
+
+                      setPO((prev) => {
+                        const copy = [...(prev.lineas_pedido ?? [])];
+                        const v = (copy[i].variantes ?? []).find((vv) => vv.id === varianteId) || null;
+
+                        copy[i] = {
+                          ...copy[i],
+                          variante_id: varianteId || null,
+                          color: v?.color || copy[i].color || "",
+                          reference: v?.reference || copy[i].reference || "",
+                          master_price: null,
+                          master_price_status: "idle",
+                          master_price_error: null,
+                        };
+
+                        return { ...prev, lineas_pedido: copy };
+                      });
+
+                      if (varianteId) await loadMasterPriceForLine(i, varianteId);
+                    }}
+                    className="border w-full px-2 py-2 rounded bg-white"
+                    disabled={!l.modelo_id || !(po.season || "").trim()}
+                  >
+                    <option value="">
+                      {!po.season?.trim()
+                        ? "-- Season requerida --"
+                        : !l.modelo_id
+                        ? "-- Selecciona modelo --"
+                        : variantes.length
+                        ? "-- Seleccionar color --"
+                        : "-- Sin variantes para esa season --"}
+                    </option>
+
+                    {variantes.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.color || "—"}
+                        {v.reference ? ` · ${v.reference}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="space-y-1 md:col-span-2">
+                  <div className="text-xs text-gray-600">Precio master recomendado</div>
+                  <div className="border rounded bg-white px-3 py-2 text-sm">{masterLabel}</div>
+
+                  <div className="flex gap-2 mt-2">
                     <button
-                      onClick={() =>
-                        setOpenSamples((prev) => ({
-                          ...prev,
-                          [i]: !prev[i],
-                        }))
-                      }
-                      className="text-sm font-semibold text-gray-700 mt-3 mb-2 flex items-center gap-2"
+                      type="button"
+                      className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
+                      onClick={() => l.variante_id && loadMasterPriceForLine(i, l.variante_id)}
+                      disabled={!l.variante_id}
                     >
-                      🧪 Muestras {openSamples[i] ? "▲" : "▼"}
+                      🔄 Recalcular
                     </button>
 
-                    {openSamples[i] && (
-                      <div className="space-y-2">
-                        {l.muestras?.map((m: any, mi: number) => (
-                          <div
-                            key={mi}
-                            className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm bg-white border rounded p-2"
-                          >
-                            <label className="flex flex-col">
-                              <span className="font-medium text-gray-600">Tipo</span>
-                              <select
-                                value={m.tipo_muestra || ""}
-                                onChange={(e) => {
-                                  const copy = [...po.lineas_pedido];
-                                  copy[i].muestras[mi].tipo_muestra = e.target.value;
-                                  setPO({ ...po, lineas_pedido: copy });
-                                }}
-                                className="mt-1 border rounded px-2 py-1"
-                              >
-                                <option value="">-- Seleccionar --</option>
-                                <option value="CFMs">CFMs</option>
-                                <option value="Counter Sample">Counter Sample</option>
-                                <option value="Fitting">Fitting</option>
-                                <option value="PPS">PPS</option>
-                                <option value="Testing Samples">Testing Samples</option>
-                                <option value="Shipping Samples">Shipping Samples</option>
-                                <option value="N/N">N/N</option>
-                              </select>
-                            </label>
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 text-sm disabled:opacity-50"
+                      onClick={() => applyMasterPriceToLine(i)}
+                      disabled={!canApply}
+                    >
+                      ✅ Aplicar master
+                    </button>
+                  </div>
 
-                            <label className="flex flex-col">
-                              <span className="font-medium text-gray-600">Fecha</span>
-                              <input
-                                type="date"
-                                value={m.fecha_muestra || ""}
-                                onChange={(e) => {
-                                  const copy = [...po.lineas_pedido];
-                                  copy[i].muestras[mi].fecha_muestra = e.target.value;
-                                  setPO({ ...po, lineas_pedido: copy });
-                                }}
-                                className="mt-1 border rounded px-2 py-1"
-                              />
-                            </label>
-
-                            <label className="flex flex-col">
-                              <span className="font-medium text-gray-600">Estado</span>
-                              <select
-                                value={m.estado_muestra || ""}
-                                onChange={(e) => {
-                                  const copy = [...po.lineas_pedido];
-                                  copy[i].muestras[mi].estado_muestra = e.target.value;
-                                  setPO({ ...po, lineas_pedido: copy });
-                                }}
-                                className="mt-1 border rounded px-2 py-1"
-                              >
-                                <option value="">-- Seleccionar --</option>
-                                <option value="Pendiente">Pendiente</option>
-                                <option value="Enviado">Enviado</option>
-                                <option value="Aprobado">Aprobado</option>
-                                <option value="Rechazado">Rechazado</option>
-                              </select>
-                            </label>
-
-                            <label className="flex flex-col">
-                              <span className="font-medium text-gray-600">Round</span>
-                              <input
-                                type="text"
-                                value={m.round || ""}
-                                onChange={(e) => {
-                                  const copy = [...po.lineas_pedido];
-                                  copy[i].muestras[mi].round = e.target.value;
-                                  setPO({ ...po, lineas_pedido: copy });
-                                }}
-                                className="mt-1 border rounded px-2 py-1"
-                              />
-                            </label>
-
-                            <label className="flex flex-col">
-                              <span className="font-medium text-gray-600">Notas</span>
-                              <input
-                                type="text"
-                                value={m.notas || ""}
-                                onChange={(e) => {
-                                  const copy = [...po.lineas_pedido];
-                                  copy[i].muestras[mi].notas = e.target.value;
-                                  setPO({ ...po, lineas_pedido: copy });
-                                }}
-                                className="mt-1 border rounded px-2 py-1"
-                              />
-                            </label>
-
-                            <button
-                              className="text-red-500 text-sm mt-4"
-                              onClick={() => {
-                                const copy = [...po.lineas_pedido];
-                                copy[i].muestras.splice(mi, 1);
-                                setPO({ ...po, lineas_pedido: copy });
-                              }}
-                            >
-                              ❌
-                            </button>
-                          </div>
-                        ))}
-
-                        <button
-                          onClick={() => {
-                            const copy = [...po.lineas_pedido];
-                            copy[i].muestras = copy[i].muestras || [];
-                            copy[i].muestras.push({
-                              tipo_muestra: "",
-                              fecha_muestra: "",
-                              estado_muestra: "Pendiente",
-                              round: "",
-                              notas: "",
-                            });
-                            setPO({ ...po, lineas_pedido: copy });
-                            setOpenSamples({ ...openSamples, [i]: true });
-                          }}
-                          className="mt-1 border px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
-                        >
-                          ➕ Añadir muestra
-                        </button>
-                      </div>
-                    )}
+                  <div className="text-[11px] text-gray-600">
+                    XIAMEN: aplica <b>SELL</b> a <b>price</b>. · BSG: <b>BUY</b> → price, <b>SELL</b> → price_selling.
                   </div>
                 </div>
-              )}
+              </div>
+
+              <div className="grid md:grid-cols-6 gap-3 text-sm">
+                {[
+                  ["Ref", "reference"],
+                  ["Style", "style"],
+                  ["Color", "color"],
+                  ["Size", "size_run"],
+                  ["Category", "category"],
+                  ["Channel", "channel"],
+                ].map(([label, key]) => (
+                  <label key={key} className="space-y-1">
+                    <div className="text-xs text-gray-600">{label}</div>
+                    <input
+                      value={(l as any)[key] || ""}
+                      onChange={(e) =>
+                        setPO((prev) => {
+                          const copy = [...(prev.lineas_pedido ?? [])];
+                          copy[i] = { ...copy[i], [key]: e.target.value };
+                          return { ...prev, lineas_pedido: copy };
+                        })
+                      }
+                      className="border w-full px-2 py-2 rounded bg-white"
+                    />
+                  </label>
+                ))}
+
+                <label className="space-y-1">
+                  <div className="text-xs text-gray-600">Qty</div>
+                  <input
+                    type="number"
+                    value={l.qty ?? 0}
+                    onChange={(e) =>
+                      setPO((prev) => {
+                        const copy = [...(prev.lineas_pedido ?? [])];
+                        copy[i] = { ...copy[i], qty: Number(e.target.value) || 0 };
+                        return { ...prev, lineas_pedido: copy };
+                      })
+                    }
+                    className="border w-full px-2 py-2 rounded bg-white text-right"
+                  />
+                </label>
+
+                <label className="space-y-1">
+                  <div className="text-xs text-gray-600">Price</div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={l.price ?? 0}
+                    onChange={(e) =>
+                      setPO((prev) => {
+                        const copy = [...(prev.lineas_pedido ?? [])];
+                        copy[i] = { ...copy[i], price: Number(e.target.value) || 0 };
+                        return { ...prev, lineas_pedido: copy };
+                      })
+                    }
+                    className="border w-full px-2 py-2 rounded bg-white text-right"
+                  />
+                </label>
+              </div>
+
+              <div className="text-sm font-semibold">
+                Total línea: {fmt((l.qty || 0) * (l.price || 0))}
+              </div>
             </div>
           );
         })}
-
-        <button
-          onClick={() => {
-            const copy = [...(po.lineas_pedido || [])];
-            copy.push({
-              reference: "",
-              style: "",
-              color: "",
-              size_run: "",
-              qty: 0,
-              price: 0,
-              trial_upper: "",
-              trial_lasting: "",
-              lasting: "",
-              finish_date: "",
-              muestras: [],
-              modelo_id: null,
-              variante_id: null,
-            });
-            setPO({ ...po, lineas_pedido: copy });
-          }}
-          className="mt-2 border px-3 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
-        >
-          ➕ Añadir línea
-        </button>
       </div>
 
-      {/* BOTONES */}
-      <div className="flex gap-2">
-        <button
-          onClick={guardar}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow text-sm"
-        >
-          💾 Guardar
-        </button>
-        <button
-          onClick={() => router.push(`/po/${id}`)}
-          className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded shadow text-sm"
-        >
-          ← Cancelar
-        </button>
-        <button
-          onClick={eliminar}
-          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow text-sm"
-        >
-          🗑 Eliminar PO
-        </button>
+      <div className="p-4 bg-gray-50 rounded-xl border text-sm font-semibold">
+        📊 Total Pares: {totalPairs.toLocaleString("es-ES")} · Total Importe: {fmt(totalAmount)}
       </div>
     </div>
   );

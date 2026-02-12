@@ -1,7 +1,7 @@
 "use client";
 
-import EditarPO from "../[id]/editar/page";
+import NuevoPOEditarWrapper from "./editar/page";
 
 export default function NuevoPO() {
-  return <EditarPO />; // ✅ sin pasar props
+  return <NuevoPOEditarWrapper />;
 }
