@@ -104,6 +104,15 @@ type TPO = {
   lineas_pedido?: TLinea[];
 };
 
+type TSuggestions = {
+  customers: string[];
+  suppliers: string[];
+  factories: string[];
+  sizes: string[];
+  categories: string[];
+  channels: string[];
+};
+
 function toISODateOrEmpty(v: any): string {
   if (!v) return "";
   const s = String(v).trim();
@@ -125,7 +134,6 @@ export default function EditarPOPage() {
   const params = useParams<{ id: string }>();
   const idParam = params?.id;
 
-  // Si entras por /po/nuevo que renderiza este componente:
   const isNew = !idParam || idParam === "nuevo";
 
   const [po, setPO] = useState<TPO>({
@@ -138,6 +146,18 @@ export default function EditarPOPage() {
   const [modelosLoading, setModelosLoading] = useState(false);
   const [modelosError, setModelosError] = useState<string | null>(null);
   const [modeloQ, setModeloQ] = useState("");
+
+  // suggestions (datalist)
+  const [suggestions, setSuggestions] = useState<TSuggestions>({
+    customers: [],
+    suppliers: [],
+    factories: [],
+    sizes: [],
+    categories: [],
+    channels: [],
+  });
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
 
   const poDateISO = useMemo(() => toISODateOrEmpty(po.po_date), [po.po_date]);
 
@@ -237,19 +257,76 @@ export default function EditarPOPage() {
     }
   };
 
-  // ✅ DEBOUNCE: recarga modelos cuando cambian filtros, pero no en cada tecla
-  const debounceRef = useRef<any>(null);
+  // ✅ DEBOUNCE modelos por filtros cabecera
+  const debounceModelosRef = useRef<any>(null);
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
+    if (debounceModelosRef.current) clearTimeout(debounceModelosRef.current);
+    debounceModelosRef.current = setTimeout(() => {
       loadModelos();
     }, 300);
 
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (debounceModelosRef.current) clearTimeout(debounceModelosRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [po.customer, po.supplier, po.factory]);
+
+  // ------------------ SUGGESTIONS (datalist) ------------------
+  const loadSuggestions = async () => {
+    setSuggestionsLoading(true);
+    setSuggestionsError(null);
+
+    try {
+      const sp = new URLSearchParams();
+      sp.set("limit", "400");
+
+      const customer = (po.customer || "").trim();
+      const supplier = (po.supplier || "").trim();
+      const factory = (po.factory || "").trim();
+
+      if (customer) sp.set("customer", customer);
+      if (supplier) sp.set("supplier", supplier);
+      if (factory) sp.set("factory", factory);
+
+      const res = await fetch(`/api/po/suggestions?${sp.toString()}`, { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) throw new Error(json?.error || "Error cargando sugerencias");
+
+      const d = json?.data || {};
+      setSuggestions({
+        customers: Array.isArray(d.customers) ? d.customers : [],
+        suppliers: Array.isArray(d.suppliers) ? d.suppliers : [],
+        factories: Array.isArray(d.factories) ? d.factories : [],
+        sizes: Array.isArray(d.sizes) ? d.sizes : [],
+        categories: Array.isArray(d.categories) ? d.categories : [],
+        channels: Array.isArray(d.channels) ? d.channels : [],
+      });
+    } catch (e: any) {
+      setSuggestionsError(e?.message || "Error");
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  };
+
+  // ✅ Debounce sugerencias cuando cambian los filtros cabecera
+  const debounceSugRef = useRef<any>(null);
+  useEffect(() => {
+    if (debounceSugRef.current) clearTimeout(debounceSugRef.current);
+    debounceSugRef.current = setTimeout(() => {
+      loadSuggestions();
+    }, 250);
+
+    return () => {
+      if (debounceSugRef.current) clearTimeout(debounceSugRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [po.customer, po.supplier, po.factory]);
+
+  // cargar sugerencias iniciales
+  useEffect(() => {
+    loadSuggestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ------------------ VARIANTES por línea ------------------
   const loadVariantesForLine = async (lineIndex: number, modeloId: string) => {
@@ -265,7 +342,6 @@ export default function EditarPOPage() {
       return;
     }
 
-    // reset variantes de esa línea
     setPO((prev) => {
       const copy = [...(prev.lineas_pedido ?? [])];
       if (!copy[lineIndex]) return prev;
@@ -390,7 +466,6 @@ export default function EditarPOPage() {
             ? Number((qty * (next.price_selling || 0)).toFixed(2))
             : null;
       } else {
-        // XIAMEN / intermediario: usar SELL, fallback BUY
         const p = recommendedSell ?? recommendedBuy;
         if (p !== null) next.price = p;
       }
@@ -466,6 +541,38 @@ export default function EditarPOPage() {
   // ------------------ RENDER ------------------
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
+      {/* DATALISTS (globales) */}
+      <datalist id="dl-po-customers">
+        {suggestions.customers.map((v) => (
+          <option key={v} value={v} />
+        ))}
+      </datalist>
+      <datalist id="dl-po-suppliers">
+        {suggestions.suppliers.map((v) => (
+          <option key={v} value={v} />
+        ))}
+      </datalist>
+      <datalist id="dl-po-factories">
+        {suggestions.factories.map((v) => (
+          <option key={v} value={v} />
+        ))}
+      </datalist>
+      <datalist id="dl-po-sizes">
+        {suggestions.sizes.map((v) => (
+          <option key={v} value={v} />
+        ))}
+      </datalist>
+      <datalist id="dl-po-categories">
+        {suggestions.categories.map((v) => (
+          <option key={v} value={v} />
+        ))}
+      </datalist>
+      <datalist id="dl-po-channels">
+        {suggestions.channels.map((v) => (
+          <option key={v} value={v} />
+        ))}
+      </datalist>
+
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">✏️ {isNew ? "Nuevo PO" : "Editar PO"}</h1>
 
@@ -503,9 +610,11 @@ export default function EditarPOPage() {
           <label className="space-y-1">
             <div className="text-xs text-gray-600">Customer</div>
             <input
+              list="dl-po-customers"
               value={po.customer || ""}
               onChange={(e) => setPO((prev) => ({ ...prev, customer: e.target.value }))}
               className="border w-full px-2 py-2 rounded"
+              placeholder={suggestionsLoading ? "Cargando…" : ""}
             />
             <div className="text-[11px] text-gray-500">(filtra modelos)</div>
           </label>
@@ -513,9 +622,11 @@ export default function EditarPOPage() {
           <label className="space-y-1">
             <div className="text-xs text-gray-600">Supplier</div>
             <input
+              list="dl-po-suppliers"
               value={po.supplier || ""}
               onChange={(e) => setPO((prev) => ({ ...prev, supplier: e.target.value }))}
               className="border w-full px-2 py-2 rounded"
+              placeholder={suggestionsLoading ? "Cargando…" : ""}
             />
             <div className="text-[11px] text-gray-500">(filtra modelos)</div>
           </label>
@@ -523,9 +634,11 @@ export default function EditarPOPage() {
           <label className="space-y-1">
             <div className="text-xs text-gray-600">Factory</div>
             <input
+              list="dl-po-factories"
               value={po.factory || ""}
               onChange={(e) => setPO((prev) => ({ ...prev, factory: e.target.value }))}
               className="border w-full px-2 py-2 rounded"
+              placeholder={suggestionsLoading ? "Cargando…" : ""}
             />
             <div className="text-[11px] text-gray-500">(filtra modelos)</div>
           </label>
@@ -592,6 +705,7 @@ export default function EditarPOPage() {
           <div className="text-xs text-gray-600">
             Modelos cargados: <b>{modelos.length}</b>
             {modelosLoading ? <span className="ml-2 text-gray-400">· cargando…</span> : null}
+            {suggestionsError ? <span className="ml-2 text-red-500">· sug: {suggestionsError}</span> : null}
           </div>
         )}
       </div>
@@ -674,7 +788,6 @@ export default function EditarPOPage() {
                       if (modeloId) await loadVariantesForLine(i, modeloId);
                     }}
                     className="border w-full px-2 py-2 rounded bg-white"
-                    // ✅ NO lo deshabilitamos: si no, “parece” que no deja seleccionar nunca
                     disabled={false}
                   >
                     <option value="">-- Seleccionar modelo --</option>
@@ -766,21 +879,22 @@ export default function EditarPOPage() {
 
               <div className="grid md:grid-cols-6 gap-3 text-sm">
                 {[
-                  ["Ref", "reference"],
-                  ["Style", "style"],
-                  ["Color", "color"],
-                  ["Size", "size_run"],
-                  ["Category", "category"],
-                  ["Channel", "channel"],
-                ].map(([label, key]) => (
-                  <label key={key} className="space-y-1">
-                    <div className="text-xs text-gray-600">{label}</div>
+                  ["Ref", "reference", undefined],
+                  ["Style", "style", undefined],
+                  ["Color", "color", undefined],
+                  ["Size", "size_run", "dl-po-sizes"],
+                  ["Category", "category", "dl-po-categories"],
+                  ["Channel", "channel", "dl-po-channels"],
+                ].map(([label, key, listId]) => (
+                  <label key={key as string} className="space-y-1">
+                    <div className="text-xs text-gray-600">{label as string}</div>
                     <input
-                      value={(l as any)[key] || ""}
+                      {...(listId ? { list: listId as string } : {})}
+                      value={(l as any)[key as string] || ""}
                       onChange={(e) =>
                         setPO((prev) => {
                           const copy = [...(prev.lineas_pedido ?? [])];
-                          copy[i] = { ...copy[i], [key]: e.target.value };
+                          copy[i] = { ...copy[i], [key as string]: e.target.value };
                           return { ...prev, lineas_pedido: copy };
                         })
                       }
