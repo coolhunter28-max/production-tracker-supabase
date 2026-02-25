@@ -26,10 +26,7 @@ export async function GET(
   try {
     const varianteId = params.varianteId;
     if (!varianteId) {
-      return NextResponse.json(
-        { error: "varianteId is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "varianteId is required" }, { status: 400 });
     }
 
     const { data, error } = await supabase
@@ -55,10 +52,7 @@ export async function GET(
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data || []);
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || "Unknown error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });
   }
 }
 
@@ -69,10 +63,7 @@ export async function POST(
   try {
     const varianteId = params.varianteId;
     if (!varianteId) {
-      return NextResponse.json(
-        { error: "varianteId is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "varianteId is required" }, { status: 400 });
     }
 
     // 1) Cargar variante para obtener modelo_id + season (por defecto)
@@ -83,10 +74,7 @@ export async function POST(
       .single();
 
     if (vErr || !variante) {
-      return NextResponse.json(
-        { error: "Variante no existe" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Variante no existe" }, { status: 404 });
     }
 
     const body = await req.json();
@@ -106,14 +94,22 @@ export async function POST(
       return NextResponse.json({ error: "season is required" }, { status: 400 });
     }
 
-    const currency = String(body?.currency || "EUR").trim() || "EUR";
+    // ✅ Moneda por defecto: USD
+    const currency = String(body?.currency || "USD").trim() || "USD";
 
-    // ✅ Opción A: 1 precio por variante y día
+    // ✅ 1 precio por variante y día
     // Si no mandas valid_from -> usamos HOY
     const validFromRaw = String(body?.valid_from || "").trim();
     const valid_from = validFromRaw || todayISODate();
 
-    const notes = body?.notes === "" ? null : body?.notes ?? null;
+    // ✅ Registrar usuario (sin tocar BD): lo metemos en notes
+    const createdBy = String(body?.created_by || "").trim();
+
+    const notesRaw = body?.notes === "" ? null : body?.notes ?? null;
+    const notes =
+      createdBy
+        ? (notesRaw ? `${notesRaw}\ncreated_by=${createdBy}` : `created_by=${createdBy}`)
+        : notesRaw;
 
     const payload = {
       modelo_id: variante.modelo_id,
@@ -127,8 +123,6 @@ export async function POST(
     };
 
     // 2) UPSERT por (variante_id, valid_from)
-    // - Si existe (misma variante y mismo día): UPDATE
-    // - Si no existe: INSERT
     const { data, error } = await supabase
       .from("modelo_precios")
       .upsert([payload], { onConflict: "variante_id,valid_from" })
@@ -141,9 +135,6 @@ export async function POST(
 
     return NextResponse.json({ status: "ok", precio: data });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || "Unknown error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });
   }
 }
