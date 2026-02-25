@@ -1,111 +1,130 @@
-# 📘 Production Tracker — Documento Maestro v6.6
+Production Tracker — Documento Maestro v6.7
 
-> **Versión consolidada tras:**
-> - Cierre del Módulo QC (import + PDF report)
-> - Activación operativa BSG (pi_bsg, price_selling, amount_selling)
-> - ✅ Sincronización Master (Modelos/Variantes/Precios) desde POs existentes
-> - ✅ Enlace `lineas_pedido` ↔ Master + snapshot de precios usados
-> - ✅ UI Modelos con buscador + filtros desplegables + paginación
->
-> **Este documento es la fuente de verdad del proyecto a partir de este commit.**
+Versión consolidada tras:
 
----
+Cierre completo del módulo QC
 
-## 1. Objetivo del sistema
+Activación operativa BSG (compra / venta)
 
-El **Production Tracker** es una plataforma interna para gestionar de forma integral:
+UI Producción funcional con BSG
 
-- Pedidos (POs)
-- Líneas de pedido
-- Producción y muestras
-- Calidad (QC)
-- Alertas automatizadas
-- Importación / exportación de datos
-- Seguimiento por fábricas y suppliers
+✅ Sincronización Master (Modelos / Variantes / Precios) desde POs existentes
 
-Sustituye completamente los Excels operativos entre **España ↔ China**, manteniendo:
+✅ Snapshot histórico de precios por línea
 
-- Trazabilidad
-- Control de cambios
-- Históricos
-- Seguridad de datos
+✅ UI Modelos con buscador, filtros y paginación
 
----
+✅ Pricing, Márgenes y base analítica definidos
 
-## 2. Arquitectura Tecnológica
+Este documento es la fuente de verdad del proyecto a partir de este commit.
 
-### 2.1 Frontend
+1. Objetivo del sistema
 
-- **Next.js 14** (App Router)
-- React Server / Client Components
-- TailwindCSS
-- ShadCN UI
-- ExcelJS (lectura de Excel QC)
+Production Tracker es una plataforma interna para gestionar de forma integral:
 
-### 2.2 Backend
+Pedidos (POs)
 
-- API Routes (`/app/api/*`)
-- Runtime: Node.js
+Líneas de pedido
 
-### 2.3 Base de Datos
+Producción y muestras
 
-- Supabase (PostgreSQL)
-- UUIDs
-- Relaciones estrictas
-- Preparado para RLS / multiusuario
+Calidad (QC)
 
-### 2.4 Almacenamiento de archivos
+Pricing y márgenes
 
-- **Cloudflare R2**
+Alertas automatizadas
+
+Importación / exportación
+
+Reporting y análisis
+
+Sustituye completamente los Excels operativos entre España ↔ China, garantizando:
+
+Trazabilidad histórica
+
+Control de cambios
+
+Auditoría
+
+Escalabilidad analítica
+
+2. Arquitectura Tecnológica
+2.1 Frontend
+
+Next.js 14 (App Router)
+
+React Server / Client Components
+
+TailwindCSS
+
+ShadCN UI
+
+ExcelJS (QC import)
+
+2.2 Backend
+
+API Routes (/app/api/*)
+
+Runtime: Node.js
+
+2.3 Base de Datos
+
+Supabase (PostgreSQL)
+
+UUIDs
+
+Relaciones estrictas
+
+Preparado para RLS / multiusuario
+
+2.4 Almacenamiento
+
+Cloudflare R2 (S3 compatible)
 
 Usado para:
-- Imágenes QC (PPS y defectos)
-- PDFs de reportes QC
-- Archivos futuros
 
----
+Imágenes QC
 
-## 3. Estructura del Proyecto (actual)
+PDFs QC
 
+Imágenes de Modelos / Variantes
+
+3. Estructura del Proyecto (estado actual)
 src/
 ├─ app/
 │ ├─ produccion/
-│ │ ├─ dashboard/ ← 📌 LISTADO PRINCIPAL DE POs
+│ │ ├─ dashboard/        ← Listado principal de POs (BSG activo)
 │ │ ├─ alertas/
 │ │ ├─ import/
-│ │ └─ po/[id]/ ← ⏳ Vista detalle PO (pendiente)
+│ │ └─ po/[id]/editar/   ← Edición PO (manual + autofill)
 │ ├─ qc/
-│ │ ├─ page.tsx ← Listado QC + KPIs
-│ │ └─ inspections/
-│ │ └─ [id]/
-│ │ └─ report/ ← PDF QC
+│ │ ├─ page.tsx
+│ │ └─ inspections/[id]/report/
 │ ├─ desarrollo/
 │ │ └─ modelos/
-│ │ ├─ page.tsx ← ✅ Listado modelos (buscador + filtros + paginación)
-│ │ ├─ nuevo/
-│ │ └─ [id]/
+│ │   ├─ page.tsx        ← Listado con filtros + paginación
+│ │   ├─ nuevo/
+│ │   └─ [id]/
 │ ├─ api/
-│ │ ├─ import-csv/ ← 📌 Importador España (POs)
+│ │ ├─ import-csv/
 │ │ ├─ import-china/
 │ │ ├─ export-china/
 │ │ ├─ qc/
-│ │ │ ├─ upload/
-│ │ │ └─ inspections/
 │ │ ├─ generar-alertas/
-│ │ ├─ modelos/ ← ✅ GET con filtros+count+pag; POST crea modelo+1ª variante
-│ │ └─ modelos-filters/ ← ✅ dropdowns supplier/customer/factory
+│ │ ├─ modelos/
+│ │ └─ modelos-filters/
 │ └─ page.tsx
 │
 ├─ components/
-│ ├─ dashboard/ ← Tabla y filtros POs
-│ ├─ alertas/
-│ └─ qc/
+│ ├─ dashboard/
+│ ├─ qc/
+│ └─ ui/
 │
 ├─ lib/
+│ ├─ groupRowsByPO.ts
 │ ├─ csv-utils.ts
-│ ├─ groupRowsByPO.ts ← 📌 CONSTRUYE groupedPOs
-│ ├─ extractExcelImages.ts
-│ └─ r2.ts
+│ ├─ r2.ts
+│ └─ extractExcelImages.ts
 │
 ├─ services/
 │ ├─ import-csv.ts
@@ -113,264 +132,296 @@ src/
 │ └─ pos.ts
 │
 └─ types/
-└─ index.ts
+4. Modelo de Datos (visión funcional)
+4.1 pos
 
-
----
-
-## 4. Modelo de Base de Datos (resumen)
-
-### pos
 Cabecera del pedido.
 
-### lineas_pedido
-
-Campos clave:
-- reference
-- style
-- color
-- qty
-- price (coste)
-- amount
-
-**Campos BSG (operativa desarrollo):**
-- `pi_bsg`
-- `price_selling`
-- `amount_selling`
-
-> Estos campos **ya se importan correctamente desde CSV** y están en Supabase.
-> ✅ **Ya pintados en la UI** (listados y detalle PO / líneas), se usan para cálculos comerciales.
-
-✅ **Nuevo: enlace con Master**
-- `modelo_id uuid`  → referencia a `modelos.id`
-- `variante_id uuid` → referencia a `modelo_variantes.id`
-
-✅ **Nuevo: snapshot de precios usados por línea** (histórico inmutable)
-- `master_buy_price_used numeric`
-- `master_sell_price_used numeric`
-- `master_currency_used text`
-- `master_valid_from_used date`
-- `master_price_id_used uuid` → referencia a `modelo_precios.id`
-- `master_price_source text` (ej: `autofill`)
-
-> Snapshot aplicado automáticamente a líneas existentes:
-> - total_lineas = 651
-> - con_snapshot = 503
-> - sin_snapshot = 148
->
-> Las líneas sin snapshot suelen ser: líneas sin precio master disponible (o sin match completo).
+4.2 lineas_pedido
 
-### muestras
+Campos operativos:
 
-- CFMS
-- COUNTERS
-- FITTINGS
-- PPS
-- TESTINGS
-- SHIPPINGS
-
-Creación automática desde importador España.
+style
 
----
-
-## 4A. Módulo Desarrollo — Modelos, Variantes, Composición, Precios e Imágenes
+reference
 
-Este bloque añade un módulo “catálogo” para gestionar **Modelos** y sus **Variantes** (por Season + Color), y dentro de cada variante:
-- **Composición** (materiales por `kind` + `slot`)
-- **Precios** (histórico por fecha de validez)
-- **Imágenes** (fotos ligadas a `variante_id`, no “random”)
+color
 
-### 4A.1 Reglas de negocio
+qty
 
-**Modelos**
-- Un modelo tiene **1 imagen principal** (kind=`main`).
-- La “galería” ya **no vive en el modelo** (para evitar imágenes sin contexto).
+price
 
-**Variantes**
-- Un modelo puede tener N variantes.
-- Una variante se identifica por `(modelo_id, season, color)` (único).
-- Las imágenes “de producto” viven en la variante y quedan ligadas a `variante_id`.
+amount
 
-**Composición**
-- Cada registro es un “componente” de la variante: `kind` + `slot`.
-- Único por `(variante_id, kind, slot)` para evitar duplicados.
+Campos BSG:
 
-**Precios**
-- Regla de integridad actual: **1 precio por variante y día** (unique: `variante_id + valid_from`).
-- Si necesitas corregir el precio el mismo día: **editar** (PATCH) el registro del día (no insertar otro).
+pi_bsg
 
-✅ **Aclaración operativa actual (muy importante): moneda**
-- Toda la operativa de precios es en **USD**
-- `modelo_precios.currency` tiene default = **USD**
-- El volcado masivo desde POs usa USD
+price_selling
 
-✅ **Aclaración técnica importante sobre unicidad en `modelo_precios`**
-- Existe constraint/unique relevante: `(variante_id, valid_from)`
-- Esto implica que el conflicto se gestiona por `(variante_id, valid_from)` (no por season)
+amount_selling
 
----
+Enlace Master
 
-## 4B. Sincronización Master desde POs existentes (NUEVO)
+modelo_id
 
-Durante fase de desarrollo es habitual cargar datos masivos (CSV/Excel) antes de estar 100% operativos en el sistema.
-Por eso se ha implementado un flujo seguro para:
+variante_id
 
-1) Crear modelos faltantes desde `lineas_pedido.style`
-2) Crear/actualizar variantes desde `lineas_pedido` + `pos.season` + `lineas_pedido.color`
-3) Vincular `lineas_pedido` con `modelo_id` y `variante_id`
-4) Volcar precios al master desde `lineas_pedido.price` (+ opcional sell)
-5) Guardar snapshot de precio usado en cada línea (`lineas_pedido.master_*`)
+Snapshot histórico de precios (clave del sistema)
 
-### 4B.1 Resultado tras la última sincronización
-- Modelos creados desde POs: ✅
-- Variantes creadas/actualizadas (latest po_date por color/season): ✅
-- Status de modelos: ✅ (modelos provenientes de POs se han marcado como `activo`)
-- Precios master importados en USD: ✅
-- Snapshot de precio aplicado en líneas: ✅ (503 con snapshot; 148 pendientes)
+master_buy_price_used
 
----
+master_sell_price_used
 
-## 4C. UI Modelos mejorada (NUEVO)
+master_currency_used
 
-El listado de modelos era demasiado largo y poco usable.
-Se ha actualizado la pantalla **/desarrollo/modelos** para incluir:
+master_valid_from_used
 
-- Buscador: `style` y `reference`
-- Filtros desplegables:
-  - `supplier`
-  - `customer`
-  - `factory`
-- Status desplegable (enum):
-  - desarrollo | activo | en_fabricacion | cancelado
-- Paginación:
-  - `limit/offset` con `count` (para rendimiento)
+master_price_id_used
 
-### Endpoints implicados
+master_price_source (autofill | manual | import)
 
-- `GET /api/modelos`
-  - Soporta filtros + paginación
-  - Devuelve: `{ data, count, limit, offset }`
+📌 El snapshot es inmutable salvo edición consciente.
 
-- `GET /api/modelos-filters`
-  - Devuelve listas únicas:
-  - `{ suppliers, customers, factories }`
+5. Master de Modelos (Módulo Desarrollo)
+5.1 Modelos
 
----
+Identificados por style
 
-## 5. Importador CSV España (POs)
+Imagen principal (kind=main)
 
-**Estado:** ✅ COMPLETADO Y ESTABLE
+Datos comerciales base
 
-### Flujo
-1. Upload CSV
-2. Validate
-3. Preview
-4. Confirm
+5.2 Variantes
 
-### Lógica clave
+Identificadas por (modelo_id, season, color)
 
-- Normalización EU
-- Agrupación por PO → `groupRowsByPO.ts`
-- Regeneración completa (opción B)
-- Creación automática de muestras
+Factory puede variar por season
 
-📌 **`groupRowsByPO.ts`** es el archivo que:
-- Lee columnas CSV
-- Construye `header` + `lines`
-- Debe mapear **pi_bsg / price_selling / amount_selling**
+Imágenes viven en la variante
 
-👉 Si un campo llega `null`, el origen SIEMPRE está aquí.
+5.3 Precios (modelo_precios)
 
----
+Buy / Sell
 
-## 6. Importador China
+Por variante
 
-**Estado:** ✅ COMPLETO
+Históricos por valid_from
 
-- Actualiza fechas
-- No crea datos nuevos
-- Flujo seguro ida/vuelta
+Moneda: USD
 
----
+Constraint clave:
 
-## 7. Exportador China
+unique (variante_id, valid_from)
 
-**Estado:** ✅ COMPLETO (v2)
+➡️ Para corregir precio el mismo día: PATCH, no INSERT.
 
-- Selección por season
-- Funciona con una o múltiples seasons
-- Excel bloqueado
+6. Pricing y Márgenes (definitivo)
+6.1 Operativas coexistentes
+Xiamen DIC — Comisión pura
 
----
+price = venta
 
-## 8. Sistema de Alertas
+amount = total venta
 
-**Estado:** ✅ OPERATIVO
+margen_xiamen = amount * 0.10
 
-Genera alertas por:
-- Retrasos
-- Fechas vencidas
-- Muestras pendientes
+No existe coste real en sistema.
 
-Ruta:
-`/api/generar-alertas`
+BSG — Compra / Venta
 
----
+price = buy_price
 
-## 9. Dashboard Producción (POs)
+amount = buy_amount
 
-**Estado:** ⚠️ FUNCIONAL, PENDIENTE BSG
+price_selling
 
-📌 **Este es el módulo que pinta los pedidos (POs):**
-- Página: `src/app/produccion/dashboard/page.tsx`
-- Componentes: `src/components/dashboard/*`
+amount_selling
 
-Pendiente aquí:
-- Mostrar columnas:
-  - pi_bsg
-  - price_selling
-  - amount_selling
-- Lógica condicional:
-  - Supplier = Xiamen → intermediario
-  - Supplier = BSG → desarrollo completo
+Margen base:
 
----
+amount_selling - amount
 
-## 10. MÓDULO QC — ESTADO DEFINITIVO v1
+Comisión opcional:
 
-(Se mantiene como en v6.5)
+amount * 0.10
 
----
+Margen total:
 
-## 11. Estado Global del Proyecto
+(amount_selling - amount) + comisión
 
-| Módulo | Estado |
-|------|------|
-| Importador CSV España | ✔ |
-| Importador China | ✔ |
-| Exportador China | ✔ |
-| Alertas | ✔ |
-| Dashboard POs | ⚠️ |
-| QC completo | ✔ |
-| Desarrollo modelos/variantes | ✔ |
-| ✅ Sync Master desde POs + snapshot | ✔ |
-| ✅ UI Modelos filtros/paginación | ✔ |
+⚠️ La comisión debe poder activarse/desactivarse por reglas futuras.
 
----
+7. Flujo Master → Pedido (autofill)
 
-## 12. Próximo Bloque de Trabajo
+Usuario selecciona:
 
-### 12.1 Conectar Producción (lineas_pedido) con Master (autofill)
-Objetivo:
-- Añadir/usar `modelo_id` y `variante_id` en `lineas_pedido`
-- En UI de líneas:
-  - seleccionar modelo
-  - resolver variante por season/color
-  - autofill de precio vigente master
-  - guardar snapshot en `lineas_pedido.master_*`
-- Gestionar excepciones:
-  - listado de líneas sin snapshot (148)
+Modelo
 
----
+Variante (season + color)
 
-Documento Maestro **v6.6** (punto de corte estable).
+Sistema:
+
+Resuelve factory
+
+Busca precio vigente (valid_from <= today)
+
+Propone buy / sell según operativa
+
+Usuario:
+
+Acepta o modifica
+
+Sistema:
+
+Guarda snapshot en lineas_pedido
+
+Marca master_price_source
+
+📌 Cambios futuros en master NO afectan a pedidos existentes.
+
+8. Importadores
+8.1 Importador CSV España
+
+Estado: ✅ estable
+
+Agrupa por PO (groupRowsByPO.ts)
+
+Crea:
+
+POs
+
+Líneas
+
+Muestras
+
+Importa BSG fields correctamente
+
+8.2 Importador China
+
+Estado: ✅ estable
+
+Solo actualiza fechas
+
+8.3 Exportador China
+
+Estado: ✅ v2 estable
+
+Multi-season
+
+Excel bloqueado
+
+9. QC (v1 definitivo)
+
+Subida imágenes R2
+
+Reportes PDF
+
+Inspecciones y defectos
+
+KPIs
+
+📌 Módulo cerrado funcionalmente.
+
+10. Dashboard Producción
+
+Estado: ✅ operativo (BSG incluido)
+
+Listado POs
+
+Totales
+
+Preview PO
+
+BSG fields visibles
+
+Cálculos correctos
+
+11. Calculadora de Precios y Márgenes (siguiente bloque)
+
+La calculadora será:
+
+Herramienta operativa
+
+Simulador
+
+Generador opcional de nuevos precios master
+
+Funciones:
+
+Partir de buy_price
+
+Aplicar:
+
+margen deseado
+
+comisión
+
+redondeos
+
+Generar:
+
+selling_price sugerido
+
+margen esperado
+
+Resultados:
+
+Guardar en master o
+
+Usar solo como simulación
+
+⚠️ Nunca recalcula histórico.
+
+12. Sistema de Cubos (visión analítica)
+
+Gracias al snapshot, el sistema soporta analítica real.
+
+Dimensiones
+
+Supplier
+
+Customer
+
+Factory
+
+Season
+
+Modelo / Variante
+
+Operativa
+
+Fechas
+
+Métricas
+
+Ventas
+
+Compras
+
+Márgenes
+
+Comisión
+
+Demoras
+
+Incidencias
+
+📌 Los cubos no recalculan, solo leen hechos históricos.
+
+13. Estado Global
+Módulo	Estado
+Importadores	✔
+QC	✔
+Master Modelos	✔
+Snapshot precios	✔
+UI Modelos	✔
+Producción BSG	✔
+Pricing definido	✔
+Base analítica	✔
+14. Punto de corte
+
+Documento Maestro v6.7
+✔ Proyecto estable
+✔ Listo para commit
+✔ Base sólida para calculadora y reporting

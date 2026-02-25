@@ -29,6 +29,7 @@ type Filters = {
   factory: string;
   season: string;
   style: string;
+  estado: string; // ✅ IMPORTANTE: existe en FiltersBox (se ve en tu UI)
   search: string;
 };
 
@@ -38,12 +39,17 @@ const DEFAULT_FILTERS: Filters = {
   factory: "todos",
   season: "todos",
   style: "todos",
+  estado: "todos",
   search: "",
 };
 
 function getStylesFromPO(po: PO): string[] {
   const list = (po as any)?.styles;
   return Array.isArray(list) ? list.filter(Boolean) : [];
+}
+
+function safeStr(v: any): string {
+  return String(v ?? "").trim();
 }
 
 // -----------------------------------------------------
@@ -105,8 +111,7 @@ export default function DashboardPage() {
   );
 
   const seasons = useMemo(
-    () =>
-      [...new Set(pos.map((p) => (p as any)?.season).filter(Boolean))].sort(),
+    () => [...new Set(pos.map((p) => (p as any)?.season).filter(Boolean))].sort(),
     [pos]
   );
 
@@ -121,26 +126,39 @@ export default function DashboardPage() {
   useEffect(() => {
     let result = pos;
 
-    if (filters.customer !== "todos")
+    if (filters.customer !== "todos") {
       result = result.filter((p) => p.customer === filters.customer);
+    }
 
-    if (filters.supplier !== "todos")
+    if (filters.supplier !== "todos") {
       result = result.filter((p) => p.supplier === filters.supplier);
+    }
 
-    if (filters.factory !== "todos")
+    if (filters.factory !== "todos") {
       result = result.filter((p) => p.factory === filters.factory);
+    }
 
-    if (filters.season !== "todos")
+    if (filters.season !== "todos") {
       result = result.filter((p) => (p as any)?.season === filters.season);
+    }
 
     if (filters.style !== "todos") {
       result = result.filter((p) => getStylesFromPO(p).includes(filters.style));
     }
 
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
+    // ✅ filtro por estado (el que existe en tu UI)
+    if (filters.estado !== "todos") {
       result = result.filter((p) => {
-        const test = (s?: string) => (s || "").toLowerCase().includes(q);
+        const e = getEstadoPO(p);
+        return e?.estado === filters.estado;
+      });
+    }
+
+    // ✅ búsqueda robusta (siempre string)
+    const q = safeStr((filters as any)?.search).toLowerCase();
+    if (q) {
+      result = result.filter((p) => {
+        const test = (s?: any) => safeStr(s).toLowerCase().includes(q);
         const styles = getStylesFromPO(p).join(" ").toLowerCase();
 
         return (
@@ -197,7 +215,6 @@ export default function DashboardPage() {
         return msg;
       }
 
-      // Resumen corto para ver directamente en la tarjeta
       const resumenCorto =
         `Importación completada:\n` +
         `• POs encontrados: ${json.pos_encontrados}\n` +
@@ -208,7 +225,6 @@ export default function DashboardPage() {
 
       setImportChinaMsg(resumenCorto);
 
-      // Informe completo (el que se muestra en el modal + TXT)
       const cambios: string[] = json.detalles?.cambios || [];
       const avisos: string[] = json.avisos || [];
       const errores: string[] = json.errores || [];
@@ -223,23 +239,16 @@ export default function DashboardPage() {
         `Errores: ${errores.length}`,
         "",
         "=== CAMBIOS ===",
-        ...(cambios.length > 0
-          ? cambios.map((c) => `• ${c}`)
-          : ["(Sin cambios registrados)"]),
+        ...(cambios.length > 0 ? cambios.map((c) => `• ${c}`) : ["(Sin cambios registrados)"]),
         "",
         "=== AVISOS ===",
-        ...(avisos.length > 0
-          ? avisos.map((a) => `• ${a}`)
-          : ["(Sin avisos)"]),
+        ...(avisos.length > 0 ? avisos.map((a) => `• ${a}`) : ["(Sin avisos)"]),
         "",
         "=== ERRORES ===",
-        ...(errores.length > 0
-          ? errores.map((e) => `• ${e}`)
-          : ["(Sin errores)"]),
+        ...(errores.length > 0 ? errores.map((e) => `• ${e}`) : ["(Sin errores)"]),
       ];
 
-      const report = reportLines.join("\n");
-      return report; // 🔥 esto lo recibe el componente ImportChina y abre el modal
+      return reportLines.join("\n");
     } finally {
       setImportingChina(false);
     }
@@ -249,18 +258,10 @@ export default function DashboardPage() {
   // FILTRO DEL GRÁFICO
   // -----------------------------------------------------
   const posForChart = pos
-    .filter(
-      (p) => selectedSeason === "todas" || (p as any)?.season === selectedSeason
-    )
-    .filter(
-      (p) => selectedSupplier === "todos" || p.supplier === selectedSupplier
-    )
-    .filter(
-      (p) => selectedFactory === "todos" || p.factory === selectedFactory
-    )
-    .filter(
-      (p) => selectedCustomer === "todos" || p.customer === selectedCustomer
-    );
+    .filter((p) => selectedSeason === "todas" || (p as any)?.season === selectedSeason)
+    .filter((p) => selectedSupplier === "todos" || p.supplier === selectedSupplier)
+    .filter((p) => selectedFactory === "todos" || p.factory === selectedFactory)
+    .filter((p) => selectedCustomer === "todos" || p.customer === selectedCustomer);
 
   const chartData = getDashboardEstados(posForChart);
 
@@ -276,17 +277,14 @@ export default function DashboardPage() {
   // -----------------------------------------------------
   return (
     <div className="container mx-auto py-6 space-y-6">
-      {/* HEADER */}
       <DashboardHeader />
 
-      {/* TABS */}
       <Tabs defaultValue="dashboard" className="space-y-4">
         <TabsList>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="alertas">Alertas</TabsTrigger>
         </TabsList>
 
-        {/* --- TAB: DASHBOARD --- */}
         <TabsContent value="dashboard" className="space-y-6">
           <DashboardCards
             totalPOs={pos.length}
@@ -295,12 +293,10 @@ export default function DashboardPage() {
             totalFactories={factories.length}
           />
 
-          {/* FILTROS DEL GRÁFICO */}
           <div className="bg-white p-4 rounded-lg shadow space-y-4">
             <h2 className="text-lg font-semibold">Estado general de los POs</h2>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* Season */}
               <div>
                 <label className="text-sm font-medium">Season:</label>
                 <select
@@ -317,7 +313,6 @@ export default function DashboardPage() {
                 </select>
               </div>
 
-              {/* Supplier */}
               <div>
                 <label className="text-sm font-medium">Supplier:</label>
                 <select
@@ -334,7 +329,6 @@ export default function DashboardPage() {
                 </select>
               </div>
 
-              {/* Factory */}
               <div>
                 <label className="text-sm font-medium">Factory:</label>
                 <select
@@ -351,7 +345,6 @@ export default function DashboardPage() {
                 </select>
               </div>
 
-              {/* Customer */}
               <div>
                 <label className="text-sm font-medium">Customer:</label>
                 <select
@@ -374,7 +367,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* IMPORT / EXPORT / FILTERS */}
           <ExportChina seasons={seasons} />
 
           <ImportChina
@@ -392,14 +384,28 @@ export default function DashboardPage() {
             seasons={seasons}
             styles={availableStyles}
             filters={filters}
-            onChange={setFilters}
+            onChange={(next: any) => {
+              // ✅ soporta si FiltersBox llama con objeto O con updater(prev=>next)
+              setFilters((prev) => {
+                const computed = typeof next === "function" ? next(prev) : next;
+
+                return {
+                  customer: String(computed?.customer ?? prev.customer ?? "todos"),
+                  supplier: String(computed?.supplier ?? prev.supplier ?? "todos"),
+                  factory: String(computed?.factory ?? prev.factory ?? "todos"),
+                  season: String(computed?.season ?? prev.season ?? "todos"),
+                  style: String(computed?.style ?? prev.style ?? "todos"),
+                  estado: String(computed?.estado ?? prev.estado ?? "todos"),
+                  search: String(computed?.search ?? prev.search ?? ""),
+                };
+              });
+            }}
             onClear={() => setFilters(DEFAULT_FILTERS)}
           />
 
           <POsTable pos={filteredPOs} />
         </TabsContent>
 
-        {/* --- TAB: ALERTAS --- */}
         <TabsContent value="alertas" className="space-y-4">
           <AlertsBox />
         </TabsContent>

@@ -1,20 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import React from "react";
 
 type Filters = {
   customer: string;
@@ -22,8 +8,19 @@ type Filters = {
   factory: string;
   season: string;
   style: string;
-  estado?: string;
+  estado: string;
   search: string;
+};
+
+type Props = {
+  customers: string[];
+  suppliers: string[];
+  factories: string[];
+  seasons: string[];
+  styles: string[];
+  filters: Filters;
+  onChange: React.Dispatch<React.SetStateAction<Filters>> | ((next: any) => void);
+  onClear: () => void;
 };
 
 export default function FiltersBox({
@@ -32,137 +29,145 @@ export default function FiltersBox({
   factories,
   seasons,
   styles,
-  estados = [],   // <--- fallback seguro (muy importante)
   filters,
   onChange,
   onClear,
-}: {
-  customers: string[];
-  suppliers: string[];
-  factories: string[];
-  seasons: string[];
-  styles: string[];
-  estados?: string[];    // <--- lo hacemos opcional
-  filters: Filters;
-  onChange: (field: keyof Filters, value: string) => void;
-  onClear: () => void;
-}) {
+}: Props) {
+  // ✅ helper: siempre actualiza con updater (nunca manda el evento al parent)
+  const setField = (key: keyof Filters, value: string) => {
+    const v = String(value ?? "");
+    if (typeof onChange === "function") {
+      (onChange as any)((prev: Filters) => ({ ...prev, [key]: v }));
+    }
+  };
+
+  const safe = (v: any) => String(v ?? "");
+
+  // Opciones de estado (ajusta si tus labels exactas difieren)
+  const estadoOptions = [
+    "todos",
+    "Pendiente",
+    "Enviado",
+    "Confirmado",
+    "Producción",
+    "Shipment",
+    "Finalizado",
+    "Cancelado",
+  ];
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Filtros</CardTitle>
-      </CardHeader>
+    <div className="bg-white p-4 rounded-lg shadow space-y-4">
+      <h2 className="text-lg font-semibold">Filtros</h2>
 
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-
-          {/* CUSTOMER */}
-          <div>
-            <label className="text-sm">Customer</label>
-            <Select
-              value={filters.customer}
-              onValueChange={(v) => onChange("customer", v)}
-            >
-              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                {customers.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* SUPPLIER */}
-          <div>
-            <label className="text-sm">Supplier</label>
-            <Select
-              value={filters.supplier}
-              onValueChange={(v) => onChange("supplier", v)}
-            >
-              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                {suppliers.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* FACTORY */}
-          <div>
-            <label className="text-sm">Factory</label>
-            <Select
-              value={filters.factory}
-              onValueChange={(v) => onChange("factory", v)}
-            >
-              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                {factories.map((f) => (
-                  <SelectItem key={f} value={f}>{f}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* SEASON */}
-          <div>
-            <label className="text-sm">Season</label>
-            <Select
-              value={filters.season}
-              onValueChange={(v) => onChange("season", v)}
-            >
-              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todas</SelectItem>
-                {seasons.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* ESTADO (seguro) */}
-          <div>
-            <label className="text-sm">Estado</label>
-            <Select
-              value={filters.estado ?? "todos"}
-              onValueChange={(v) => onChange("estado", v)}
-            >
-              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-
-                {(estados ?? []).map((e) => (
-                  <SelectItem key={e} value={e}>
-                    <div className="flex items-center gap-2">
-                      <span>{e}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* SEARCH */}
-          <div>
-            <label className="text-sm">Buscar</label>
-            <Input
-              value={filters.search}
-              onChange={(e) => onChange("search", e.target.value)}
-              placeholder="PO / Supplier / Customer..."
-            />
-          </div>
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        {/* Customer */}
+        <div>
+          <label className="text-sm font-medium">Customer</label>
+          <select
+            className="w-full border px-3 py-2 rounded"
+            value={safe(filters.customer) || "todos"}
+            onChange={(e) => setField("customer", e.target.value)}
+          >
+            <option value="todos">Todos</option>
+            {customers.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="mt-3">
-          <Button variant="secondary" onClick={onClear}>
-            Limpiar filtros
-          </Button>
+        {/* Supplier */}
+        <div>
+          <label className="text-sm font-medium">Supplier</label>
+          <select
+            className="w-full border px-3 py-2 rounded"
+            value={safe(filters.supplier) || "todos"}
+            onChange={(e) => setField("supplier", e.target.value)}
+          >
+            <option value="todos">Todos</option>
+            {suppliers.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
         </div>
-      </CardContent>
-    </Card>
+
+        {/* Factory */}
+        <div>
+          <label className="text-sm font-medium">Factory</label>
+          <select
+            className="w-full border px-3 py-2 rounded"
+            value={safe(filters.factory) || "todos"}
+            onChange={(e) => setField("factory", e.target.value)}
+          >
+            <option value="todos">Todos</option>
+            {factories.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Season */}
+        <div>
+          <label className="text-sm font-medium">Season</label>
+          <select
+            className="w-full border px-3 py-2 rounded"
+            value={safe(filters.season) || "todos"}
+            onChange={(e) => setField("season", e.target.value)}
+          >
+            <option value="todos">Todas</option>
+            {seasons.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Estado */}
+        <div>
+          <label className="text-sm font-medium">Estado</label>
+          <select
+            className="w-full border px-3 py-2 rounded"
+            value={safe(filters.estado) || "todos"}
+            onChange={(e) => setField("estado", e.target.value)}
+          >
+            <option value="todos">Todos</option>
+            {estadoOptions
+              .filter((x) => x !== "todos")
+              .map((e) => (
+                <option key={e} value={e}>
+                  {e}
+                </option>
+              ))}
+          </select>
+        </div>
+
+        {/* Buscar */}
+        <div>
+          <label className="text-sm font-medium">Buscar</label>
+          <input
+            className="w-full border px-3 py-2 rounded"
+            value={safe(filters.search)}
+            onChange={(e) => setField("search", e.target.value)}
+            placeholder="PO / customer / supplier / style..."
+          />
+        </div>
+      </div>
+
+      <div>
+        <button
+          type="button"
+          onClick={onClear}
+          className="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm"
+        >
+          Limpiar filtros
+        </button>
+      </div>
+    </div>
   );
 }
