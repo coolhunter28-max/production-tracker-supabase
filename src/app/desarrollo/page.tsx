@@ -34,12 +34,16 @@ export default function DesarrolloHome() {
           </div>
         </Link>
 
-        <div className="block bg-white p-5 rounded-xl shadow border opacity-60">
+        {/* NUEVO: Calculadora */}
+        <Link
+          href="/desarrollo/calculadora"
+          className="block bg-white p-5 rounded-xl shadow border hover:shadow-md transition"
+        >
           <div className="text-lg font-semibold">🧮 Calculadora</div>
           <div className="text-sm text-gray-600">
-            Coste → precio venta, margen bruto, histórico… (próximo)
+            Coste → precio venta, margen (sobre coste), comisión y redondeo
           </div>
-        </div>
+        </Link>
 
         <div className="block bg-white p-5 rounded-xl shadow border opacity-60">
           <div className="text-lg font-semibold">📊 Informes</div>
