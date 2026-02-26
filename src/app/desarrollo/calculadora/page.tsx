@@ -43,12 +43,35 @@ type Variante = {
   status?: string | null;
 };
 
+type Cotizacion = {
+  id: string;
+  modelo_id: string | null;
+  variante_id: string;
+  currency: string;
+  buy_price: number;
+  sell_price: number;
+  margin_pct: number | null; // decimal
+  commission_enabled: boolean;
+  commission_rate: number | null; // decimal
+  rounding_step: number | null;
+  status: string;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
 function todayYYYYMMDD() {
   const d = new Date();
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
 }
 
 export default function CalculadoraPage() {
@@ -58,11 +81,11 @@ export default function CalculadoraPage() {
   const [qty, setQty] = React.useState("1");
 
   const [commissionEnabled, setCommissionEnabled] = React.useState(false);
-  const [commissionRate, setCommissionRate] = React.useState("10");
+  const [commissionRate, setCommissionRate] = React.useState("10"); // %
 
   const [mode, setMode] = React.useState<"M2P" | "P2M">("M2P");
 
-  const [targetMarginPct, setTargetMarginPct] = React.useState("20");
+  const [targetMarginPct, setTargetMarginPct] = React.useState("20"); // %
   const [sellPrice, setSellPrice] = React.useState("0");
 
   // ✅ Redondeo fijo 0.05
@@ -71,7 +94,7 @@ export default function CalculadoraPage() {
   // Cálculos base
   const cost = Math.max(0, toNumber(buyPrice, 0));
   const q = Math.max(1, Math.floor(toNumber(qty, 1)));
-  const rate = Math.max(0, toNumber(commissionRate, 10)) / 100;
+  const rate = Math.max(0, toNumber(commissionRate, 10)) / 100; // decimal
 
   const buyAmount = cost * q;
   const commission = commissionEnabled ? buyAmount * rate : 0;
@@ -81,10 +104,10 @@ export default function CalculadoraPage() {
 
   const marginBase = sellAmount - buyAmount;
   const marginTotal = marginBase + commission;
-  const marginPctB = buyAmount > 0 ? marginTotal / buyAmount : 0;
+  const marginPctB = buyAmount > 0 ? marginTotal / buyAmount : 0; // decimal
 
   // Margen -> precio (margen % sobre coste)
-  const targetPct = Math.max(0, toNumber(targetMarginPct, 0)) / 100;
+  const targetPct = Math.max(0, toNumber(targetMarginPct, 0)) / 100; // decimal
   const commissionPerUnit = commissionEnabled ? cost * rate : 0;
   const rawSell = cost * (1 + targetPct) - commissionPerUnit;
   const suggestedSell = roundToStep(Math.max(0, rawSell), roundingStep);
@@ -114,6 +137,16 @@ export default function CalculadoraPage() {
   >("idle");
   const [saveMessage, setSaveMessage] = React.useState<string>("");
 
+  // ===== Cotizaciones =====
+  const [quoteStatus, setQuoteStatus] = React.useState("enviada");
+  const [quoteNotes, setQuoteNotes] = React.useState("");
+  const [quotes, setQuotes] = React.useState<Cotizacion[]>([]);
+  const [quotesLoading, setQuotesLoading] = React.useState(false);
+  const [quoteSaveStatus, setQuoteSaveStatus] = React.useState<
+    "idle" | "saving" | "ok" | "error"
+  >("idle");
+  const [quoteSaveMessage, setQuoteSaveMessage] = React.useState("");
+
   async function buscarModelos() {
     setSaveStatus("idle");
     setSaveMessage("");
@@ -123,6 +156,7 @@ export default function CalculadoraPage() {
     setSelectedModeloId("");
     setSelectedVarianteId("");
     setVariantes([]);
+    setQuotes([]);
 
     try {
       const q = modeloQuery.trim();
@@ -145,11 +179,12 @@ export default function CalculadoraPage() {
     setVariantesLoading(true);
     setSelectedVarianteId("");
     setVariantes([]);
+    setQuotes([]);
     setSaveStatus("idle");
     setSaveMessage("");
 
     try {
-      // ✅ OJO: este endpoint debe existir: GET /api/variantes?modelo_id=...
+      // ✅ Endpoint: GET /api/variantes?modelo_id=...
       const res = await fetch(
         `/api/variantes?modelo_id=${encodeURIComponent(modeloId)}`
       );
@@ -168,7 +203,27 @@ export default function CalculadoraPage() {
     }
   }
 
-  async function guardarPrecio() {
+  async function cargarCotizaciones(varianteId: string) {
+    setQuotesLoading(true);
+    setQuoteSaveStatus("idle");
+    setQuoteSaveMessage("");
+    try {
+      const res = await fetch(
+        `/api/cotizaciones?variante_id=${encodeURIComponent(varianteId)}&limit=30`
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Error cargando cotizaciones");
+      setQuotes(Array.isArray(json?.data) ? json.data : []);
+    } catch (e: any) {
+      setQuotes([]);
+      setQuoteSaveStatus("error");
+      setQuoteSaveMessage(e?.message || "Error cargando cotizaciones");
+    } finally {
+      setQuotesLoading(false);
+    }
+  }
+
+  async function guardarPrecioMaster() {
     setSaveStatus("idle");
     setSaveMessage("");
 
@@ -193,8 +248,6 @@ export default function CalculadoraPage() {
         created_by: (userName || "").trim() || "antonio",
       };
 
-      // ✅ Endpoint existente:
-      // POST /api/variantes/[varianteId]/precios
       const res = await fetch(`/api/variantes/${selectedVarianteId}/precios`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -211,6 +264,56 @@ export default function CalculadoraPage() {
     } catch (e: any) {
       setSaveStatus("error");
       setSaveMessage(e?.message || "Error guardando precio");
+    }
+  }
+
+  async function guardarCotizacion() {
+    setQuoteSaveStatus("idle");
+    setQuoteSaveMessage("");
+
+    if (!selectedVarianteId) {
+      setQuoteSaveStatus("error");
+      setQuoteSaveMessage("Selecciona una variante antes de guardar la cotización.");
+      return;
+    }
+
+    setQuoteSaveStatus("saving");
+    try {
+      const body = {
+        variante_id: selectedVarianteId,
+        modelo_id: selectedModeloId || null,
+        currency: "USD",
+        buy_price: cost,
+        sell_price: sellToSave,
+
+        // trazabilidad de cómo se calculó
+        margin_pct: mode === "M2P" ? targetPct : marginPctB, // decimal
+        commission_enabled: commissionEnabled,
+        commission_rate: commissionEnabled ? rate : null, // decimal
+        rounding_step: roundingStep,
+
+        status: quoteStatus,
+        notes: quoteNotes || null,
+        created_by: (userName || "").trim() || "antonio",
+      };
+
+      const res = await fetch("/api/cotizaciones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Error guardando cotización");
+
+      setQuoteSaveStatus("ok");
+      setQuoteSaveMessage("✅ Cotización guardada.");
+      setQuoteNotes("");
+
+      await cargarCotizaciones(selectedVarianteId);
+    } catch (e: any) {
+      setQuoteSaveStatus("error");
+      setQuoteSaveMessage(e?.message || "Error guardando cotización");
     }
   }
 
@@ -241,8 +344,7 @@ export default function CalculadoraPage() {
 
         {operativa === "XIAMEN" && (
           <div className="text-sm text-gray-600">
-            En Xiamen China marca el precio. Aquí actuamos como comerciales a
-            comisión.
+            En Xiamen China marca el precio. Aquí actuamos como comerciales a comisión.
           </div>
         )}
       </div>
@@ -327,12 +429,8 @@ export default function CalculadoraPage() {
                 </div>
 
                 <div className="bg-gray-50 p-4 rounded border">
-                  <div className="text-sm">
-                    Selling price sugerido (redondeado 0.05) — $
-                  </div>
-                  <div className="text-xl font-bold">
-                    {formatMoney(suggestedSell)}
-                  </div>
+                  <div className="text-sm">Selling price sugerido (redondeado 0.05) — $</div>
+                  <div className="text-xl font-bold">{formatMoney(suggestedSell)}</div>
                 </div>
               </>
             )}
@@ -366,10 +464,11 @@ export default function CalculadoraPage() {
             </div>
           </div>
 
-          {/* Guardar */}
+          {/* Guardar master */}
           <div className="bg-white p-5 rounded-xl shadow border space-y-4">
-            <div className="font-semibold">
-              Confirmar y guardar en master (modelo_precios)
+            <div className="font-semibold">Confirmar y guardar en master (modelo_precios)</div>
+            <div className="text-sm text-gray-600">
+              Guarda en master por variante y fecha (1 por día). No afecta a pedidos existentes.
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -433,18 +532,18 @@ export default function CalculadoraPage() {
                     </option>
                   ))}
                 </select>
-                <div className="text-xs text-gray-500 mt-1">
-                  {modelos.length === 0
-                    ? "Haz una búsqueda para ver modelos."
-                    : `${modelos.length} resultado(s).`}
-                </div>
               </div>
 
               <div>
                 <label className="text-sm">Variante (season · color)</label>
                 <select
                   value={selectedVarianteId}
-                  onChange={(e) => setSelectedVarianteId(e.target.value)}
+                  onChange={(e) => {
+                    const vId = e.target.value;
+                    setSelectedVarianteId(vId);
+                    if (vId) cargarCotizaciones(vId);
+                    else setQuotes([]);
+                  }}
                   className="border rounded px-3 py-2 w-full"
                   disabled={!selectedModeloId || variantesLoading}
                 >
@@ -459,13 +558,6 @@ export default function CalculadoraPage() {
                     </option>
                   ))}
                 </select>
-                <div className="text-xs text-gray-500 mt-1">
-                  {variantesLoading
-                    ? "Cargando variantes..."
-                    : selectedModeloId
-                    ? `${variantes.length} variante(s).`
-                    : ""}
-                </div>
               </div>
             </div>
 
@@ -477,34 +569,127 @@ export default function CalculadoraPage() {
                 Buy price a guardar: <b>{formatMoney(cost)}</b>
               </div>
               <div>
-                Selling price a guardar: <b>{formatMoney(sellToSave)}</b>{" "}
-                (redondeado 0.05)
+                Selling price a guardar: <b>{formatMoney(sellToSave)}</b> (redondeado 0.05)
               </div>
             </div>
 
             <button
-              onClick={guardarPrecio}
+              onClick={guardarPrecioMaster}
               className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
               disabled={saveStatus === "saving"}
             >
-              {saveStatus === "saving"
-                ? "Guardando..."
-                : "Guardar precio en master"}
+              {saveStatus === "saving" ? "Guardando..." : "Guardar precio en master"}
             </button>
 
             {saveStatus !== "idle" && (
-              <div
-                className={`text-sm ${
-                  saveStatus === "ok"
-                    ? "text-green-700"
-                    : saveStatus === "error"
-                    ? "text-red-700"
-                    : "text-gray-700"
-                }`}
-              >
+              <div className={`text-sm ${saveStatus === "ok" ? "text-green-700" : "text-red-700"}`}>
                 {saveMessage}
               </div>
             )}
+          </div>
+
+          {/* Cotizaciones */}
+          <div className="bg-white p-5 rounded-xl shadow border space-y-4">
+            <div className="font-semibold">Cotizaciones (histórico comercial)</div>
+            <div className="text-sm text-gray-600">
+              Guarda cada propuesta enviada al cliente (regateos incluidos). Separado del master.
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm">Estado</label>
+                <select
+                  value={quoteStatus}
+                  onChange={(e) => setQuoteStatus(e.target.value)}
+                  className="border rounded px-3 py-2 w-full"
+                >
+                  <option value="enviada">enviada</option>
+                  <option value="negociando">negociando</option>
+                  <option value="aceptada">aceptada</option>
+                  <option value="rechazada">rechazada</option>
+                </select>
+              </div>
+
+              <div className="rounded border bg-gray-50 p-3 text-sm space-y-1">
+                <div>Se guardará:</div>
+                <div>
+                  Buy: <b>{formatMoney(cost)}</b> — Sell: <b>{formatMoney(sellToSave)}</b> ($)
+                </div>
+                <div>
+                  Margen (sobre coste):{" "}
+                  <b>{formatPct(mode === "M2P" ? targetPct : marginPctB)}%</b>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm">Notas (opcional)</label>
+              <textarea
+                value={quoteNotes}
+                onChange={(e) => setQuoteNotes(e.target.value)}
+                className="border rounded px-3 py-2 w-full min-h-[90px]"
+                placeholder="Ej: Cliente pide bajar 0.50$, cambio material..."
+              />
+            </div>
+
+            <button
+              onClick={guardarCotizacion}
+              className="px-4 py-2 rounded bg-gray-900 text-white hover:bg-black disabled:opacity-60"
+              disabled={quoteSaveStatus === "saving"}
+            >
+              {quoteSaveStatus === "saving" ? "Guardando..." : "Guardar como cotización"}
+            </button>
+
+            {quoteSaveStatus !== "idle" && (
+              <div className={`text-sm ${quoteSaveStatus === "ok" ? "text-green-700" : "text-red-700"}`}>
+                {quoteSaveMessage}
+              </div>
+            )}
+
+            <div className="border-t pt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="font-medium">Últimas cotizaciones</div>
+                <div className="text-xs text-gray-500">
+                  {selectedVarianteId
+                    ? quotesLoading
+                      ? "Cargando..."
+                      : `${quotes.length} registro(s)`
+                    : "Selecciona una variante"}
+                </div>
+              </div>
+
+              {!selectedVarianteId && (
+                <div className="text-sm text-gray-600">
+                  Selecciona una variante para ver su histórico.
+                </div>
+              )}
+
+              {selectedVarianteId && !quotesLoading && quotes.length === 0 && (
+                <div className="text-sm text-gray-600">
+                  Aún no hay cotizaciones para esta variante.
+                </div>
+              )}
+
+              {quotes.map((q) => (
+                <div key={q.id} className="rounded border p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium">
+                      {q.status.toUpperCase()} · ${formatMoney(Number(q.sell_price))}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {formatDateTime(q.created_at)} {q.created_by ? `· ${q.created_by}` : ""}
+                    </div>
+                  </div>
+                  <div className="text-gray-700 mt-1">
+                    Buy ${formatMoney(Number(q.buy_price))} · Sell ${formatMoney(Number(q.sell_price))} · Margen{" "}
+                    {q.margin_pct !== null ? `${formatPct(Number(q.margin_pct))}%` : "—"}
+                  </div>
+                  {q.notes ? (
+                    <div className="text-gray-600 mt-1 whitespace-pre-wrap">{q.notes}</div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           </div>
         </>
       )}
