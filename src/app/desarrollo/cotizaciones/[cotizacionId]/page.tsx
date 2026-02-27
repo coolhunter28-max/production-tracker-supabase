@@ -27,8 +27,22 @@ function todayYYYYMMDD() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function fmtDateTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
+}
+
+function calcMarginPct(buy: number, sell: number) {
+  if (!Number.isFinite(buy) || buy <= 0) return 0;
+  if (!Number.isFinite(sell)) return 0;
+  return (sell - buy) / buy; // decimal
+}
+
 type Detail = {
   id: string;
+  modelo_id: string | null;
+  variante_id: string;
   status: string;
   currency: string;
   buy_price: number;
@@ -44,6 +58,18 @@ type Detail = {
   modelo_variantes: { season: string; color: string; reference: string } | null;
 };
 
+type Round = {
+  id: string;
+  variante_id: string;
+  status: string;
+  currency: string;
+  buy_price: number;
+  sell_price: number;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
 export default function CotizacionDetailPage({
   params,
 }: {
@@ -55,7 +81,6 @@ export default function CotizacionDetailPage({
   const [data, setData] = React.useState<Detail | null>(null);
   const [loading, setLoading] = React.useState(true);
 
-  // mensajes
   const [msg, setMsg] = React.useState("");
 
   // editable
@@ -71,6 +96,10 @@ export default function CotizacionDetailPage({
   // acciones
   const [saving, setSaving] = React.useState(false);
   const [duplicating, setDuplicating] = React.useState(false);
+
+  // histórico por variante
+  const [rounds, setRounds] = React.useState<Round[]>([]);
+  const [roundsLoading, setRoundsLoading] = React.useState(false);
 
   async function load() {
     setLoading(true);
@@ -88,11 +117,37 @@ export default function CotizacionDetailPage({
       setSellPrice(String(d.sell_price ?? "0"));
       setNotes(d.notes || "");
       setPromote(false);
+
+      // cargar histórico por variante
+      if (d?.variante_id) {
+        await loadRounds(d.variante_id);
+      } else {
+        setRounds([]);
+      }
     } catch (e: any) {
       setMsg(e?.message || "Error");
       setData(null);
+      setRounds([]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadRounds(varianteId: string) {
+    setRoundsLoading(true);
+    try {
+      const res = await fetch(
+        `/api/cotizaciones?variante_id=${encodeURIComponent(varianteId)}&limit=50`
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Error cargando rondas");
+      const list = Array.isArray(json?.data) ? (json.data as Round[]) : [];
+      // ya vienen ordenadas por created_at desc en tu endpoint
+      setRounds(list);
+    } catch (e) {
+      setRounds([]);
+    } finally {
+      setRoundsLoading(false);
     }
   }
 
@@ -103,7 +158,7 @@ export default function CotizacionDetailPage({
 
   const buy = Math.max(0, toNumber(buyPrice, 0));
   const sell = Math.max(0, toNumber(sellPrice, 0));
-  const marginPct = buy > 0 ? (sell - buy) / buy : 0;
+  const marginPct = calcMarginPct(buy, sell);
 
   async function guardar() {
     setMsg("");
@@ -156,7 +211,6 @@ export default function CotizacionDetailPage({
       const newId = json?.cotizacion?.id;
       if (!newId) throw new Error("No se devolvió el id de la nueva cotización");
 
-      // Ir directo a la nueva cotización
       router.push(`/desarrollo/cotizaciones/${newId}`);
     } catch (e: any) {
       setMsg(e?.message || "Error duplicando");
@@ -229,9 +283,7 @@ export default function CotizacionDetailPage({
             <b>Creada:</b> {new Date(data.created_at).toLocaleString()}{" "}
             {data.created_by ? `· ${data.created_by}` : ""}
           </div>
-          <div className="text-xs text-gray-500 mt-2">
-            ID: {data.id}
-          </div>
+          <div className="text-xs text-gray-500 mt-2">ID: {data.id}</div>
         </div>
       </div>
 
@@ -280,8 +332,7 @@ export default function CotizacionDetailPage({
             Margen (sobre coste): <b>{formatPctDecimal(marginPct)}%</b>
           </div>
           <div>
-            Buy: <b>${formatMoney(buy)}</b> · Sell:{" "}
-            <b>${formatMoney(sell)}</b>
+            Buy: <b>${formatMoney(buy)}</b> · Sell: <b>${formatMoney(sell)}</b>
           </div>
         </div>
 
@@ -325,14 +376,90 @@ export default function CotizacionDetailPage({
         </button>
 
         {msg ? (
-          <div
-            className={`text-sm ${
-              msg.startsWith("✅") ? "text-green-700" : "text-red-700"
-            }`}
-          >
+          <div className={`text-sm ${msg.startsWith("✅") ? "text-green-700" : "text-red-700"}`}>
             {msg}
           </div>
         ) : null}
+      </div>
+
+      {/* ✅ HISTÓRICO POR VARIANTE */}
+      <div className="bg-white p-5 rounded-xl shadow border space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="font-semibold">Histórico de rondas (misma variante)</div>
+          <div className="text-xs text-gray-500">
+            {roundsLoading ? "Cargando..." : `${rounds.length} ronda(s)`}
+          </div>
+        </div>
+
+        {rounds.length === 0 && !roundsLoading && (
+          <div className="text-sm text-gray-600">No hay más cotizaciones para esta variante.</div>
+        )}
+
+        <div className="space-y-2">
+          {rounds.map((r, idx) => {
+            const isCurrent = r.id === id;
+
+            // diferencia sell vs ronda siguiente (más antigua)
+            const next = rounds[idx + 1];
+            const deltaSell =
+              next && Number.isFinite(Number(r.sell_price)) && Number.isFinite(Number(next.sell_price))
+                ? Number(r.sell_price) - Number(next.sell_price)
+                : null;
+
+            const m = calcMarginPct(Number(r.buy_price), Number(r.sell_price));
+
+            return (
+              <div
+                key={r.id}
+                className={`rounded border p-3 text-sm ${
+                  isCurrent ? "bg-blue-50 border-blue-300" : "bg-white"
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-medium">
+                    {fmtDateTime(r.created_at)} ·{" "}
+                    <span className="px-2 py-1 rounded bg-gray-100 border">{r.status}</span>
+                    {isCurrent ? <span className="ml-2 text-xs text-blue-700">(actual)</span> : null}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="text-gray-700">
+                      Buy <b>${formatMoney(Number(r.buy_price))}</b> · Sell{" "}
+                      <b>${formatMoney(Number(r.sell_price))}</b> · Margen{" "}
+                      <b>{formatPctDecimal(m)}%</b>
+                    </div>
+                    <Link
+                      href={`/desarrollo/cotizaciones/${r.id}`}
+                      className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs"
+                      title="Abrir esta ronda"
+                    >
+                      Abrir
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="mt-1 flex items-center justify-between">
+                  <div className="text-xs text-gray-500">
+                    {r.created_by ? `Usuario: ${r.created_by}` : "Usuario: -"}
+                  </div>
+
+                  {deltaSell !== null ? (
+                    <div className="text-xs text-gray-600">
+                      Δ sell vs ronda anterior:{" "}
+                      <b>{deltaSell >= 0 ? `+${formatMoney(deltaSell)}` : formatMoney(deltaSell)}</b>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400">Δ sell: —</div>
+                  )}
+                </div>
+
+                {r.notes ? (
+                  <div className="mt-2 text-gray-600 whitespace-pre-wrap">{r.notes}</div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
