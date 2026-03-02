@@ -9,6 +9,11 @@ type Row = {
   currency: string;
   buy_price: number;
   sell_price: number;
+  margin_pct: number | null;
+  commission_enabled: boolean;
+  commission_rate: number | null;
+  rounding_step: number | null;
+  notes: string | null;
   created_by: string | null;
   created_at: string;
   modelos: { style: string; reference: string | null; customer: string | null } | null;
@@ -26,6 +31,55 @@ function fmtDate(iso: string) {
   return d.toLocaleString();
 }
 
+function pct(decimal: number) {
+  if (!Number.isFinite(decimal)) return "0.00";
+  return (decimal * 100).toFixed(2);
+}
+
+function calcGrossMarginDecimal(buy: number, sell: number) {
+  const b = Number(buy);
+  const s = Number(sell);
+  if (!Number.isFinite(b) || b <= 0) return 0;
+  if (!Number.isFinite(s)) return 0;
+  return (s - b) / b;
+}
+
+// ✅ Comisión sobre BUY: beneficio = (sell-buy) + buy*rate
+function calcNetMarginDecimal_BSG(buy: number, sell: number, commissionEnabled: boolean, commissionRate: number | null) {
+  const b = Number(buy);
+  const s = Number(sell);
+  if (!Number.isFinite(b) || b <= 0) return 0;
+  if (!Number.isFinite(s)) return 0;
+
+  const rate = commissionEnabled ? Number(commissionRate ?? 0) : 0;
+  const r = Number.isFinite(rate) ? rate : 0;
+
+  const profit = (s - b) + b * r;
+  return profit / b;
+}
+
+function useLocalStorageNumber(key: string, defaultValue: number) {
+  const [value, setValue] = React.useState<number>(defaultValue);
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === null) return;
+      const n = Number(raw);
+      if (Number.isFinite(n)) setValue(n);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(key, String(value));
+    } catch {}
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
+
 export default function CotizacionesListPage() {
   const [q, setQ] = React.useState("");
   const [customer, setCustomer] = React.useState("");
@@ -39,6 +93,10 @@ export default function CotizacionesListPage() {
   const [rows, setRows] = React.useState<Row[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
+
+  // ✅ margen mínimo configurable (porcentaje)
+  const [minMarginPct, setMinMarginPct] = useLocalStorageNumber("pt_min_margin_pct", 20);
+  const [onlyLowMargin, setOnlyLowMargin] = React.useState(false);
 
   async function loadMeta() {
     setMetaLoading(true);
@@ -73,7 +131,9 @@ export default function CotizacionesListPage() {
       const res = await fetch(`/api/cotizaciones/list?${params.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Error cargando cotizaciones");
-      setRows(Array.isArray(json?.data) ? json.data : []);
+
+      const list = Array.isArray(json?.data) ? (json.data as Row[]) : [];
+      setRows(list);
     } catch (e: any) {
       setRows([]);
       setMsg(e?.message || "Error");
@@ -87,6 +147,25 @@ export default function CotizacionesListPage() {
     buscar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const minMarginDecimal = Math.max(0, Number(minMarginPct) || 0) / 100;
+
+  // ✅ margen de “alerta”: neto si comisión ON, si no bruto
+  function calcAlertMarginDecimal(r: Row) {
+    const gross = calcGrossMarginDecimal(Number(r.buy_price), Number(r.sell_price));
+    const net = calcNetMarginDecimal_BSG(
+      Number(r.buy_price),
+      Number(r.sell_price),
+      Boolean(r.commission_enabled),
+      r.commission_rate
+    );
+    return r.commission_enabled ? net : gross;
+  }
+
+  const filteredRows = React.useMemo(() => {
+    if (!onlyLowMargin) return rows;
+    return rows.filter((r) => calcAlertMarginDecimal(r) < minMarginDecimal);
+  }, [rows, onlyLowMargin, minMarginDecimal]);
 
   return (
     <div className="container mx-auto py-8 space-y-6 max-w-6xl">
@@ -126,9 +205,7 @@ export default function CotizacionesListPage() {
             >
               <option value="">{metaLoading ? "Cargando..." : "(todos)"}</option>
               {customerOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
@@ -143,9 +220,7 @@ export default function CotizacionesListPage() {
             >
               <option value="">{metaLoading ? "Cargando..." : "(todas)"}</option>
               {seasonOptions.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </div>
@@ -166,32 +241,58 @@ export default function CotizacionesListPage() {
           </div>
         </div>
 
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={buscar}
-            className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
-            disabled={loading}
-          >
-            {loading ? "Buscando..." : "Buscar"}
-          </button>
+        <div className="grid md:grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="text-sm">Margen mínimo (%)</label>
+            <input
+              value={String(minMarginPct)}
+              onChange={(e) => {
+                const n = Number(String(e.target.value).replace(",", "."));
+                if (Number.isFinite(n)) setMinMarginPct(n);
+                else if (e.target.value === "") setMinMarginPct(0);
+              }}
+              className="border rounded px-3 py-2 w-full"
+              placeholder="20"
+            />
+            <div className="text-xs text-gray-500 mt-1">Se guarda en tu navegador (local).</div>
+          </div>
 
-          <button
-            onClick={loadMeta}
-            className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200"
-            disabled={metaLoading}
-            title="Recargar listas de customer/season"
-          >
-            {metaLoading ? "Cargando..." : "Recargar listas"}
-          </button>
+          <div className="flex items-center gap-3">
+            <input type="checkbox" checked={onlyLowMargin} onChange={(e) => setOnlyLowMargin(e.target.checked)} />
+            <div className="text-sm text-gray-700">
+              Solo bajo margen (&lt; {Number(minMarginPct || 0).toFixed(2)}%)
+            </div>
+          </div>
 
-          {msg ? <div className="text-sm text-red-700">{msg}</div> : null}
+          <div className="flex gap-2 items-center justify-end">
+            <button
+              onClick={buscar}
+              className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+              disabled={loading}
+            >
+              {loading ? "Buscando..." : "Buscar"}
+            </button>
+
+            <button
+              onClick={loadMeta}
+              className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200"
+              disabled={metaLoading}
+              title="Recargar listas de customer/season"
+            >
+              {metaLoading ? "Cargando..." : "Recargar listas"}
+            </button>
+          </div>
         </div>
+
+        {msg ? <div className="text-sm text-red-700">{msg}</div> : null}
       </div>
 
       <div className="bg-white p-5 rounded-xl shadow border">
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold">Resultados</div>
-          <div className="text-xs text-gray-500">{rows.length} registro(s)</div>
+          <div className="text-xs text-gray-500">
+            {filteredRows.length} registro(s){onlyLowMargin ? " (filtrado)" : ""}
+          </div>
         </div>
 
         <div className="overflow-auto">
@@ -206,41 +307,69 @@ export default function CotizacionesListPage() {
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3">Buy</th>
                 <th className="py-2 pr-3">Sell</th>
+                <th className="py-2 pr-3">Margen bruto %</th>
+                <th className="py-2 pr-3">Margen neto %</th>
                 <th className="py-2 pr-3">Usuario</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b hover:bg-gray-50">
-                  <td className="py-2 pr-3 whitespace-nowrap">
-                    <Link
-                      href={`/desarrollo/cotizaciones/${r.id}`}
-                      className="text-blue-700 hover:underline"
-                    >
-                      {fmtDate(r.created_at)}
-                    </Link>
-                  </td>
-                  <td className="py-2 pr-3">{r.modelos?.customer || "-"}</td>
-                  <td className="py-2 pr-3">{r.modelos?.style || "-"}</td>
-                  <td className="py-2 pr-3">{r.modelo_variantes?.season || "-"}</td>
-                  <td className="py-2 pr-3">{r.modelo_variantes?.color || "-"}</td>
-                  <td className="py-2 pr-3">
-                    <span className="px-2 py-1 rounded bg-gray-100 border">{r.status}</span>
-                  </td>
-                  <td className="py-2 pr-3">${formatMoney(r.buy_price)}</td>
-                  <td className="py-2 pr-3 font-semibold">${formatMoney(r.sell_price)}</td>
-                  <td className="py-2 pr-3">{r.created_by || "-"}</td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
+              {filteredRows.map((r) => {
+                const gross = calcGrossMarginDecimal(Number(r.buy_price), Number(r.sell_price));
+                const net = calcNetMarginDecimal_BSG(
+                  Number(r.buy_price),
+                  Number(r.sell_price),
+                  Boolean(r.commission_enabled),
+                  r.commission_rate
+                );
+
+                const alertMargin = r.commission_enabled ? net : gross;
+                const low = alertMargin < minMarginDecimal;
+
+                return (
+                  <tr key={r.id} className={`border-b hover:bg-gray-50 ${low ? "bg-red-50" : ""}`}>
+                    <td className="py-2 pr-3 whitespace-nowrap">
+                      <Link href={`/desarrollo/cotizaciones/${r.id}`} className="text-blue-700 hover:underline">
+                        {fmtDate(r.created_at)}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-3">{r.modelos?.customer || "-"}</td>
+                    <td className="py-2 pr-3">{r.modelos?.style || "-"}</td>
+                    <td className="py-2 pr-3">{r.modelo_variantes?.season || "-"}</td>
+                    <td className="py-2 pr-3">{r.modelo_variantes?.color || "-"}</td>
+                    <td className="py-2 pr-3">
+                      <span className="px-2 py-1 rounded bg-gray-100 border">{r.status}</span>
+                    </td>
+                    <td className="py-2 pr-3">${formatMoney(r.buy_price)}</td>
+                    <td className="py-2 pr-3 font-semibold">${formatMoney(r.sell_price)}</td>
+
+                    <td className="py-2 pr-3">{pct(gross)}%</td>
+
+                    <td className={`py-2 pr-3 font-semibold ${low ? "text-red-700" : "text-gray-900"}`}>
+                      {pct(net)}%
+                      {low ? <span className="ml-2 text-xs">(bajo mín.)</span> : null}
+                      {!r.commission_enabled ? <span className="ml-2 text-xs text-gray-500">(sin comisión)</span> : null}
+                    </td>
+
+                    <td className="py-2 pr-3">{r.created_by || "-"}</td>
+                  </tr>
+                );
+              })}
+
+              {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-6 text-center text-gray-600">
+                  <td colSpan={12} className="py-6 text-center text-gray-600">
                     No hay resultados con estos filtros.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="text-xs text-gray-500 mt-3 space-y-1">
+          <div><b>Margen bruto</b> = (Sell - Buy) / Buy</div>
+          <div><b>Margen neto (BSG)</b> = ((Sell - Buy) + Buy × comisión) / Buy (si comisión ON)</div>
+          <div>La alerta y el filtro “bajo margen” usan margen neto si comisión está activa.</div>
         </div>
       </div>
     </div>
