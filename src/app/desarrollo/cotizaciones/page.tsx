@@ -9,11 +9,8 @@ type Row = {
   currency: string;
   buy_price: number;
   sell_price: number;
-  margin_pct: number | null;
   commission_enabled: boolean;
-  commission_rate: number | null;
-  rounding_step: number | null;
-  notes: string | null;
+  commission_rate: number | null; // decimal (0.10)
   created_by: string | null;
   created_at: string;
   modelos: { style: string; reference: string | null; customer: string | null } | null;
@@ -44,17 +41,31 @@ function calcGrossMarginDecimal(buy: number, sell: number) {
   return (s - b) / b;
 }
 
-// ✅ Comisión sobre BUY: beneficio = (sell-buy) + buy*rate
-function calcNetMarginDecimal_BSG(buy: number, sell: number, commissionEnabled: boolean, commissionRate: number | null) {
+function calcProfitGross(buy: number, sell: number) {
   const b = Number(buy);
   const s = Number(sell);
+  if (!Number.isFinite(b) || !Number.isFinite(s)) return 0;
+  return s - b;
+}
+
+// ✅ BSG neto: beneficio = (Sell-Buy) + Buy*rate (si comisión ON)
+// Comisión SIEMPRE sobre BUY si está activa
+function calcProfitNet_BSG(buy: number, sell: number, commissionEnabled: boolean, commissionRate: number | null) {
+  const b = Number(buy);
+  const s = Number(sell);
+  if (!Number.isFinite(b) || !Number.isFinite(s)) return 0;
+
+  const r = commissionEnabled ? Number(commissionRate ?? 0) : 0;
+  const rate = Number.isFinite(r) ? r : 0;
+
+  return (s - b) + b * rate;
+}
+
+function calcNetMarginDecimal_BSG(buy: number, sell: number, commissionEnabled: boolean, commissionRate: number | null) {
+  const b = Number(buy);
   if (!Number.isFinite(b) || b <= 0) return 0;
-  if (!Number.isFinite(s)) return 0;
 
-  const rate = commissionEnabled ? Number(commissionRate ?? 0) : 0;
-  const r = Number.isFinite(rate) ? rate : 0;
-
-  const profit = (s - b) + b * r;
+  const profit = calcProfitNet_BSG(buy, sell, commissionEnabled, commissionRate);
   return profit / b;
 }
 
@@ -94,9 +105,25 @@ export default function CotizacionesListPage() {
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
 
-  // ✅ margen mínimo configurable (porcentaje)
+  // margen mínimo configurable (%)
   const [minMarginPct, setMinMarginPct] = useLocalStorageNumber("pt_min_margin_pct", 20);
+
+  // filtros extra
   const [onlyLowMargin, setOnlyLowMargin] = React.useState(false);
+  const [onlyNegativeProfit, setOnlyNegativeProfit] = React.useState(false);
+
+  const minMarginDecimal = Math.max(0, Number(minMarginPct) || 0) / 100;
+
+  function calcAlertMarginDecimal(r: Row) {
+    const gross = calcGrossMarginDecimal(Number(r.buy_price), Number(r.sell_price));
+    const net = calcNetMarginDecimal_BSG(
+      Number(r.buy_price),
+      Number(r.sell_price),
+      Boolean(r.commission_enabled),
+      r.commission_rate
+    );
+    return r.commission_enabled ? net : gross;
+  }
 
   async function loadMeta() {
     setMetaLoading(true);
@@ -125,7 +152,7 @@ export default function CotizacionesListPage() {
       if (customer.trim()) params.set("customer", customer.trim());
       if (season.trim()) params.set("season", season.trim());
       if (status.trim()) params.set("status", status.trim());
-      params.set("limit", "100");
+      params.set("limit", "150");
       params.set("offset", "0");
 
       const res = await fetch(`/api/cotizaciones/list?${params.toString()}`);
@@ -148,24 +175,23 @@ export default function CotizacionesListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const minMarginDecimal = Math.max(0, Number(minMarginPct) || 0) / 100;
-
-  // ✅ margen de “alerta”: neto si comisión ON, si no bruto
-  function calcAlertMarginDecimal(r: Row) {
-    const gross = calcGrossMarginDecimal(Number(r.buy_price), Number(r.sell_price));
-    const net = calcNetMarginDecimal_BSG(
-      Number(r.buy_price),
-      Number(r.sell_price),
-      Boolean(r.commission_enabled),
-      r.commission_rate
-    );
-    return r.commission_enabled ? net : gross;
-  }
-
   const filteredRows = React.useMemo(() => {
-    if (!onlyLowMargin) return rows;
-    return rows.filter((r) => calcAlertMarginDecimal(r) < minMarginDecimal);
-  }, [rows, onlyLowMargin, minMarginDecimal]);
+    return rows.filter((r) => {
+      if (onlyLowMargin) {
+        if (calcAlertMarginDecimal(r) >= minMarginDecimal) return false;
+      }
+      if (onlyNegativeProfit) {
+        const netProfit = calcProfitNet_BSG(
+          Number(r.buy_price),
+          Number(r.sell_price),
+          Boolean(r.commission_enabled),
+          r.commission_rate
+        );
+        if (netProfit >= 0) return false;
+      }
+      return true;
+    });
+  }, [rows, onlyLowMargin, onlyNegativeProfit, minMarginDecimal]);
 
   return (
     <div className="container mx-auto py-8 space-y-6 max-w-6xl">
@@ -175,7 +201,10 @@ export default function CotizacionesListPage() {
           <Link href="/desarrollo" className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">
             ← Desarrollo
           </Link>
-          <Link href="/desarrollo/calculadora" className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">
+          <Link
+            href="/desarrollo/calculadora"
+            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+          >
             + Nueva cotización
           </Link>
         </div>
@@ -257,11 +286,24 @@ export default function CotizacionesListPage() {
             <div className="text-xs text-gray-500 mt-1">Se guarda en tu navegador (local).</div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <input type="checkbox" checked={onlyLowMargin} onChange={(e) => setOnlyLowMargin(e.target.checked)} />
-            <div className="text-sm text-gray-700">
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={onlyLowMargin}
+                onChange={(e) => setOnlyLowMargin(e.target.checked)}
+              />
               Solo bajo margen (&lt; {Number(minMarginPct || 0).toFixed(2)}%)
-            </div>
+            </label>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={onlyNegativeProfit}
+                onChange={(e) => setOnlyNegativeProfit(e.target.checked)}
+              />
+              Solo beneficio neto negativo
+            </label>
           </div>
 
           <div className="flex gap-2 items-center justify-end">
@@ -277,7 +319,7 @@ export default function CotizacionesListPage() {
               onClick={loadMeta}
               className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200"
               disabled={metaLoading}
-              title="Recargar listas de customer/season"
+              title="Recargar listas"
             >
               {metaLoading ? "Cargando..." : "Recargar listas"}
             </button>
@@ -291,7 +333,8 @@ export default function CotizacionesListPage() {
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold">Resultados</div>
           <div className="text-xs text-gray-500">
-            {filteredRows.length} registro(s){onlyLowMargin ? " (filtrado)" : ""}
+            {filteredRows.length} registro(s)
+            {(onlyLowMargin || onlyNegativeProfit) ? " (filtrado)" : ""}
           </div>
         </div>
 
@@ -307,22 +350,24 @@ export default function CotizacionesListPage() {
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3">Buy</th>
                 <th className="py-2 pr-3">Sell</th>
-                <th className="py-2 pr-3">Margen bruto %</th>
+                <th className="py-2 pr-3">Benef. bruto</th>
+                <th className="py-2 pr-3">Benef. neto (BSG)</th>
                 <th className="py-2 pr-3">Margen neto %</th>
                 <th className="py-2 pr-3">Usuario</th>
               </tr>
             </thead>
             <tbody>
               {filteredRows.map((r) => {
-                const gross = calcGrossMarginDecimal(Number(r.buy_price), Number(r.sell_price));
-                const net = calcNetMarginDecimal_BSG(
-                  Number(r.buy_price),
-                  Number(r.sell_price),
-                  Boolean(r.commission_enabled),
-                  r.commission_rate
-                );
+                const buy = Number(r.buy_price);
+                const sell = Number(r.sell_price);
 
-                const alertMargin = r.commission_enabled ? net : gross;
+                const grossProfit = calcProfitGross(buy, sell);
+                const netProfit = calcProfitNet_BSG(buy, sell, Boolean(r.commission_enabled), r.commission_rate);
+
+                const grossMargin = calcGrossMarginDecimal(buy, sell);
+                const netMargin = calcNetMarginDecimal_BSG(buy, sell, Boolean(r.commission_enabled), r.commission_rate);
+
+                const alertMargin = r.commission_enabled ? netMargin : grossMargin;
                 const low = alertMargin < minMarginDecimal;
 
                 return (
@@ -339,15 +384,25 @@ export default function CotizacionesListPage() {
                     <td className="py-2 pr-3">
                       <span className="px-2 py-1 rounded bg-gray-100 border">{r.status}</span>
                     </td>
-                    <td className="py-2 pr-3">${formatMoney(r.buy_price)}</td>
-                    <td className="py-2 pr-3 font-semibold">${formatMoney(r.sell_price)}</td>
+                    <td className="py-2 pr-3">${formatMoney(buy)}</td>
+                    <td className="py-2 pr-3 font-semibold">${formatMoney(sell)}</td>
 
-                    <td className="py-2 pr-3">{pct(gross)}%</td>
+                    <td className="py-2 pr-3">
+                      {grossProfit >= 0 ? "+" : ""}
+                      ${formatMoney(grossProfit)}
+                    </td>
+
+                    <td className={`py-2 pr-3 font-semibold ${netProfit < 0 ? "text-red-700" : "text-gray-900"}`}>
+                      {netProfit >= 0 ? "+" : ""}
+                      ${formatMoney(netProfit)}
+                      {!r.commission_enabled ? (
+                        <span className="ml-2 text-xs text-gray-500">(sin comisión)</span>
+                      ) : null}
+                    </td>
 
                     <td className={`py-2 pr-3 font-semibold ${low ? "text-red-700" : "text-gray-900"}`}>
-                      {pct(net)}%
+                      {pct(netMargin)}%
                       {low ? <span className="ml-2 text-xs">(bajo mín.)</span> : null}
-                      {!r.commission_enabled ? <span className="ml-2 text-xs text-gray-500">(sin comisión)</span> : null}
                     </td>
 
                     <td className="py-2 pr-3">{r.created_by || "-"}</td>
@@ -367,9 +422,10 @@ export default function CotizacionesListPage() {
         </div>
 
         <div className="text-xs text-gray-500 mt-3 space-y-1">
-          <div><b>Margen bruto</b> = (Sell - Buy) / Buy</div>
-          <div><b>Margen neto (BSG)</b> = ((Sell - Buy) + Buy × comisión) / Buy (si comisión ON)</div>
-          <div>La alerta y el filtro “bajo margen” usan margen neto si comisión está activa.</div>
+          <div><b>Benef. bruto</b> = Sell − Buy</div>
+          <div><b>Benef. neto (BSG)</b> = (Sell − Buy) + (Buy × comisión) (si comisión ON)</div>
+          <div><b>Margen neto</b> = Benef. neto / Buy</div>
+          <div>La alerta “bajo margen” usa neto si comisión está activa.</div>
         </div>
       </div>
     </div>
