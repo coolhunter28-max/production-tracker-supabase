@@ -142,10 +142,14 @@ export default function CalculadoraPage() {
   const [quoteNotes, setQuoteNotes] = React.useState("");
   const [quotes, setQuotes] = React.useState<Cotizacion[]>([]);
   const [quotesLoading, setQuotesLoading] = React.useState(false);
+
   const [quoteSaveStatus, setQuoteSaveStatus] = React.useState<
     "idle" | "saving" | "ok" | "error"
   >("idle");
   const [quoteSaveMessage, setQuoteSaveMessage] = React.useState("");
+
+  // ✅ NUEVO: promover a master al aceptar
+  const [promoteOnAccept, setPromoteOnAccept] = React.useState(false);
 
   async function buscarModelos() {
     setSaveStatus("idle");
@@ -314,6 +318,41 @@ export default function CalculadoraPage() {
     } catch (e: any) {
       setQuoteSaveStatus("error");
       setQuoteSaveMessage(e?.message || "Error guardando cotización");
+    }
+  }
+
+  // ✅ NUEVO: actualizar estado y (opcional) promover a master al aceptar
+  async function actualizarEstadoCotizacion(cotizacionId: string, newStatus: string) {
+    setQuoteSaveStatus("idle");
+    setQuoteSaveMessage("");
+
+    try {
+      const body: any = {
+        status: newStatus,
+        promote_to_master: promoteOnAccept && newStatus === "aceptada",
+        valid_from: validFrom, // usamos la misma fecha que tienes arriba
+      };
+
+      const res = await fetch(`/api/cotizaciones/${cotizacionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Error actualizando cotización");
+
+      if (selectedVarianteId) await cargarCotizaciones(selectedVarianteId);
+
+      setQuoteSaveStatus("ok");
+      setQuoteSaveMessage(
+        promoteOnAccept && newStatus === "aceptada"
+          ? "✅ Cotización marcada como aceptada y precio promovido a master."
+          : "✅ Estado de cotización actualizado."
+      );
+    } catch (e: any) {
+      setQuoteSaveStatus("error");
+      setQuoteSaveMessage(e?.message || "Error actualizando cotización");
     }
   }
 
@@ -595,6 +634,18 @@ export default function CalculadoraPage() {
               Guarda cada propuesta enviada al cliente (regateos incluidos). Separado del master.
             </div>
 
+            {/* NUEVO: toggle promover al aceptar */}
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={promoteOnAccept}
+                onChange={(e) => setPromoteOnAccept(e.target.checked)}
+              />
+              <div className="text-sm text-gray-700">
+                Al marcar como <b>ACEPTADA</b>, actualizar también el <b>master</b> (valid_from = {validFrom})
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm">Estado</label>
@@ -659,15 +710,11 @@ export default function CalculadoraPage() {
               </div>
 
               {!selectedVarianteId && (
-                <div className="text-sm text-gray-600">
-                  Selecciona una variante para ver su histórico.
-                </div>
+                <div className="text-sm text-gray-600">Selecciona una variante para ver su histórico.</div>
               )}
 
               {selectedVarianteId && !quotesLoading && quotes.length === 0 && (
-                <div className="text-sm text-gray-600">
-                  Aún no hay cotizaciones para esta variante.
-                </div>
+                <div className="text-sm text-gray-600">Aún no hay cotizaciones para esta variante.</div>
               )}
 
               {quotes.map((q) => (
@@ -680,13 +727,37 @@ export default function CalculadoraPage() {
                       {formatDateTime(q.created_at)} {q.created_by ? `· ${q.created_by}` : ""}
                     </div>
                   </div>
+
                   <div className="text-gray-700 mt-1">
                     Buy ${formatMoney(Number(q.buy_price))} · Sell ${formatMoney(Number(q.sell_price))} · Margen{" "}
                     {q.margin_pct !== null ? `${formatPct(Number(q.margin_pct))}%` : "—"}
                   </div>
+
                   {q.notes ? (
                     <div className="text-gray-600 mt-1 whitespace-pre-wrap">{q.notes}</div>
                   ) : null}
+
+                  {/* NUEVO: botones de estado */}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => actualizarEstadoCotizacion(q.id, "negociando")}
+                      className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs"
+                    >
+                      Negociando
+                    </button>
+                    <button
+                      onClick={() => actualizarEstadoCotizacion(q.id, "aceptada")}
+                      className="px-3 py-1 rounded bg-green-600 hover:bg-green-700 text-white text-xs"
+                    >
+                      Aceptada
+                    </button>
+                    <button
+                      onClick={() => actualizarEstadoCotizacion(q.id, "rechazada")}
+                      className="px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-xs"
+                    >
+                      Rechazada
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

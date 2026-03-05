@@ -201,6 +201,15 @@ export default function CotizacionesListPage() {
           <Link href="/desarrollo" className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">
             ← Desarrollo
           </Link>
+
+          {/* ✅ NUEVO: Oferta cliente */}
+          <Link
+            href="/desarrollo/cotizaciones/oferta"
+            className="px-4 py-2 rounded bg-gray-900 text-white hover:bg-black"
+          >
+            📤 Oferta cliente
+          </Link>
+
           <Link
             href="/desarrollo/calculadora"
             className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"

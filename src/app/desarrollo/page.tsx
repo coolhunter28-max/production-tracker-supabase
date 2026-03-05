@@ -23,7 +23,6 @@ export default function DesarrolloHome() {
           </div>
         </Link>
 
-        {/* NUEVO: Snapshot pendiente */}
         <Link
           href="/desarrollo/snapshot-pendiente"
           className="block bg-white p-5 rounded-xl shadow border hover:shadow-md transition"
@@ -34,14 +33,23 @@ export default function DesarrolloHome() {
           </div>
         </Link>
 
-        {/* NUEVO: Calculadora */}
         <Link
           href="/desarrollo/calculadora"
           className="block bg-white p-5 rounded-xl shadow border hover:shadow-md transition"
         >
           <div className="text-lg font-semibold">🧮 Calculadora</div>
           <div className="text-sm text-gray-600">
-            Coste → precio venta, margen (sobre coste), comisión y redondeo
+            Nueva cotización / simulación (BSG)
+          </div>
+        </Link>
+
+        <Link
+          href="/desarrollo/cotizaciones"
+          className="block bg-white p-5 rounded-xl shadow border hover:shadow-md transition"
+        >
+          <div className="text-lg font-semibold">🗂️ Cotizaciones</div>
+          <div className="text-sm text-gray-600">
+            Histórico comercial con filtros (cliente, season, style…)
           </div>
         </Link>
 
