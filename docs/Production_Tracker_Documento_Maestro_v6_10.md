@@ -1039,16 +1039,160 @@ Production Tracker funciona en 5 capas:
 - Proyecto estable
 - Capa analítica v1 cerrada
 - Base sólida para calculadora, reporting, BI y dashboards dentro de la app
+🔹 26. Analytics UI (v1 implementado)
+26.1 Estado general
 
-### Próximo bloque recomendado
+La capa de Analytics UI ha sido implementada directamente en la aplicación Next.js, conectando de forma directa con la capa analítica en Supabase.
 
-**Analytics UI en la aplicación**
+Principios aplicados:
 
-Dashboards previstos:
+No duplicar lógica en frontend
+No crear views adicionales sin necesidad
+UI basada únicamente en vistas existentes
+Filtros solo cuando están soportados por la view
+Uso de search params como fuente de verdad (sin contexto global)
+26.2 Arquitectura de rutas
+/analytics
+  /executive
+  /operaciones
+    /customers
+    /factories
+    /seasons
+    /logistica
+  /quality
+    /customers
+    /factories
+    /models
+26.3 Convención de filtros (URL)
+season
+customer
+factory
+operativa
+modelo
+style
+status
+dateType
+dateFrom
+dateTo
+page
+sort
+view
 
-- Executive Dashboard
-- Production Dashboard
-- Quality Dashboard
-- Commercial Dashboard
-- Customer Intelligence Dashboard
+Reglas:
 
+Los filtros viven en la URL (search params)
+Cada pantalla decide qué filtros usa
+No existe estado global compartido
+26.4 Módulo Executive
+
+Ruta:
+
+/analytics/executive
+
+Views utilizadas:
+
+vw_exec_kpi_dashboard
+vw_exec_customer_ranking
+vw_exec_factory_ranking
+vw_exec_season_performance_ranking
+
+Filtros:
+
+season
+customer
+factory
+dateType
+date range
+26.5 Módulo Operaciones
+Overview
+
+Ruta:
+
+/analytics/operaciones
+
+Estructura:
+
+Customers (principal)
+Factories
+Seasons
+Logistics
+Drill-downs
+/analytics/operaciones/customers
+/analytics/operaciones/factories
+/analytics/operaciones/seasons
+/analytics/operaciones/logistica
+
+Views utilizadas:
+
+vw_exec_customer_ranking
+vw_exec_factory_ranking
+vw_exec_season_performance_ranking
+vw_exec_customer_logistics_pressure_ranking
+
+Regla clave:
+
+👉 Cada pantalla usa únicamente filtros soportados por su view
+
+26.6 Módulo Quality
+Overview
+
+Ruta:
+
+/analytics/quality
+
+Bloques:
+
+Customers
+Factories
+Styles
+Drill-downs
+/analytics/quality/customers
+/analytics/quality/factories
+/analytics/quality/models
+
+Views utilizadas:
+
+vw_qc_by_customer
+vw_qc_by_factory
+vw_qc_by_model
+Decisión crítica
+
+La dimensión modelo en QC se define como:
+
+style
+
+No se usa modelo para evitar inconsistencias con la base de datos.
+
+26.7 Componentes base reutilizados
+AnalyticsPageShell
+AnalyticsSectionHeader
+AnalyticsRankingTable
+AnalyticsBarChart
+26.8 Reglas UX consolidadas
+❌ No filtros falsos
+❌ No columnas inventadas
+❌ No datasets duplicados
+❌ No scatter charts sin contexto claro
+✅ UI refleja el dato real
+✅ Jerarquía clara (overview → drill-down)
+✅ Navegación consistente entre módulos
+✅ Lectura dual por pantalla (ranking + volumen)
+26.9 Estado del módulo Analytics UI
+Módulo	Estado
+Executive	✔
+Operaciones	✔
+Quality	✔
+Desarrollo	⏳ pendiente
+Clientes (Business Matrix UI)	⏳ pendiente
+26.10 Próximo bloque
+
+Siguiente desarrollo:
+
+Analytics → Desarrollo (Pricing / Negotiation / Quotes)
+
+Objetivo:
+
+explotar vw_dev_*
+análisis de pricing
+negociación por cliente
+conversión quote → order

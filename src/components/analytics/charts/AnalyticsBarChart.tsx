@@ -1,157 +1,192 @@
-type AnalyticsBarChartProps = {
-  title: string;
-  rows: Array<Record<string, string | number | boolean | null>>;
-  labelKeys?: string[];
-  valueKeys?: string[];
-  maxItems?: number;
-};
+import Link from 'next/link'
+import { AnalyticsBarChart } from '@/components/analytics/charts/AnalyticsBarChart'
+import { AnalyticsPageShell } from '@/components/analytics/layout/AnalyticsPageShell'
+import { AnalyticsRankingTable } from '@/components/analytics/tables/AnalyticsRankingTable'
+import { AnalyticsSectionHeader } from '@/components/analytics/layout/AnalyticsSectionHeader'
+import {
+  getDevelopmentConversionByCustomer,
+  getDevelopmentCustomerRanking,
+  getDevelopmentSummary,
+  parseDevelopmentFilters,
+} from '@/lib/analytics/desarrollo'
 
-function humanizeKey(key: string) {
-  return key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+type PageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
 }
 
-function detectLabelKey(
-  rows: Array<Record<string, string | number | boolean | null>>,
-  labelKeys?: string[]
-) {
-  const sample = rows[0];
-  if (!sample) return null;
+function formatNumber(value: number | null | undefined, digits = 0): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—'
 
-  const entries = Object.entries(sample);
-
-  if (labelKeys && labelKeys.length > 0) {
-    for (const key of labelKeys) {
-      if (key in sample) return key;
-    }
-  }
-
-  const stringEntry = entries.find(([, value]) => typeof value === "string");
-  return stringEntry?.[0] ?? entries[0]?.[0] ?? null;
+  return new Intl.NumberFormat('es-ES', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value)
 }
 
-function detectValueKey(
-  rows: Array<Record<string, string | number | boolean | null>>,
-  valueKeys?: string[]
-) {
-  const sample = rows[0];
-  if (!sample) return null;
+function formatPercent(value: number | null | undefined, digits = 2): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—'
 
-  const entries = Object.entries(sample);
-
-  if (valueKeys && valueKeys.length > 0) {
-    for (const key of valueKeys) {
-      if (key in sample && typeof sample[key] === "number") return key;
-    }
-  }
-
-  const numericEntry = entries.find(([, value]) => typeof value === "number");
-  return numericEntry?.[0] ?? null;
+  return `${formatNumber(value, digits)}%`
 }
 
-function toChartItems(
-  rows: Array<Record<string, string | number | boolean | null>>,
-  maxItems: number,
-  labelKeys?: string[],
-  valueKeys?: string[]
-) {
-  const labelKey = detectLabelKey(rows, labelKeys);
-  const valueKey = detectValueKey(rows, valueKeys);
+function formatDays(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—'
 
-  if (!labelKey || !valueKey) {
-    return {
-      labelKey,
-      valueKey,
-      items: [] as Array<{ label: string; value: number }>,
-    };
-  }
-
-  const items = rows
-    .map((row) => ({
-      label: String(row[labelKey] ?? "—"),
-      value:
-        typeof row[valueKey] === "number"
-          ? (row[valueKey] as number)
-          : Number(row[valueKey] ?? 0),
-    }))
-    .filter((item) => Number.isFinite(item.value))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, maxItems);
-
-  return { labelKey, valueKey, items };
+  return `${formatNumber(value, 1)} d`
 }
 
-function formatNumber(value: number) {
-  return new Intl.NumberFormat("es-ES", {
-    maximumFractionDigits: 2,
-  }).format(value);
-}
+export default async function DevelopmentAnalyticsPage({
+  searchParams,
+}: PageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : {}
+  const filters = parseDevelopmentFilters(resolvedSearchParams)
 
-export function AnalyticsBarChart({
-  title,
-  rows,
-  labelKeys,
-  valueKeys,
-  maxItems = 8,
-}: AnalyticsBarChartProps) {
-  const { labelKey, valueKey, items } = toChartItems(
-    rows,
-    maxItems,
-    labelKeys,
-    valueKeys
-  );
+  const [summary, customerRanking, conversionRanking] = await Promise.all([
+    getDevelopmentSummary(filters),
+    getDevelopmentCustomerRanking(filters),
+    getDevelopmentConversionByCustomer(filters),
+  ])
 
-  const maxValue = Math.max(...items.map((item) => item.value), 0);
-  const hasData = items.length > 0;
+  const rankingChartRows = customerRanking.map((item) => ({
+    customer: item.customer ?? 'N/A',
+    approx_conversion_rate_pct: item.approx_conversion_rate_pct ?? 0,
+  }))
+
+  const conversionChartRows = conversionRanking.map((item) => ({
+    customer: item.customer ?? 'N/A',
+    approx_conversion_rate_pct: item.approx_conversion_rate_pct ?? 0,
+  }))
 
   return (
-    <section className="rounded-2xl border bg-card shadow-sm">
-      <div className="border-b px-4 py-3">
-        <h3 className="text-base font-medium">{title}</h3>
-        {labelKey && valueKey ? (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {humanizeKey(labelKey)} vs {humanizeKey(valueKey)}
-          </p>
-        ) : null}
-      </div>
-
-      {!hasData ? (
-        <div className="flex min-h-[340px] items-center justify-center px-4 py-6 text-sm text-muted-foreground">
-          No hay datos para mostrar.
-        </div>
-      ) : (
-        <div className="min-h-[340px] px-4 py-4">
-          <div className="space-y-4">
-            {items.map((item) => {
-              const width =
-                maxValue > 0
-                  ? `${Math.max((item.value / maxValue) * 100, 2)}%`
-                  : "0%";
-
-              return (
-                <div key={item.label} className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-4 text-sm">
-                    <span className="max-w-[65%] truncate font-medium">
-                      {item.label}
-                    </span>
-                    <span className="shrink-0 text-muted-foreground">
-                      {formatNumber(item.value)}
-                    </span>
-                  </div>
-
-                  <div className="h-2.5 rounded-full bg-muted">
-                    <div
-                      className="h-2.5 rounded-full bg-foreground/80 transition-all"
-                      style={{ width }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+    <AnalyticsPageShell
+      title="Desarrollo"
+      description="Pricing, negotiation and quote conversion analytics."
+    >
+      <div className="space-y-8">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border bg-background p-5">
+            <div className="text-sm text-muted-foreground">Quotes</div>
+            <div className="mt-2 text-2xl font-semibold">
+              {formatNumber(summary?.quote_count)}
+            </div>
           </div>
-        </div>
-      )}
-    </section>
-  );
+
+          <div className="rounded-2xl border bg-background p-5">
+            <div className="text-sm text-muted-foreground">Customers</div>
+            <div className="mt-2 text-2xl font-semibold">
+              {formatNumber(summary?.customer_count)}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border bg-background p-5">
+            <div className="text-sm text-muted-foreground">Avg Margin %</div>
+            <div className="mt-2 text-2xl font-semibold">
+              {formatPercent(summary?.avg_quote_margin_pct)}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border bg-background p-5">
+            <div className="text-sm text-muted-foreground">Avg Gap vs Master %</div>
+            <div className="mt-2 text-2xl font-semibold">
+              {formatPercent(summary?.avg_gap_vs_master_sell_pct)}
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <AnalyticsSectionHeader
+            title="Customer Negotiation & Conversion"
+            description="Executive ranking of customer negotiation intensity and commercial conversion."
+            action={
+              <Link
+                href="/analytics/desarrollo/customers"
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                View customer detail
+              </Link>
+            }
+          />
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <AnalyticsRankingTable
+              title="Customer ranking"
+              rows={customerRanking.map((item) => ({
+                key: `${item.customer ?? 'unknown'}-${item.season ?? 'na'}`,
+                values: [
+                  item.customer ?? '—',
+                  item.season ?? '—',
+                  formatNumber(item.quote_count),
+                  formatNumber(item.matched_order_count),
+                  formatPercent(item.approx_conversion_rate_pct),
+                  formatNumber(item.avg_revision_count, 2),
+                  formatNumber(item.rank_negotiation),
+                ],
+              }))}
+              columns={[
+                'Customer',
+                'Season',
+                'Quotes',
+                'Matched Orders',
+                'Conversion %',
+                'Avg Revisions',
+                'Rank Negotiation',
+              ]}
+              emptyMessage="No customer ranking data found."
+            />
+
+            <AnalyticsBarChart
+              title="Conversion % by customer"
+              rows={rankingChartRows}
+              labelKeys={['customer']}
+              valueKeys={['approx_conversion_rate_pct']}
+              maxItems={10}
+            />
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <AnalyticsSectionHeader
+            title="Quote to Order Conversion"
+            description="Commercial efficiency of quotes converted into matched orders."
+          />
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <AnalyticsRankingTable
+              title="Conversion by customer"
+              rows={conversionRanking.map((item) => ({
+                key: `${item.customer ?? 'unknown'}-${item.season ?? 'na'}`,
+                values: [
+                  item.customer ?? '—',
+                  item.season ?? '—',
+                  formatNumber(item.quote_count),
+                  formatNumber(item.matched_order_count),
+                  formatPercent(item.approx_conversion_rate_pct),
+                  formatDays(item.avg_days_quote_to_order),
+                  formatNumber(item.avg_revision_count, 2),
+                ],
+              }))}
+              columns={[
+                'Customer',
+                'Season',
+                'Quotes',
+                'Matched Orders',
+                'Conversion %',
+                'Avg Days',
+                'Avg Revisions',
+              ]}
+              emptyMessage="No conversion data found."
+            />
+
+            <AnalyticsBarChart
+              title="Quote to order conversion"
+              rows={conversionChartRows}
+              labelKeys={['customer']}
+              valueKeys={['approx_conversion_rate_pct']}
+              maxItems={10}
+            />
+          </div>
+        </section>
+      </div>
+    </AnalyticsPageShell>
+  )
 }
