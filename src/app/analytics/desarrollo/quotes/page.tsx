@@ -105,6 +105,7 @@ export default async function DevelopmentQuotesAnalyticsPage({
     ...(filters.quoteStatus ? { quoteStatus: filters.quoteStatus } : {}),
     ...(filters.dateFrom ? { dateFrom: filters.dateFrom } : {}),
     ...(filters.dateTo ? { dateTo: filters.dateTo } : {}),
+    ...(filters.sort ? { sort: filters.sort } : {}),
   }
 
   return (
@@ -171,7 +172,7 @@ export default async function DevelopmentQuotesAnalyticsPage({
           </p>
         </div>
 
-        <form method="GET" className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <form method="GET" className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <div className="space-y-2">
             <label htmlFor="customer" className="text-sm font-medium">
               Customer
@@ -255,7 +256,26 @@ export default async function DevelopmentQuotesAnalyticsPage({
             />
           </div>
 
-          <div className="flex items-end gap-2 md:col-span-2 xl:col-span-5">
+          <div className="space-y-2">
+            <label htmlFor="sort" className="text-sm font-medium">
+              Sort by
+            </label>
+            <select
+              id="sort"
+              name="sort"
+              defaultValue={filters.sort ?? 'quote_date.desc'}
+              className="w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-foreground"
+            >
+              <option value="quote_date.desc">Latest quote date</option>
+              <option value="quote_date.asc">Oldest quote date</option>
+              <option value="customer.asc">Customer</option>
+              <option value="season.asc">Season</option>
+              <option value="quote_status.asc">Status</option>
+              <option value="days_quote_to_order.desc">Days to order</option>
+            </select>
+          </div>
+
+          <div className="flex items-end gap-2 md:col-span-2 xl:col-span-6">
             <button
               type="submit"
               className="rounded-xl border bg-foreground px-4 py-2 text-sm font-medium text-background"
