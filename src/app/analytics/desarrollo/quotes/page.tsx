@@ -323,27 +323,32 @@ export default async function DevelopmentQuotesAnalyticsPage({
         </div>
 
         <div className="overflow-auto rounded-2xl border bg-card shadow-sm">
-          <table className="w-full min-w-[1800px] text-sm">
-            <thead className="sticky top-0 bg-card">
+          <table className="w-full min-w-[1400px] text-sm">
+            <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b">
-                <th className="px-4 py-3 text-left">Quote Date</th>
-                <th className="px-4 py-3 text-left">Customer</th>
-                <th className="px-4 py-3 text-left">Season</th>
+                <th className="sticky left-0 z-20 bg-card px-4 py-3 text-left">
+                  Quote Date
+                </th>
+                <th className="sticky left-[140px] z-20 bg-card px-4 py-3 text-left">
+                  Customer
+                </th>
+
                 <th className="px-4 py-3 text-left">Style</th>
-                <th className="px-4 py-3 text-left">Reference</th>
                 <th className="px-4 py-3 text-left">Color</th>
-                <th className="px-4 py-3 text-left">Factory</th>
                 <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Revision No</th>
-                <th className="px-4 py-3 text-left">Total Revisions</th>
-                <th className="px-4 py-3 text-left">Quote Buy</th>
-                <th className="px-4 py-3 text-left">Quote Sell</th>
-                <th className="px-4 py-3 text-left">Margin %</th>
-                <th className="px-4 py-3 text-left">Margin Amount</th>
-                <th className="px-4 py-3 text-left">PO Number</th>
-                <th className="px-4 py-3 text-left">Order Factory</th>
-                <th className="px-4 py-3 text-left">Gap Order vs Quote %</th>
-                <th className="px-4 py-3 text-left">Days Quote → Order</th>
+                <th className="px-4 py-3 text-left">PO</th>
+
+                <th className="px-4 py-3 text-right">Sell</th>
+                <th className="px-4 py-3 text-right">Margin %</th>
+                <th className="px-4 py-3 text-right">Gap %</th>
+                <th className="px-4 py-3 text-right">Days</th>
+
+                <th className="px-4 py-3 text-left">Season</th>
+                <th className="px-4 py-3 text-left">Factory</th>
+
+                <th className="px-4 py-3 text-right">Buy</th>
+                <th className="px-4 py-3 text-right">Margin €</th>
+                <th className="px-4 py-3 text-right">Revisions</th>
               </tr>
             </thead>
 
@@ -351,64 +356,82 @@ export default async function DevelopmentQuotesAnalyticsPage({
               {rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={18}
+                    colSpan={15}
                     className="px-4 py-6 text-center text-muted-foreground"
                   >
                     No quotes found for the selected filters.
                   </td>
                 </tr>
               ) : (
-                rows.map((row, index) => (
-                  <tr
-                    key={`${row.cotizacion_id ?? 'quote'}-${index}`}
-                    className="border-b last:border-0 hover:bg-muted/30"
-                  >
-                    <td className="px-4 py-3">{formatDate(row.quote_date)}</td>
-                    <td className="px-4 py-3 font-medium">{row.customer ?? '—'}</td>
-                    <td className="px-4 py-3">{row.season ?? '—'}</td>
-                    <td className="px-4 py-3">{row.style ?? '—'}</td>
-                    <td className="px-4 py-3">{row.reference ?? '—'}</td>
-                    <td className="px-4 py-3">{row.color ?? '—'}</td>
-                    <td className="px-4 py-3">{row.quote_factory ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusBadgeClass(
-                          row.quote_status
-                        )}`}
-                      >
-                        {humanizeStatus(row.quote_status)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {formatNumber(row.revision_no_inferred)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {formatNumber(row.revision_count_inferred)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {formatCurrency(row.quote_buy_price, 2)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {formatCurrency(row.quote_sell_price, 2)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {formatPercentFromRatio(row.quote_margin_pct)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {formatCurrency(row.quote_margin_amount, 2)}
-                    </td>
-                    <td className="px-4 py-3">{row.po_number ?? '—'}</td>
-                    <td className="px-4 py-3">{row.order_factory ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      {formatPercentValue(row.gap_order_vs_quote_sell_pct)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {row.days_quote_to_order === null
-                        ? '—'
-                        : `${formatNumber(row.days_quote_to_order, 1)} d`}
-                    </td>
-                  </tr>
-                ))
+                rows.map((row, index) => {
+                  const gap = row.gap_order_vs_quote_sell_pct
+
+                  const gapColor =
+                    gap === null ? '' : gap > 0 ? 'text-emerald-600' : 'text-rose-600'
+
+                  return (
+                    <tr
+                      key={`${row.cotizacion_id ?? 'quote'}-${index}`}
+                      className="border-b last:border-0 hover:bg-muted/30"
+                    >
+                      <td className="sticky left-0 bg-card px-4 py-3">
+                        {formatDate(row.quote_date)}
+                      </td>
+
+                      <td className="sticky left-[140px] bg-card px-4 py-3 font-medium">
+                        {row.customer ?? '—'}
+                      </td>
+
+                      <td className="px-4 py-3">{row.style ?? '—'}</td>
+                      <td className="px-4 py-3">{row.color ?? '—'}</td>
+
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusBadgeClass(
+                            row.quote_status
+                          )}`}
+                        >
+                          {humanizeStatus(row.quote_status)}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3 font-medium">{row.po_number ?? '—'}</td>
+
+                      <td className="px-4 py-3 text-right font-medium">
+                        {formatCurrency(row.quote_sell_price, 2)}
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        {formatPercentFromRatio(row.quote_margin_pct)}
+                      </td>
+
+                      <td className={`px-4 py-3 text-right font-medium ${gapColor}`}>
+                        {formatPercentValue(gap)}
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        {row.days_quote_to_order === null
+                          ? '—'
+                          : `${formatNumber(row.days_quote_to_order, 1)} d`}
+                      </td>
+
+                      <td className="px-4 py-3">{row.season ?? '—'}</td>
+                      <td className="px-4 py-3">{row.quote_factory ?? '—'}</td>
+
+                      <td className="px-4 py-3 text-right">
+                        {formatCurrency(row.quote_buy_price, 2)}
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        {formatCurrency(row.quote_margin_amount, 2)}
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        {formatNumber(row.revision_count_inferred)}
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
