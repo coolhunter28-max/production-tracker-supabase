@@ -12,12 +12,30 @@ import type {
   CustomerOperationalDetail,
   CustomerQualityDetail,
   CustomerXiamenVolumeEvolutionRow,
-  CustomerLatestXiamenVolumeSignal,
 } from "@/types/clientes";
 
 type SearchParamsInput =
   | Record<string, string | string[] | undefined>
   | URLSearchParams;
+
+export interface CustomerLatestXiamenVolumeSignal {
+  customer: string;
+  season: string;
+  previous_season: string | null;
+  qty_growth_pct: number | null;
+  sell_growth_pct: number | null;
+  volume_signal: string | null;
+}
+
+export interface CustomerHealthSignal {
+  customer: string;
+  health_signal: string | null;
+  health_reason?: string | null;
+  volume_signal: string | null;
+  qty_growth_pct?: number | null;
+  sell_growth_pct?: number | null;
+  xiamen_context_flag: boolean | null;
+}
 
 function readParam(
   searchParams: SearchParamsInput,
@@ -75,56 +93,14 @@ export function parseClientesSearchParams(
   };
 }
 
-function applySort(
-  query: ReturnType<SupabaseClient["from"]>,
-  sort: CustomerBusinessMatrixSort
-) {
-  switch (sort) {
-    case "business_score.asc":
-      return query.order("customer_business_score", {
-        ascending: true,
-        nullsFirst: false,
-      });
-
-    case "friction_score.desc":
-      return query.order("customer_friction_score", {
-        ascending: false,
-        nullsFirst: false,
-      });
-
-    case "friction_score.asc":
-      return query.order("customer_friction_score", {
-        ascending: true,
-        nullsFirst: false,
-      });
-
-    case "customer.asc":
-      return query.order("customer", {
-        ascending: true,
-      });
-
-    case "customer.desc":
-      return query.order("customer", {
-        ascending: false,
-      });
-
-    case "business_score.desc":
-    default:
-      return query.order("customer_business_score", {
-        ascending: false,
-        nullsFirst: false,
-      });
-  }
-}
-
 export async function getCustomerBusinessMatrix(
   supabase: SupabaseClient,
   filters: CustomerBusinessMatrixFilters
 ): Promise<CustomerBusinessMatrixRow[]> {
   let query = supabase
-    .from("vw_customer_business_matrix")
+    .from("vw_customer_business_contextual")
     .select(
-      "customer, customer_business_profile, customer_business_score, customer_friction_score"
+      "customer, customer_business_profile:contextual_business_profile, customer_business_score:contextual_business_score, customer_friction_score"
     );
 
   if (filters.customer) {
@@ -132,16 +108,59 @@ export async function getCustomerBusinessMatrix(
   }
 
   if (filters.profile) {
-    query = query.eq("customer_business_profile", filters.profile);
+    query = query.eq("contextual_business_profile", filters.profile);
   }
 
-  query = applySort(query, filters.sort);
+  switch (filters.sort) {
+    case "business_score.asc":
+      query = query.order("contextual_business_score", {
+        ascending: true,
+        nullsFirst: false,
+      });
+      break;
+
+    case "business_score.desc":
+      query = query.order("contextual_business_score", {
+        ascending: false,
+        nullsFirst: false,
+      });
+      break;
+
+    case "friction_score.asc":
+      query = query.order("customer_friction_score", {
+        ascending: true,
+        nullsFirst: false,
+      });
+      break;
+
+    case "friction_score.desc":
+      query = query.order("customer_friction_score", {
+        ascending: false,
+        nullsFirst: false,
+      });
+      break;
+
+    case "customer.asc":
+      query = query.order("customer", { ascending: true });
+      break;
+
+    case "customer.desc":
+      query = query.order("customer", { ascending: false });
+      break;
+
+    default:
+      query = query.order("contextual_business_score", {
+        ascending: false,
+        nullsFirst: false,
+      });
+      break;
+  }
 
   const { data, error } = await query;
 
   if (error) {
     throw new Error(
-      `Error cargando vw_customer_business_matrix: ${error.message}`
+      `Error cargando vw_customer_business_contextual: ${error.message}`
     );
   }
 
@@ -175,6 +194,43 @@ export async function getCustomerBusinessDetail(
   return (data ?? null) as CustomerBusinessDetail | null;
 }
 
+export async function getCustomerBusinessContextualDetail(
+  supabase: SupabaseClient,
+  customer: string
+): Promise<{
+  customer: string;
+  raw_business_profile: string | null;
+  raw_business_score: number | null;
+  contextual_business_profile: string | null;
+  contextual_business_score: number | null;
+  customer_friction_score: number | null;
+  score_model: string | null;
+  volume_signal: string | null;
+  health_signal: string | null;
+} | null> {
+  const normalizedCustomer = customer.trim();
+
+  if (!normalizedCustomer) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("vw_customer_business_contextual")
+    .select(
+      "customer, raw_business_profile, raw_business_score, contextual_business_profile, contextual_business_score, customer_friction_score, score_model, volume_signal, health_signal"
+    )
+    .eq("customer", normalizedCustomer)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Error cargando vw_customer_business_contextual: ${error.message}`
+    );
+  }
+
+  return data ?? null;
+}
+
 export async function getCustomerOperationalDetail(
   supabase: SupabaseClient,
   customer: string
@@ -192,9 +248,7 @@ export async function getCustomerOperationalDetail(
     .maybeSingle();
 
   if (error) {
-    throw new Error(
-      `Error cargando vw_exec_customer_ranking: ${error.message}`
-    );
+    throw new Error(`Error cargando vw_exec_customer_ranking: ${error.message}`);
   }
 
   return (data ?? null) as CustomerOperationalDetail | null;
@@ -247,6 +301,7 @@ export async function getCustomerQualityDetail(
 
   return (data ?? null) as CustomerQualityDetail | null;
 }
+
 export async function getCustomerXiamenVolumeEvolution(
   supabase: SupabaseClient,
   customer: string
@@ -271,6 +326,7 @@ export async function getCustomerXiamenVolumeEvolution(
 
   return (data ?? []) as CustomerXiamenVolumeEvolutionRow[];
 }
+
 export async function getLatestXiamenVolumeSignals(
   supabase: SupabaseClient
 ): Promise<Record<string, CustomerLatestXiamenVolumeSignal>> {
@@ -298,6 +354,59 @@ export async function getLatestXiamenVolumeSignals(
 
   return map;
 }
+
+export async function getCustomerHealthSignals(
+  supabase: SupabaseClient
+): Promise<Record<string, CustomerHealthSignal>> {
+  const { data, error } = await supabase
+    .from("vw_customer_health_signal")
+    .select(
+      "customer, health_signal, volume_signal, xiamen_context_flag"
+    );
+
+  if (error) {
+    throw new Error(`Error cargando health signals: ${error.message}`);
+  }
+
+  const map: Record<string, CustomerHealthSignal> = {};
+
+  for (const row of data ?? []) {
+    map[row.customer] = {
+      customer: row.customer,
+      health_signal: row.health_signal,
+      volume_signal: row.volume_signal,
+      xiamen_context_flag: row.xiamen_context_flag,
+    };
+  }
+
+  return map;
+}
+
+export async function getCustomerHealthSignal(
+  supabase: SupabaseClient,
+  customer: string
+): Promise<CustomerHealthSignal | null> {
+  const normalizedCustomer = customer.trim();
+
+  if (!normalizedCustomer) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("vw_customer_health_signal")
+    .select(
+      "customer, health_signal, health_reason, volume_signal, qty_growth_pct, sell_growth_pct, xiamen_context_flag"
+    )
+    .eq("customer", normalizedCustomer)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Error cargando customer health signal: ${error.message}`);
+  }
+
+  return (data ?? null) as CustomerHealthSignal | null;
+}
+
 export async function getCustomerDetailBundle(
   supabase: SupabaseClient,
   customer: string
@@ -331,26 +440,13 @@ export function getCustomerBusinessFilterOptions(
     )
   ).sort((a, b) => a.localeCompare(b));
 
-  const profileOrder: CustomerBusinessProfile[] = [
-    "STRATEGIC",
-    "PROFITABLE",
-    "NEGOTIATOR",
-    "RISKY",
-    "LOW_VALUE",
-  ];
-
-  const profileSet = new Set<CustomerBusinessProfile>();
-
-  for (const row of rows) {
-    if (
-      row.customer_business_profile &&
-      isValidProfile(row.customer_business_profile)
-    ) {
-      profileSet.add(row.customer_business_profile);
-    }
-  }
-
-  const profiles = profileOrder.filter((profile) => profileSet.has(profile));
+  const profiles = Array.from(
+    new Set(
+      rows
+        .map((row) => row.customer_business_profile)
+        .filter((value): value is CustomerBusinessProfile => Boolean(value))
+    )
+  ).sort((a, b) => a.localeCompare(b));
 
   return {
     customers,
@@ -383,32 +479,11 @@ export function buildCustomerBusinessKPIs(
       (row) => row.customer_business_profile === "PROFITABLE"
     ).length,
     riskyCustomers: rows.filter(
-      (row) => row.customer_business_profile === "RISKY"
+      (row) =>
+        row.customer_business_profile === "RISKY" ||
+        row.customer_business_profile === "CRITICAL_XIAMEN"
     ).length,
     avgBusinessScore: average(rows.map((row) => row.customer_business_score)),
     avgFrictionScore: average(rows.map((row) => row.customer_friction_score)),
   };
-}
-export async function getCustomerHealthSignals(supabase: any) {
-  const { data, error } = await supabase
-    .from("vw_customer_health_signal")
-    .select("customer, health_signal, volume_signal");
-
-  if (error) {
-    throw new Error(`Error cargando health signals: ${error.message}`);
-  }
-
-  const map: Record<
-    string,
-    { health_signal: string; volume_signal: string | null }
-  > = {};
-
-  for (const row of data ?? []) {
-    map[row.customer] = {
-      health_signal: row.health_signal,
-      volume_signal: row.volume_signal,
-    };
-  }
-
-  return map;
 }

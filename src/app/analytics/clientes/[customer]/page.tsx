@@ -1,8 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase";
-import { getCustomerDetailBundle } from "@/lib/analytics/clientes";
+import {
+  getCustomerDetailBundle,
+  getCustomerHealthSignal,
+} from "@/lib/analytics/clientes";
 import type { CustomerBusinessProfile } from "@/types/clientes";
+
+type HealthSignal =
+  | "HEALTHY"
+  | "MONITOR"
+  | "WARNING"
+  | "CRITICAL"
+  | "STABLE"
+  | "NEUTRAL"
+  | "-";
 
 function formatNumber(value: number | null | undefined, decimals = 2) {
   if (value === null || value === undefined) return "-";
@@ -22,30 +34,22 @@ function formatPercent(value: number | null | undefined, decimals = 2) {
   }).format(value)}%`;
 }
 
-function isXiamenDominant(xiamenMix: number | null | undefined) {
-  return xiamenMix !== null && xiamenMix !== undefined && xiamenMix >= 70;
-}
-
-function isBSGDominant(bsgMix: number | null | undefined) {
-  return bsgMix !== null && bsgMix !== undefined && bsgMix >= 70;
-}
-
-function getContextualProfileLabel(
+function getProfileLabel(
   profile: string | null | undefined,
-  xiamenMix: number | null | undefined
+  isXiamenContext: boolean
 ) {
-  if (profile === "RISKY" && isXiamenDominant(xiamenMix)) {
+  if (profile === "RISKY" && isXiamenContext) {
     return "DEMANDING (Xiamen)";
   }
 
   return profile ?? "-";
 }
 
-function getContextualProfileBadgeClass(
+function getProfileBadgeClass(
   profile: string | null | undefined,
-  xiamenMix: number | null | undefined
+  isXiamenContext: boolean
 ) {
-  if (profile === "RISKY" && isXiamenDominant(xiamenMix)) {
+  if (profile === "RISKY" && isXiamenContext) {
     return "bg-amber-50 text-amber-700 ring-amber-200";
   }
 
@@ -65,19 +69,21 @@ function getContextualProfileBadgeClass(
   }
 }
 
-function getInsightToneClass(
-  tone: "positive" | "warning" | "risk" | "neutral"
-) {
-  switch (tone) {
-    case "positive":
-      return "bg-emerald-50 text-emerald-800 ring-emerald-200";
-    case "warning":
-      return "bg-amber-50 text-amber-800 ring-amber-200";
-    case "risk":
-      return "bg-red-50 text-red-800 ring-red-200";
-    case "neutral":
+function getHealthBadgeClass(health: HealthSignal) {
+  switch (health) {
+    case "HEALTHY":
+      return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+    case "MONITOR":
+    case "STABLE":
+      return "bg-blue-50 text-blue-700 ring-blue-200";
+    case "WARNING":
+      return "bg-amber-50 text-amber-700 ring-amber-200";
+    case "CRITICAL":
+      return "bg-red-50 text-red-700 ring-red-200";
+    case "NEUTRAL":
+    case "-":
     default:
-      return "bg-slate-50 text-slate-700 ring-slate-200";
+      return "bg-muted text-muted-foreground ring-border";
   }
 }
 
@@ -98,43 +104,33 @@ function getVolumeSignalBadgeClass(signal: string | null | undefined) {
   }
 }
 
-function getBusinessCardTitle(xiamenMix: number | null | undefined) {
-  return isXiamenDominant(xiamenMix) ? "Business Score (BI)" : "Business Score";
-}
-
-function getBusinessCardHelper(xiamenMix: number | null | undefined) {
-  return isXiamenDominant(xiamenMix)
-    ? "Indicador global de BI. En cuentas Xiamen el KPI principal es volumen y continuidad."
-    : "Score consolidado de negocio";
-}
-
-function getFrictionCardTitle(xiamenMix: number | null | undefined) {
-  return isXiamenDominant(xiamenMix) ? "Coordination Load" : "Friction Score";
-}
-
-function getFrictionCardHelper(xiamenMix: number | null | undefined) {
-  return isXiamenDominant(xiamenMix)
-    ? "En cuentas Xiamen léelo como complejidad de coordinación, no como riesgo puro."
-    : "Nivel consolidado de fricción";
-}
-
-function ContextualProfileBadge({
+function ProfileBadge({
   profile,
-  xiamenMix,
+  isXiamenContext,
 }: {
   profile: CustomerBusinessProfile | string | null;
-  xiamenMix: number | null | undefined;
+  isXiamenContext: boolean;
 }) {
-  const label = getContextualProfileLabel(profile, xiamenMix);
-
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getContextualProfileBadgeClass(
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getProfileBadgeClass(
         profile,
-        xiamenMix
+        isXiamenContext
       )}`}
     >
-      {label}
+      {getProfileLabel(profile, isXiamenContext)}
+    </span>
+  );
+}
+
+function HealthBadge({ health }: { health: HealthSignal }) {
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getHealthBadgeClass(
+        health
+      )}`}
+    >
+      {health}
     </span>
   );
 }
@@ -216,256 +212,6 @@ function DataRow({
   );
 }
 
-function InsightCard({
-  title,
-  body,
-  tone,
-}: {
-  title: string;
-  body: string;
-  tone: "positive" | "warning" | "risk" | "neutral";
-}) {
-  return (
-    <div
-      className={`rounded-2xl p-4 ring-1 ring-inset ${getInsightToneClass(
-        tone
-      )}`}
-    >
-      <p className="text-sm font-semibold">{title}</p>
-      <p className="mt-2 text-sm leading-6">{body}</p>
-    </div>
-  );
-}
-
-function buildVolumeInsight(
-  detail: Awaited<ReturnType<typeof getCustomerDetailBundle>>
-) {
-  const latestVolumeRow = detail.xiamenVolumeEvolution.at(-1);
-
-  if (!latestVolumeRow) {
-    return null;
-  }
-
-  if (latestVolumeRow.volume_signal === "VOLUME_DROP_RISK") {
-    return {
-      title: "Riesgo real por caída de volumen",
-      body: `La última temporada (${latestVolumeRow.season}) muestra una caída de volumen de ${formatPercent(
-        latestVolumeRow.qty_growth_pct,
-        2
-      )} frente a ${latestVolumeRow.previous_season}. En Xiamen esta es una señal crítica.`,
-      tone: "risk" as const,
-    };
-  }
-
-  if (latestVolumeRow.volume_signal === "VOLUME_SOFT_DROP") {
-    return {
-      title: "Caída moderada de volumen",
-      body: `La última temporada muestra una caída de volumen de ${formatPercent(
-        latestVolumeRow.qty_growth_pct,
-        2
-      )}. No es crítica, pero conviene monitorizar la siguiente season.`,
-      tone: "warning" as const,
-    };
-  }
-
-  if (latestVolumeRow.volume_signal === "GROWING") {
-    return {
-      title: "Cliente en crecimiento",
-      body: `La última temporada muestra crecimiento de volumen de ${formatPercent(
-        latestVolumeRow.qty_growth_pct,
-        2
-      )}. En Xiamen esto refuerza el valor de la cuenta.`,
-      tone: "positive" as const,
-    };
-  }
-
-  const qty = detail.operations?.qty_total;
-  const xiamenMix = detail.operations?.xiamen_sales_mix_pct;
-
-  if (!isXiamenDominant(xiamenMix) || qty === null || qty === undefined) {
-    return null;
-  }
-
-  if (qty >= 100000) {
-    return {
-      title: "Cliente de alto volumen",
-      body: "El cliente maneja un volumen elevado de producción. En operativas tipo Xiamen, este es un indicador principal de valor y continuidad.",
-      tone: "positive" as const,
-    };
-  }
-
-  return null;
-}
-
-function buildExecutiveInsights(
-  detail: Awaited<ReturnType<typeof getCustomerDetailBundle>>
-) {
-  const insights: Array<{
-    title: string;
-    body: string;
-    tone: "positive" | "warning" | "risk" | "neutral";
-  }> = [];
-
-  const volumeInsight = buildVolumeInsight(detail);
-
-  if (volumeInsight) {
-    insights.push(volumeInsight);
-  }
-
-  const profile = detail.business?.customer_business_profile;
-  const businessScore = detail.business?.customer_business_score;
-  const frictionScore = detail.business?.customer_friction_score;
-  const contributionPct = detail.operations?.contribution_pct;
-  const productionDelay = detail.operations?.avg_delay_production_days;
-  const gapVsMaster = detail.development?.avg_gap_vs_master;
-  const negotiationProfile = detail.development?.negotiation_profile;
-  const hasQualityData = detail.quality !== null;
-  const xiamenMix = detail.operations?.xiamen_sales_mix_pct;
-  const bsgMix = detail.operations?.bsg_sales_mix_pct;
-  const customerSizeBand = detail.operations?.customer_size_band;
-  const profitabilityBand = detail.operations?.profitability_band;
-
-  const xiamenDominant = isXiamenDominant(xiamenMix);
-  const bsgDominant = isBSGDominant(bsgMix);
-
-  const isLargeAccount =
-    customerSizeBand === "GROWTH_ACCOUNT" ||
-    customerSizeBand === "LARGE_ACCOUNT" ||
-    customerSizeBand === "KEY_ACCOUNT";
-
-  if (xiamenDominant) {
-    insights.push({
-      title: "Cuenta principalmente Xiamen",
-      body: `El mix operativo está dominado por Xiamen (${formatPercent(
-        xiamenMix,
-        2
-      )}). En este tipo de cuenta la lectura debe centrarse más en volumen, continuidad y coordinación que en margen de compraventa.`,
-      tone: "neutral",
-    });
-  }
-
-  if (isLargeAccount) {
-    insights.push({
-      title: "Cuenta de peso relevante",
-      body: `El cliente está clasificado como ${customerSizeBand}. Aunque exista fricción, su peso comercial justifica seguimiento prioritario y lectura estratégica.`,
-      tone: "positive",
-    });
-  }
-
-  if (
-    contributionPct !== null &&
-    contributionPct !== undefined &&
-    contributionPct >= 10
-  ) {
-    insights.push({
-      title: "Peso económico relevante",
-      body: `El cliente aporta un contribution_pct de ${formatPercent(
-        contributionPct,
-        2
-      )}. No conviene interpretar la relación solo por fricción: también hay impacto real en negocio.`,
-      tone: "positive",
-    });
-  }
-
-  if (
-    productionDelay !== null &&
-    productionDelay !== undefined &&
-    productionDelay > 0
-  ) {
-    insights.push({
-      title: "Fricción operativa existente",
-      body: `La media de retraso de producción es de ${formatNumber(
-        productionDelay,
-        2
-      )} días. Esto apunta a tensión operativa, aunque no necesariamente a un problema estructural de cliente.`,
-      tone: productionDelay >= 7 ? "risk" : "warning",
-    });
-  }
-
-  if (bsgDominant && negotiationProfile === "AGGRESSIVE") {
-    insights.push({
-      title: "Presión comercial sobre negocio BSG",
-      body: `La cuenta tiene peso relevante en BSG (${formatPercent(
-        bsgMix,
-        2
-      )}) y además muestra un perfil negociador agresivo. Aquí sí existe mayor riesgo de erosión de margen y conviene controlar concesiones.`,
-      tone: "warning",
-    });
-  }
-
-  if (
-    bsgDominant &&
-    gapVsMaster !== null &&
-    gapVsMaster !== undefined &&
-    gapVsMaster >= 20
-  ) {
-    insights.push({
-      title: "Gap alto frente a master",
-      body: `El gap medio frente a master está en ${formatPercent(
-        gapVsMaster,
-        2
-      )}. En una cuenta dominada por BSG esto sugiere presión real sobre pricing y margen.`,
-      tone: "warning",
-    });
-  }
-
-  if (
-    !xiamenDominant &&
-    (profile === "RISKY" ||
-      (frictionScore !== null &&
-        frictionScore !== undefined &&
-        frictionScore >= 40 &&
-        businessScore !== null &&
-        businessScore !== undefined &&
-        businessScore < 0))
-  ) {
-    insights.push({
-      title: "Relación desequilibrada",
-      body: "La combinación de score de negocio débil y fricción elevada sugiere una cuenta exigente para la organización. Conviene revisar estrategia comercial y límites de negociación.",
-      tone: "risk",
-    });
-  }
-
-  if (
-    xiamenDominant &&
-    frictionScore !== null &&
-    frictionScore !== undefined &&
-    frictionScore >= 40
-  ) {
-    insights.push({
-      title: "Cuenta exigente de alta coordinación",
-      body: "La fricción elevada debe leerse aquí como señal de complejidad operativa y comercial, no necesariamente como bajo valor del cliente. Conviene reforzar seguimiento y coordinación.",
-      tone: "warning",
-    });
-  }
-
-  if (profitabilityBand === "HIGH_MARGIN" && bsgDominant) {
-    insights.push({
-      title: "Rentabilidad sólida en BSG",
-      body: "La cuenta aparece en banda de rentabilidad alta dentro de una operativa donde sí existe margen de compraventa. Esto refuerza su valor económico.",
-      tone: "positive",
-    });
-  }
-
-  if (!hasQualityData) {
-    insights.push({
-      title: "Sin cobertura QC",
-      body: "No hay datos de calidad disponibles para este cliente en la view QC. Esto no implica ausencia de riesgo, sino ausencia de señal en ese bloque.",
-      tone: "neutral",
-    });
-  }
-
-  if (insights.length === 0) {
-    insights.push({
-      title: "Lectura estable",
-      body: "No se detectan señales especialmente críticas en esta versión del detalle. Conviene seguir monitorizando evolución comercial, operativa y de calidad.",
-      tone: "neutral",
-    });
-  }
-
-  return insights.slice(0, 6);
-}
-
 export default async function AnalyticsClienteDetailPage({
   params,
 }: {
@@ -474,14 +220,18 @@ export default async function AnalyticsClienteDetailPage({
   const decodedCustomer = decodeURIComponent(params.customer);
 
   const supabase = await createClient();
-  const detail = await getCustomerDetailBundle(supabase, decodedCustomer);
+
+  const [detail, healthData] = await Promise.all([
+    getCustomerDetailBundle(supabase, decodedCustomer),
+    getCustomerHealthSignal(supabase, decodedCustomer),
+  ]);
 
   if (!detail.business) {
     notFound();
   }
 
-  const xiamenMix = detail.operations?.xiamen_sales_mix_pct;
-  const insights = buildExecutiveInsights(detail);
+  const isXiamenContext = healthData?.xiamen_context_flag === true;
+  const health = (healthData?.health_signal as HealthSignal | undefined) ?? "-";
 
   return (
     <div className="space-y-6 p-6">
@@ -498,40 +248,53 @@ export default async function AnalyticsClienteDetailPage({
           <h1 className="text-3xl font-semibold tracking-tight">
             {detail.business.customer}
           </h1>
-          <ContextualProfileBadge
+
+          <ProfileBadge
             profile={detail.business.customer_business_profile}
-            xiamenMix={xiamenMix}
+            isXiamenContext={isXiamenContext}
           />
         </div>
       </header>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <MetricCard
-          title={getBusinessCardTitle(xiamenMix)}
+          title={isXiamenContext ? "Business Score (BI)" : "Business Score"}
           value={formatNumber(detail.business.customer_business_score, 2)}
-          helper={getBusinessCardHelper(xiamenMix)}
+          helper={
+            isXiamenContext
+              ? "Indicador BI secundario en cuentas Xiamen"
+              : "Score consolidado de negocio"
+          }
         />
         <MetricCard
-          title={getFrictionCardTitle(xiamenMix)}
+          title={isXiamenContext ? "Coordination Load" : "Friction Score"}
           value={formatNumber(detail.business.customer_friction_score, 2)}
-          helper={getFrictionCardHelper(xiamenMix)}
+          helper={
+            isXiamenContext
+              ? "Complejidad de coordinación, no riesgo puro"
+              : "Nivel consolidado de fricción"
+          }
         />
         <MetricCard
           title="Profile"
-          value={getContextualProfileLabel(
+          value={getProfileLabel(
             detail.business.customer_business_profile,
-            xiamenMix
+            isXiamenContext
           )}
-          helper="Clasificación ajustada al contexto operativo"
+          helper="Clasificación contextualizada"
+        />
+        <MetricCard
+          title="Health"
+          value={health}
+          helper="Señal consolidada desde BI Layer"
         />
       </section>
 
-      {isXiamenDominant(xiamenMix) ? (
+      {isXiamenContext ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           En cuentas dominadas por Xiamen, el KPI principal debe leerse por
           volumen, continuidad y evolución entre temporadas. Los scores de BI de
-          cabecera son útiles como señal secundaria, no como juicio final de la
-          cuenta.
+          cabecera son útiles como señal secundaria.
         </div>
       ) : null}
 
@@ -653,9 +416,6 @@ export default async function AnalyticsClienteDetailPage({
                   <th className="px-4 py-3 font-medium text-right">
                     Sell Growth
                   </th>
-                  <th className="px-4 py-3 font-medium text-right">
-                    PO Growth
-                  </th>
                   <th className="px-4 py-3 font-medium">Signal</th>
                 </tr>
               </thead>
@@ -679,9 +439,6 @@ export default async function AnalyticsClienteDetailPage({
                     <td className="px-4 py-3 text-right">
                       {formatPercent(row.sell_growth_pct, 2)}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      {formatPercent(row.po_count_growth_pct, 2)}
-                    </td>
                     <td className="px-4 py-3">
                       <VolumeSignalBadge signal={row.volume_signal} />
                     </td>
@@ -695,18 +452,62 @@ export default async function AnalyticsClienteDetailPage({
 
       <DetailSection
         title="Lectura ejecutiva"
-        description="Interpretación automática basada en los bloques ya consolidados"
+        description="Interpretación consolidada desde vw_customer_health_signal"
       >
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {insights.map((insight, index) => (
-            <InsightCard
-              key={`${insight.title}-${index}`}
-              title={insight.title}
-              body={insight.body}
-              tone={insight.tone}
-            />
-          ))}
+        <div
+          className={`rounded-2xl p-4 ring-1 ring-inset ${getHealthBadgeClass(
+            health
+          )}`}
+        >
+          <p className="text-sm font-semibold">{health}</p>
+          <p className="mt-2 text-sm leading-6">
+            {healthData?.health_reason ?? "Sin señal específica disponible."}
+          </p>
         </div>
+ {healthData && healthData.health_signal === "CRITICAL" ? (
+  <div className="mt-4 rounded-xl border bg-red-50 p-4 text-sm text-red-900">
+    <p className="font-semibold mb-4">Drivers del estado</p>
+
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      
+      <div className="rounded-lg border bg-white p-3">
+        <p className="text-xs text-muted-foreground">Última temporada</p>
+        <p className="text-sm font-semibold">
+          {healthData.xiamen_latest_season ?? "-"}
+        </p>
+      </div>
+
+      <div className="rounded-lg border bg-white p-3">
+        <p className="text-xs text-muted-foreground">Temporada previa</p>
+        <p className="text-sm font-semibold">
+          {healthData.xiamen_previous_season ?? "-"}
+        </p>
+      </div>
+
+      <div className="rounded-lg border bg-white p-3">
+        <p className="text-xs text-muted-foreground">Qty Growth</p>
+        <p className="text-sm font-semibold text-red-600">
+          {formatPercent(healthData.qty_growth_pct, 2)}
+        </p>
+      </div>
+
+      <div className="rounded-lg border bg-white p-3">
+        <p className="text-xs text-muted-foreground">Sell Growth</p>
+        <p className="text-sm font-semibold text-red-600">
+          {formatPercent(healthData.sell_growth_pct, 2)}
+        </p>
+      </div>
+
+      <div className="rounded-lg border bg-white p-3">
+        <p className="text-xs text-muted-foreground">PO Growth</p>
+        <p className="text-sm font-semibold text-red-600">
+          {formatPercent(healthData.po_count_growth_pct, 2)}
+        </p>
+      </div>
+
+    </div>
+  </div>
+) : null}
       </DetailSection>
     </div>
   );
