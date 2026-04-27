@@ -112,6 +112,24 @@ function KpiCard({
   );
 }
 
+function formatProfileLabel(profile: string | null | undefined) {
+  switch (profile) {
+    case "CRITICAL_XIAMEN":
+      return "CRITICAL (Xiamen)";
+    case "WATCH_XIAMEN":
+      return "WATCH (Xiamen)";
+    case "GROWING_XIAMEN":
+      return "GROWING (Xiamen)";
+    case "NEW_OR_UNTRACKED_XIAMEN":
+      return "NEW / UNTRACKED (Xiamen)";
+    case "DEMANDING_XIAMEN":
+    case "DEMANDING (Xiamen)":
+      return "DEMANDING (Xiamen)";
+    default:
+      return profile ?? "-";
+  }
+}
+
 function ProfileBadge({
   profile,
 }: {
@@ -123,11 +141,10 @@ function ProfileBadge({
         profile
       )}`}
     >
-      {profile ?? "-"}
+      {formatProfileLabel(profile)}
     </span>
   );
 }
-
 function HealthBadge({ health }: { health: HealthSignal }) {
   return (
     <span
