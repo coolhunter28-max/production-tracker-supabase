@@ -3,7 +3,7 @@ import {
   buildCustomerBusinessKPIs,
   getCustomerBusinessFilterOptions,
   getCustomerBusinessMatrix,
-  getLatestXiamenVolumeSignals,
+  getCustomerHealthSignals,
   parseClientesSearchParams,
 } from "@/lib/analytics/clientes";
 import { createClient } from "@/lib/supabase";
@@ -14,7 +14,14 @@ import type {
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-type HealthSignal = "HEALTHY" | "MONITOR" | "WARNING" | "CRITICAL" | "-";
+type HealthSignal =
+  | "HEALTHY"
+  | "MONITOR"
+  | "WARNING"
+  | "CRITICAL"
+  | "STABLE"
+  | "NEUTRAL"
+  | "-";
 
 function formatNumber(value: number | null | undefined, decimals = 2) {
   if (value === null || value === undefined) return "-";
@@ -66,11 +73,14 @@ function getHealthBadgeClass(health: HealthSignal) {
     case "HEALTHY":
       return "bg-emerald-50 text-emerald-700 ring-emerald-200";
     case "MONITOR":
+    case "STABLE":
       return "bg-blue-50 text-blue-700 ring-blue-200";
     case "WARNING":
       return "bg-amber-50 text-amber-700 ring-amber-200";
     case "CRITICAL":
       return "bg-red-50 text-red-700 ring-red-200";
+    case "NEUTRAL":
+    case "-":
     default:
       return "bg-muted text-muted-foreground ring-border";
   }
@@ -78,35 +88,13 @@ function getHealthBadgeClass(health: HealthSignal) {
 
 function getContextualProfileLabel(
   profile: string | null | undefined,
-  hasXiamenSignal: boolean
+  hasXiamenContext: boolean
 ) {
-  if (profile === "RISKY" && hasXiamenSignal) {
+  if (profile === "RISKY" && hasXiamenContext) {
     return "DEMANDING (Xiamen)";
   }
 
   return profile ?? "-";
-}
-
-function getHealthSignal({
-  volumeSignal,
-  profile,
-  frictionScore,
-}: {
-  volumeSignal: string | null | undefined;
-  profile: string | null | undefined;
-  frictionScore: number | null | undefined;
-}): HealthSignal {
-  if (volumeSignal === "VOLUME_DROP_RISK") return "CRITICAL";
-  if (volumeSignal === "VOLUME_SOFT_DROP") return "WARNING";
-  if (volumeSignal === "GROWING") return "HEALTHY";
-  if (volumeSignal === "STABLE") return "MONITOR";
-  if (volumeSignal === "NO_BASELINE") return "MONITOR";
-
-  if (profile === "RISKY" && frictionScore !== null && frictionScore !== undefined && frictionScore >= 40) {
-    return "WARNING";
-  }
-
-  return "-";
 }
 
 function KpiCard({
@@ -140,18 +128,6 @@ function ProfileBadge({
   );
 }
 
-function VolumeSignalBadge({ signal }: { signal: string | null | undefined }) {
-  return (
-    <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getVolumeSignalBadgeClass(
-        signal
-      )}`}
-    >
-      {signal ?? "-"}
-    </span>
-  );
-}
-
 function HealthBadge({ health }: { health: HealthSignal }) {
   return (
     <span
@@ -160,6 +136,18 @@ function HealthBadge({ health }: { health: HealthSignal }) {
       )}`}
     >
       {health}
+    </span>
+  );
+}
+
+function VolumeSignalBadge({ signal }: { signal: string | null | undefined }) {
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getVolumeSignalBadgeClass(
+        signal
+      )}`}
+    >
+      {signal ?? "-"}
     </span>
   );
 }
@@ -178,7 +166,7 @@ export default async function AnalyticsClientesPage({
   const supabase = await createClient();
 
   const rows = await getCustomerBusinessMatrix(supabase, filters);
-  const xiamenSignals = await getLatestXiamenVolumeSignals(supabase);
+  const healthSignals = await getCustomerHealthSignals(supabase);
 
   const filterOptions = getCustomerBusinessFilterOptions(rows);
   const kpis = buildCustomerBusinessKPIs(rows);
@@ -352,17 +340,19 @@ export default async function AnalyticsClientesPage({
                 </tr>
               ) : (
                 rows.map((row: CustomerBusinessMatrixRow) => {
-                  const xiamenSignal = xiamenSignals[row.customer];
+                  const healthData = healthSignals[row.customer];
+                  const hasXiamenContext =
+                    healthData?.xiamen_context_flag === true ||
+                    Boolean(healthData?.volume_signal);
+
                   const profileLabel = getContextualProfileLabel(
                     row.customer_business_profile,
-                    Boolean(xiamenSignal)
+                    hasXiamenContext
                   );
 
-                  const health = getHealthSignal({
-                    volumeSignal: xiamenSignal?.volume_signal,
-                    profile: row.customer_business_profile,
-                    frictionScore: row.customer_friction_score,
-                  });
+                  const health =
+                    (healthData?.health_signal as HealthSignal | undefined) ??
+                    "-";
 
                   return (
                     <tr key={row.customer} className="border-t">
@@ -377,9 +367,9 @@ export default async function AnalyticsClientesPage({
                       </td>
 
                       <td className="px-5 py-4">
-                        {xiamenSignal ? (
+                        {healthData?.volume_signal ? (
                           <VolumeSignalBadge
-                            signal={xiamenSignal.volume_signal}
+                            signal={healthData.volume_signal}
                           />
                         ) : (
                           <span className="text-xs text-muted-foreground">

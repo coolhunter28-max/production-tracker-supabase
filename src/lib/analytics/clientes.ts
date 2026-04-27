@@ -389,3 +389,26 @@ export function buildCustomerBusinessKPIs(
     avgFrictionScore: average(rows.map((row) => row.customer_friction_score)),
   };
 }
+export async function getCustomerHealthSignals(supabase: any) {
+  const { data, error } = await supabase
+    .from("vw_customer_health_signal")
+    .select("customer, health_signal, volume_signal");
+
+  if (error) {
+    throw new Error(`Error cargando health signals: ${error.message}`);
+  }
+
+  const map: Record<
+    string,
+    { health_signal: string; volume_signal: string | null }
+  > = {};
+
+  for (const row of data ?? []) {
+    map[row.customer] = {
+      health_signal: row.health_signal,
+      volume_signal: row.volume_signal,
+    };
+  }
+
+  return map;
+}
