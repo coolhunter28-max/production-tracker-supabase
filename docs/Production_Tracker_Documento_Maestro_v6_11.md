@@ -1,4 +1,4 @@
-# Production Tracker — Documento Maestro v6.10
+# Production Tracker — Documento Maestro v6.11
 
 Versión consolidada tras:
 
@@ -1394,3 +1394,232 @@ base lista para siguiente bloque de inteligencia comercial
 Siguiente conversación o siguiente bloque natural:
 
 Construcción de Analytics → Clientes / Business Matrix UI
+29. Actualización de versión
+
+Nueva versión: v6.11
+
+Motivo:
+
+Inicio del desarrollo del módulo Analytics → Clientes / Business Matrix UI
+Definición completa de arquitectura funcional, datasets e implementación v1
+Preparación para ejecución de código de la overview
+30. Estado actual del sistema (actualizado)
+Módulo	Estado
+Executive	✔
+Operaciones	✔
+Quality	✔
+Desarrollo	✔
+Clientes / Business Matrix UI	🔄 En desarrollo (overview v1 definida)
+31. Nuevo módulo — Analytics → Clientes / Business Matrix UI
+31.1 Objetivo funcional
+
+El módulo Clientes / Business Matrix UI representa la capa de inteligencia comercial del sistema.
+
+Su función es:
+
+sintetizar información de:
+Cubo Operativo
+Cubo Desarrollo
+QC Analytics
+Logística
+clasificar clientes según su perfil de negocio
+permitir priorización comercial
+identificar:
+clientes estratégicos
+clientes rentables
+clientes conflictivos
+clientes de bajo valor
+
+Se basa en la view:
+
+vw_customer_business_matrix
+31.2 Clasificación de clientes
+
+Perfiles definidos:
+
+STRATEGIC
+PROFITABLE
+NEGOTIATOR
+RISKY
+LOW_VALUE
+
+Métricas clave:
+
+customer_business_score
+customer_friction_score
+31.3 Arquitectura del módulo
+
+Rutas:
+
+/analytics/clientes
+/analytics/clientes/[customer]
+
+Estructura:
+
+Overview (principal)
+Detail por cliente (pendiente)
+32. Overview v1 — definición funcional (cerrada)
+32.1 Objetivo
+
+Permitir una lectura rápida de la cartera de clientes:
+
+distribución de perfiles
+nivel de fricción
+nivel estratégico
+priorización
+32.2 Fuente de datos
+vw_customer_business_matrix
+
+Regla clave:
+
+1 sola query en v1
+sin views auxiliares
+32.3 Filtros soportados
+customer
+season (si existe en la view)
+profile
+sort
+
+Implementación:
+
+vía search params
+sin estado global
+32.4 KPI strip
+
+Incluye:
+
+Total Customers
+Strategic
+Profitable
+Risky
+Avg Business Score
+Avg Friction Score
+32.5 Tabla principal
+
+Columnas:
+
+Customer
+Profile
+Business Score
+Friction Score
+Action
+32.6 UX rules
+lectura ejecutiva
+simplicidad visual
+sin sobrecarga de datos
+jerarquía clara
+33. Arquitectura técnica implementada
+33.1 Tipos
+src/types/clientes.ts
+
+Incluye:
+
+CustomerBusinessProfile
+CustomerBusinessMatrixRow
+CustomerBusinessMatrixFilters
+CustomerBusinessKPISet
+FilterOptions
+33.2 Helper de datos
+src/lib/analytics/clientes.ts
+
+Funciones:
+
+parseClientesSearchParams
+getCustomerBusinessMatrix
+getCustomerBusinessFilterOptions
+buildCustomerBusinessKPIs
+
+Reglas:
+
+no recalcular lógica de negocio
+no generar métricas nuevas
+solo preparar datos para UI
+33.3 Página overview
+src/app/analytics/clientes/page.tsx
+
+Estructura:
+
+header
+filtros (form method="get")
+KPI strip
+tabla ranking
+34. Reglas clave del módulo
+❌ No duplicar lógica de negocio en frontend
+❌ No usar múltiples views en overview v1
+❌ No introducir filtros no soportados
+❌ No introducir lógica inferida
+✅ Usar exclusivamente vw_customer_business_matrix
+✅ Filtros vía URL
+✅ UI como representación fiel del dato
+✅ Mantener consistencia con resto de Analytics
+35. Siguientes fases definidas
+Fase 1 (actual)
+
+✔ Overview v1 — arquitectura y código definidos
+
+Fase 2 (siguiente)
+Implementación completa de overview
+Validación real con datos
+Fase 3
+Scatter / Business Matrix visual
+Fase 4
+Detail por cliente
+Fase 5
+Integración con:
+Operaciones
+Desarrollo
+Quality
+Fase 6
+Pulido UX
+Navegación cruzada
+36. Punto de corte actual
+
+El sistema se encuentra en:
+
+Inicio de implementación real del módulo Clientes (overview v1)
+
+Con:
+
+arquitectura cerrada
+datasets definidos
+tipos definidos
+helper definido
+página overview definida (lista para implementar)
+37. Mensaje para reiniciar conversación (MUY IMPORTANTE)
+
+Este es el mensaje que debes usar en tu GPT para continuar sin pérdida de contexto:
+
+MENSAJE:
+
+Continuamos el Production Tracker — Analytics UI.
+
+Contexto:
+
+Documento Maestro v6.11 actualizado
+Executive, Operaciones, Quality y Desarrollo ya implementados
+Módulo Clientes / Business Matrix UI en desarrollo
+Overview v1 completamente definida (tipos, helper y page.tsx)
+
+Punto exacto:
+Vamos a implementar el código completo del módulo:
+
+src/types/clientes.ts
+src/lib/analytics/clientes.ts
+src/app/analytics/clientes/page.tsx
+
+Reglas:
+
+usar vw_customer_business_matrix
+filtros vía search params (form GET)
+no duplicar lógica en frontend
+mantener consistencia con Analytics existente
+
+Empezamos por revisar y ajustar el código antes de pegarlo en el proyecto.
+
+38. Conclusión
+
+Con esta actualización:
+
+tienes el proyecto alineado con la realidad
+puedes continuar con cualquier GPT sin pérdida de contexto
+el siguiente paso ya es 100% ejecución
