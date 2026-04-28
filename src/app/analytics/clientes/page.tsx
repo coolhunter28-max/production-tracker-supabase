@@ -23,6 +23,15 @@ type HealthSignal =
   | "NEUTRAL"
   | "-";
 
+const HEALTH_ORDER: HealthSignal[] = [
+  "CRITICAL",
+  "WARNING",
+  "MONITOR",
+  "HEALTHY",
+  "NEUTRAL",
+  "-",
+];
+
 function formatNumber(value: number | null | undefined, decimals = 2) {
   if (value === null || value === undefined) return "-";
 
@@ -30,86 +39,6 @@ function formatNumber(value: number | null | undefined, decimals = 2) {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(value);
-}
-
-function getProfileBadgeClass(profile: string | null | undefined) {
-  switch (profile) {
-    case "STRATEGIC":
-      return "bg-blue-50 text-blue-700 ring-blue-200";
-    case "PROFITABLE":
-      return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-    case "NEGOTIATOR":
-      return "bg-amber-50 text-amber-700 ring-amber-200";
-    case "DEMANDING (Xiamen)":
-      return "bg-amber-50 text-amber-700 ring-amber-200";
-    case "RISKY":
-      return "bg-red-50 text-red-700 ring-red-200";
-    case "LOW_VALUE":
-      return "bg-slate-100 text-slate-700 ring-slate-200";
-    default:
-      return "bg-muted text-muted-foreground ring-border";
-  }
-}
-
-function getVolumeSignalBadgeClass(signal: string | null | undefined) {
-  switch (signal) {
-    case "VOLUME_DROP_RISK":
-      return "bg-red-50 text-red-700 ring-red-200";
-    case "VOLUME_SOFT_DROP":
-      return "bg-amber-50 text-amber-700 ring-amber-200";
-    case "GROWING":
-      return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-    case "STABLE":
-      return "bg-blue-50 text-blue-700 ring-blue-200";
-    case "NO_BASELINE":
-      return "bg-slate-50 text-slate-700 ring-slate-200";
-    default:
-      return "bg-muted text-muted-foreground ring-border";
-  }
-}
-
-function getHealthBadgeClass(health: HealthSignal) {
-  switch (health) {
-    case "HEALTHY":
-      return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-    case "MONITOR":
-    case "STABLE":
-      return "bg-blue-50 text-blue-700 ring-blue-200";
-    case "WARNING":
-      return "bg-amber-50 text-amber-700 ring-amber-200";
-    case "CRITICAL":
-      return "bg-red-50 text-red-700 ring-red-200";
-    case "NEUTRAL":
-    case "-":
-    default:
-      return "bg-muted text-muted-foreground ring-border";
-  }
-}
-
-function getContextualProfileLabel(
-  profile: string | null | undefined,
-  hasXiamenContext: boolean
-) {
-  if (profile === "RISKY" && hasXiamenContext) {
-    return "DEMANDING (Xiamen)";
-  }
-
-  return profile ?? "-";
-}
-
-function KpiCard({
-  title,
-  value,
-}: {
-  title: string;
-  value: string | number;
-}) {
-  return (
-    <div className="rounded-2xl border bg-white p-5 shadow-sm">
-      <p className="text-sm text-muted-foreground">{title}</p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight">{value}</p>
-    </div>
-  );
 }
 
 function formatProfileLabel(profile: string | null | undefined) {
@@ -130,41 +59,93 @@ function formatProfileLabel(profile: string | null | undefined) {
   }
 }
 
-function ProfileBadge({
-  profile,
-}: {
-  profile: CustomerBusinessProfile | string | null;
-}) {
-  return (
-    <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getProfileBadgeClass(
-        profile
-      )}`}
-    >
-      {formatProfileLabel(profile)}
-    </span>
-  );
+function getProfileBadgeClass(profile: string | null | undefined) {
+  switch (profile) {
+    case "GROWING_XIAMEN":
+    case "STRATEGIC":
+    case "PROFITABLE":
+      return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+    case "NEW_OR_UNTRACKED_XIAMEN":
+    case "DEMANDING_XIAMEN":
+    case "WATCH_XIAMEN":
+    case "NEGOTIATOR":
+      return "bg-amber-50 text-amber-700 ring-amber-200";
+    case "CRITICAL_XIAMEN":
+    case "RISKY":
+      return "bg-red-50 text-red-700 ring-red-200";
+    default:
+      return "bg-muted text-muted-foreground ring-border";
+  }
 }
-function HealthBadge({ health }: { health: HealthSignal }) {
+
+function getHealthBadgeClass(health: HealthSignal) {
+  switch (health) {
+    case "HEALTHY":
+      return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+    case "MONITOR":
+    case "STABLE":
+      return "bg-blue-50 text-blue-700 ring-blue-200";
+    case "WARNING":
+      return "bg-amber-50 text-amber-700 ring-amber-200";
+    case "CRITICAL":
+      return "bg-red-50 text-red-700 ring-red-200";
+    default:
+      return "bg-muted text-muted-foreground ring-border";
+  }
+}
+
+function getVolumeSignalBadgeClass(signal: string | null | undefined) {
+  switch (signal) {
+    case "VOLUME_DROP_RISK":
+      return "bg-red-50 text-red-700 ring-red-200";
+    case "VOLUME_SOFT_DROP":
+      return "bg-amber-50 text-amber-700 ring-amber-200";
+    case "GROWING":
+      return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+    case "NO_BASELINE":
+      return "bg-slate-50 text-slate-700 ring-slate-200";
+    default:
+      return "bg-muted text-muted-foreground ring-border";
+  }
+}
+
+function getHealthSectionClass(health: HealthSignal) {
+  switch (health) {
+    case "CRITICAL":
+      return "border-red-200 bg-red-50/50";
+    case "WARNING":
+      return "border-amber-200 bg-amber-50/50";
+    case "MONITOR":
+    case "STABLE":
+      return "border-blue-200 bg-blue-50/50";
+    case "HEALTHY":
+      return "border-emerald-200 bg-emerald-50/50";
+    default:
+      return "border-slate-200 bg-slate-50/50";
+  }
+}
+
+function KpiCard({ title, value }: { title: string; value: string | number }) {
   return (
-    <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getHealthBadgeClass(
-        health
-      )}`}
-    >
-      {health}
-    </span>
+    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+      <p className="text-sm text-muted-foreground">{title}</p>
+      <p className="mt-2 text-3xl font-semibold tracking-tight">{value}</p>
+    </div>
   );
 }
 
-function VolumeSignalBadge({ signal }: { signal: string | null | undefined }) {
+function Badge({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className: string;
+}) {
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getVolumeSignalBadgeClass(
-        signal
-      )}`}
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${className}`}
     >
-      {signal ?? "-"}
+      {children}
     </span>
   );
 }
@@ -188,40 +169,49 @@ export default async function AnalyticsClientesPage({
   const filterOptions = getCustomerBusinessFilterOptions(rows);
   const kpis = buildCustomerBusinessKPIs(rows);
 
+  const groupedByHealth = rows.reduce((acc, row) => {
+    const health =
+      (healthSignals[row.customer]?.health_signal as HealthSignal | undefined) ??
+      "NEUTRAL";
+
+    if (!acc[health]) acc[health] = [];
+    acc[health].push(row);
+
+    return acc;
+  }, {} as Record<HealthSignal, CustomerBusinessMatrixRow[]>);
+
   return (
     <div className="space-y-6 p-6">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              Analytics · Clientes
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Business Matrix overview sobre{" "}
-              <span className="font-medium">vw_customer_business_matrix</span>
-            </p>
-          </div>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Analytics · Clientes
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Customer Situation Board sobre{" "}
+            <span className="font-medium">vw_customer_business_contextual</span>
+          </p>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/analytics/executive"
-              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-            >
-              Executive
-            </Link>
-            <Link
-              href="/analytics/operaciones/customers"
-              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-            >
-              Operaciones
-            </Link>
-            <Link
-              href="/analytics/desarrollo/customers"
-              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-            >
-              Desarrollo
-            </Link>
-          </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/analytics/executive"
+            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Executive
+          </Link>
+          <Link
+            href="/analytics/operaciones/customers"
+            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Operaciones
+          </Link>
+          <Link
+            href="/analytics/desarrollo/customers"
+            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Desarrollo
+          </Link>
         </div>
       </header>
 
@@ -259,7 +249,7 @@ export default async function AnalyticsClientesPage({
               <option value="">Todos</option>
               {filterOptions.profiles.map((profile) => (
                 <option key={profile} value={profile}>
-                  {profile}
+                  {formatProfileLabel(profile)}
                 </option>
               ))}
             </select>
@@ -275,8 +265,7 @@ export default async function AnalyticsClientesPage({
               defaultValue={filters.sort}
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
             >
-              <option value="business_score.desc">Business Score ↓</option>
-              <option value="business_score.asc">Business Score ↑</option>
+              <option value="business_score.desc">Prioridad negocio</option>
               <option value="friction_score.desc">Friction Score ↓</option>
               <option value="friction_score.asc">Friction Score ↑</option>
               <option value="customer.asc">Customer A-Z</option>
@@ -320,10 +309,10 @@ export default async function AnalyticsClientesPage({
       <section className="rounded-2xl border bg-white shadow-sm">
         <div className="flex items-center justify-between border-b px-5 py-4">
           <div>
-            <h2 className="text-lg font-semibold">Customer ranking</h2>
+            <h2 className="text-lg font-semibold">Customer Situation Board</h2>
             <p className="text-sm text-muted-foreground">
-              Lectura ejecutiva de perfil, salud, fricción y evolución de
-              volumen Xiamen
+              Vista ejecutiva por prioridad: primero riesgo, después seguimiento
+              y crecimiento.
             </p>
           </div>
           <div className="text-sm text-muted-foreground">
@@ -331,94 +320,111 @@ export default async function AnalyticsClientesPage({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-muted/40 text-left">
-              <tr>
-                <th className="px-5 py-3 font-medium">Customer</th>
-                <th className="px-5 py-3 font-medium">Profile</th>
-                <th className="px-5 py-3 font-medium">Health</th>
-                <th className="px-5 py-3 font-medium">Volume Signal</th>
-                <th className="px-5 py-3 font-medium">Business Score</th>
-                <th className="px-5 py-3 font-medium">Friction Score</th>
-                <th className="px-5 py-3 font-medium">Action</th>
-              </tr>
-            </thead>
+        <div className="space-y-4 p-5">
+          {rows.length === 0 ? (
+            <div className="rounded-xl border p-8 text-center text-sm text-muted-foreground">
+              No hay datos para los filtros actuales.
+            </div>
+          ) : (
+            HEALTH_ORDER.map((health) => {
+              const group = groupedByHealth[health];
+              if (!group || group.length === 0) return null;
 
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-5 py-10 text-center text-muted-foreground"
-                  >
-                    No hay datos para los filtros actuales.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((row: CustomerBusinessMatrixRow) => {
-                  const healthData = healthSignals[row.customer];
-                  const hasXiamenContext =
-                    healthData?.xiamen_context_flag === true ||
-                    Boolean(healthData?.volume_signal);
+              return (
+                <section
+                  key={health}
+                  className={`rounded-2xl border p-4 ${getHealthSectionClass(
+                    health
+                  )}`}
+                >
+                  <div className="mb-3 flex items-center gap-2">
+                    <Badge className={getHealthBadgeClass(health)}>
+                      {health}
+                    </Badge>
+                    <h3 className="text-sm font-semibold">
+                      {group.length} cliente{group.length === 1 ? "" : "s"}
+                    </h3>
+                  </div>
 
-                  const profileLabel = getContextualProfileLabel(
-                    row.customer_business_profile,
-                    hasXiamenContext
-                  );
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {group.map((row) => {
+                      const healthData = healthSignals[row.customer];
+                      const rowHealth =
+                        (healthData?.health_signal as HealthSignal | undefined) ??
+                        "NEUTRAL";
 
-                  const health =
-                    (healthData?.health_signal as HealthSignal | undefined) ??
-                    "-";
-
-                  return (
-                    <tr key={row.customer} className="border-t">
-                      <td className="px-5 py-4 font-medium">{row.customer}</td>
-
-                      <td className="px-5 py-4">
-                        <ProfileBadge profile={profileLabel} />
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <HealthBadge health={health} />
-                      </td>
-
-                      <td className="px-5 py-4">
-                        {healthData?.volume_signal ? (
-                          <VolumeSignalBadge
-                            signal={healthData.volume_signal}
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            -
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        {formatNumber(row.customer_business_score, 2)}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        {formatNumber(row.customer_friction_score, 2)}
-                      </td>
-
-                      <td className="px-5 py-4">
+                      return (
                         <Link
+                          key={row.customer}
                           href={`/analytics/clientes/${encodeURIComponent(
                             row.customer
                           )}`}
-                          className="inline-flex rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted"
+                          className="rounded-xl border bg-white p-4 shadow-sm transition hover:bg-muted/40"
                         >
-                          Ver detalle
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold">{row.customer}</p>
+                              <div className="mt-2">
+                                <Badge
+                                  className={getProfileBadgeClass(
+                                    row.customer_business_profile
+                                  )}
+                                >
+                                  {formatProfileLabel(
+                                    row.customer_business_profile
+                                  )}
+                                </Badge>
+                              </div>
+                            </div>
+
+                            <Badge className={getHealthBadgeClass(rowHealth)}>
+                              {rowHealth}
+                            </Badge>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Business
+                              </p>
+                              <p className="font-medium">
+                                {formatNumber(row.customer_business_score, 2)}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Friction
+                              </p>
+                              <p className="font-medium">
+                                {formatNumber(row.customer_friction_score, 2)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3">
+                            {healthData?.volume_signal ? (
+                              <Badge
+                                className={getVolumeSignalBadgeClass(
+                                  healthData.volume_signal
+                                )}
+                              >
+                                {healthData.volume_signal}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Sin señal de volumen
+                              </span>
+                            )}
+                          </div>
                         </Link>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })
+          )}
         </div>
       </section>
     </div>

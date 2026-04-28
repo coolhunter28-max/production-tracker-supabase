@@ -76,6 +76,11 @@ function isValidProfile(value: string): value is CustomerBusinessProfile {
     "NEGOTIATOR",
     "RISKY",
     "LOW_VALUE",
+    "CRITICAL_XIAMEN",
+    "WATCH_XIAMEN",
+    "GROWING_XIAMEN",
+    "NEW_OR_UNTRACKED_XIAMEN",
+    "DEMANDING_XIAMEN",
   ].includes(value);
 }
 
@@ -113,17 +118,17 @@ export async function getCustomerBusinessMatrix(
 
   switch (filters.sort) {
     case "business_score.asc":
-      query = query.order("contextual_business_score", {
-        ascending: true,
-        nullsFirst: false,
-      });
-      break;
-
     case "business_score.desc":
-      query = query.order("contextual_business_score", {
-        ascending: false,
-        nullsFirst: false,
-      });
+    default:
+      query = query
+        .order("health_priority", {
+          ascending: true,
+          nullsFirst: false,
+        })
+        .order("contextual_business_score", {
+          ascending: true,
+          nullsFirst: false,
+        });
       break;
 
     case "friction_score.asc":
@@ -146,13 +151,6 @@ export async function getCustomerBusinessMatrix(
 
     case "customer.desc":
       query = query.order("customer", { ascending: false });
-      break;
-
-    default:
-      query = query.order("contextual_business_score", {
-        ascending: false,
-        nullsFirst: false,
-      });
       break;
   }
 
