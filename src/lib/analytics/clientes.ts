@@ -117,42 +117,62 @@ export async function getCustomerBusinessMatrix(
   }
 
   switch (filters.sort) {
-    case "business_score.asc":
-    case "business_score.desc":
-    default:
-      query = query
-        .order("health_priority", {
-          ascending: true,
-          nullsFirst: false,
-        })
-        .order("contextual_business_score", {
-          ascending: true,
-          nullsFirst: false,
-        });
-      break;
+  case "priority.desc":
+    query = query
+      .order("health_priority", {
+        ascending: true, // 1 = CRITICAL primero
+      })
+      .order("contextual_business_score", {
+        ascending: true, // dentro del grupo
+        nullsFirst: false,
+      });
+    break;
 
-    case "friction_score.asc":
-      query = query.order("customer_friction_score", {
+  case "business_score.asc":
+    query = query.order("contextual_business_score", {
+      ascending: true,
+      nullsFirst: false,
+    });
+    break;
+
+  case "business_score.desc":
+    query = query.order("contextual_business_score", {
+      ascending: false,
+      nullsFirst: false,
+    });
+    break;
+
+  case "friction_score.asc":
+    query = query.order("customer_friction_score", {
+      ascending: true,
+      nullsFirst: false,
+    });
+    break;
+
+  case "friction_score.desc":
+    query = query.order("customer_friction_score", {
+      ascending: false,
+      nullsFirst: false,
+    });
+    break;
+
+  case "customer.asc":
+    query = query.order("customer", { ascending: true });
+    break;
+
+  case "customer.desc":
+    query = query.order("customer", { ascending: false });
+    break;
+
+  default:
+    query = query
+      .order("health_priority", { ascending: true })
+      .order("contextual_business_score", {
         ascending: true,
         nullsFirst: false,
       });
-      break;
-
-    case "friction_score.desc":
-      query = query.order("customer_friction_score", {
-        ascending: false,
-        nullsFirst: false,
-      });
-      break;
-
-    case "customer.asc":
-      query = query.order("customer", { ascending: true });
-      break;
-
-    case "customer.desc":
-      query = query.order("customer", { ascending: false });
-      break;
-  }
+    break;
+}
 
   const { data, error } = await query;
 
@@ -359,8 +379,8 @@ export async function getCustomerHealthSignals(
   const { data, error } = await supabase
     .from("vw_customer_health_signal")
     .select(
-      "customer, health_signal, volume_signal, xiamen_context_flag"
-    );
+  "customer, health_signal, health_reason, volume_signal, qty_growth_pct, sell_growth_pct, xiamen_context_flag"
+);
 
   if (error) {
     throw new Error(`Error cargando health signals: ${error.message}`);
@@ -374,6 +394,9 @@ export async function getCustomerHealthSignals(
       health_signal: row.health_signal,
       volume_signal: row.volume_signal,
       xiamen_context_flag: row.xiamen_context_flag,
+      health_reason: row.health_reason,
+qty_growth_pct: row.qty_growth_pct,
+sell_growth_pct: row.sell_growth_pct,
     };
   }
 

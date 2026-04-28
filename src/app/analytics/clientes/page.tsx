@@ -34,6 +34,15 @@ function formatNumber(value: number | null | undefined, decimals = 2) {
   }).format(value);
 }
 
+function formatPercent(value: number | null | undefined, decimals = 2) {
+  if (value === null || value === undefined) return "-";
+
+  return `${new Intl.NumberFormat("es-ES", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value)}%`;
+}
+
 function formatProfileLabel(profile: string | null | undefined) {
   switch (profile) {
     case "CRITICAL_XIAMEN":
@@ -81,6 +90,18 @@ function getBadgeClass(health: HealthSignal) {
     default:
       return "bg-slate-100 text-slate-700 ring-slate-200";
   }
+}
+
+function getDriverClass(value: number | null | undefined) {
+  if (value === null || value === undefined) {
+    return "text-muted-foreground";
+  }
+
+  if (value <= -30) return "text-red-700";
+  if (value < 0) return "text-amber-700";
+  if (value > 0) return "text-emerald-700";
+
+  return "text-muted-foreground";
 }
 
 function KpiCard({
@@ -314,10 +335,7 @@ export default async function AnalyticsClientesPage({
                 >
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <Badge
-                        label={health}
-                        className={getBadgeClass(health)}
-                      />
+                      <Badge label={health} className={getBadgeClass(health)} />
                       <h3 className="text-sm font-semibold">
                         {group.length} cliente{group.length === 1 ? "" : "s"}
                       </h3>
@@ -330,6 +348,9 @@ export default async function AnalyticsClientesPage({
                       const rowHealth =
                         (healthData?.health_signal as HealthSignal | undefined) ??
                         "NEUTRAL";
+
+                      const qtyGrowth = healthData?.qty_growth_pct;
+                      const sellGrowth = healthData?.sell_growth_pct;
 
                       return (
                         <Link
@@ -375,26 +396,67 @@ export default async function AnalyticsClientesPage({
                             </div>
                           </div>
 
- <div className="mt-3 space-y-2">
-  {healthData?.volume_signal ? (
-    <Badge
-      label={healthData.volume_signal}
-      className="bg-slate-100 text-slate-700 ring-slate-200"
-    />
-  ) : (
-    <span className="text-xs text-muted-foreground">
-      Sin señal de volumen
-    </span>
-  )}
+                          <div className="mt-4 space-y-2">
+                            {healthData?.volume_signal ? (
+                              <Badge
+                                label={healthData.volume_signal}
+                                className="bg-slate-100 text-slate-700 ring-slate-200"
+                              />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Sin señal de volumen
+                              </span>
+                            )}
 
-  <p className="text-xs font-medium">
-    {rowHealth === "CRITICAL" && "Revisar caída de volumen"}
-    {rowHealth === "WARNING" && "Validar riesgo operativo"}
-    {rowHealth === "MONITOR" && "Seguir evolución"}
-    {rowHealth === "HEALTHY" && "Potencial crecimiento"}
-    {rowHealth === "NEUTRAL" && "Sin señal relevante"}
+                            {(qtyGrowth !== null && qtyGrowth !== undefined) ||
+                            (sellGrowth !== null &&
+                              sellGrowth !== undefined) ? (
+                              <div className="grid grid-cols-2 gap-2 rounded-lg border bg-slate-50 p-2 text-xs">
+                                <div>
+                                  <p className="text-muted-foreground">
+                                    Qty growth
+                                  </p>
+                                  <p
+                                    className={`font-semibold ${getDriverClass(
+                                      qtyGrowth
+                                    )}`}
+                                  >
+                                    {formatPercent(qtyGrowth, 2)}
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-muted-foreground">
+                                    Sell growth
+                                  </p>
+                                  <p
+                                    className={`font-semibold ${getDriverClass(
+                                      sellGrowth
+                                    )}`}
+                                  >
+                                    {formatPercent(sellGrowth, 2)}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            <p className="text-xs font-medium">
+                              {rowHealth === "CRITICAL" &&
+                                "Revisar caída de volumen"}
+                              {rowHealth === "WARNING" &&
+                                "Validar riesgo operativo"}
+                              {rowHealth === "MONITOR" && "Seguir evolución"}
+                              {rowHealth === "HEALTHY" &&
+                                "Potencial crecimiento"}
+                              {rowHealth === "NEUTRAL" &&
+                                "Sin señal relevante"}
+                            </p>
+                          </div>
+                          {healthData?.health_reason && (
+  <p className="text-xs text-muted-foreground">
+    {healthData.health_reason}
   </p>
-</div>
+)}
                         </Link>
                       );
                     })}
