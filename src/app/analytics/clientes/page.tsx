@@ -70,7 +70,6 @@ function getHealthClass(health: HealthSignal) {
       return "border-blue-200 bg-blue-50 text-blue-900";
     case "HEALTHY":
       return "border-emerald-200 bg-emerald-50 text-emerald-900";
-    case "NEUTRAL":
     default:
       return "border-slate-200 bg-slate-50 text-slate-900";
   }
@@ -86,21 +85,16 @@ function getBadgeClass(health: HealthSignal) {
       return "bg-blue-100 text-blue-700 ring-blue-200";
     case "HEALTHY":
       return "bg-emerald-100 text-emerald-700 ring-emerald-200";
-    case "NEUTRAL":
     default:
       return "bg-slate-100 text-slate-700 ring-slate-200";
   }
 }
 
 function getDriverClass(value: number | null | undefined) {
-  if (value === null || value === undefined) {
-    return "text-muted-foreground";
-  }
-
+  if (value === null || value === undefined) return "text-muted-foreground";
   if (value <= -30) return "text-red-700";
   if (value < 0) return "text-amber-700";
   if (value > 0) return "text-emerald-700";
-
   return "text-muted-foreground";
 }
 
@@ -144,7 +138,11 @@ export default async function AnalyticsClientesPage({
   const filters = parseClientesSearchParams(resolvedSearchParams);
   const supabase = await createClient();
 
-  const rows = await getCustomerBusinessMatrix(supabase, filters);
+  const rows = await getCustomerBusinessMatrix(supabase, {
+    ...filters,
+    sort: "business_score.desc",
+  });
+
   const healthSignals = await getCustomerHealthSignals(supabase);
   const filterOptions = getCustomerBusinessFilterOptions(rows);
 
@@ -215,7 +213,7 @@ export default async function AnalyticsClientesPage({
       </header>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
-        <form method="get" className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <form method="get" className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <label htmlFor="customer" className="text-sm font-medium">
               Customer
@@ -254,25 +252,7 @@ export default async function AnalyticsClientesPage({
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="sort" className="text-sm font-medium">
-              Sort
-            </label>
-            <select
-              id="sort"
-              name="sort"
-              defaultValue={filters.sort}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
-            >
-              <option value="business_score.desc">Prioridad negocio</option>
-              <option value="friction_score.desc">Friction Score ↓</option>
-              <option value="friction_score.asc">Friction Score ↑</option>
-              <option value="customer.asc">Customer A-Z</option>
-              <option value="customer.desc">Customer Z-A</option>
-            </select>
-          </div>
-
-          <div className="md:col-span-3 flex flex-wrap items-center gap-2">
+          <div className="md:col-span-2 flex flex-wrap items-center gap-2">
             <button
               type="submit"
               className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
@@ -451,12 +431,13 @@ export default async function AnalyticsClientesPage({
                               {rowHealth === "NEUTRAL" &&
                                 "Sin señal relevante"}
                             </p>
+
+                            {healthData?.health_reason ? (
+                              <p className="text-xs text-muted-foreground">
+                                {healthData.health_reason}
+                              </p>
+                            ) : null}
                           </div>
-                          {healthData?.health_reason && (
-  <p className="text-xs text-muted-foreground">
-    {healthData.health_reason}
-  </p>
-)}
                         </Link>
                       );
                     })}
