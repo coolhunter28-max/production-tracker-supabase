@@ -1,4 +1,4 @@
-# Production Tracker — Documento Maestro v6.11
+# Production Tracker — Documento Maestro v6.12
 
 Versión consolidada tras:
 
@@ -12,7 +12,7 @@ Versión consolidada tras:
 - Generación de Price List comercial (Excel / CSV / PDF)
 - Capa analítica completa (Cubo Operativo, QC Analytics y Cubo Desarrollo)
 - Business Intelligence Layer con Customer Business Matrix
-- Analytics UI consolidado en Executive, Operaciones, Quality y Desarrollo
+- Analytics UI consolidado en Executive, Operaciones, Quality, Desarrollo y Clientes / Business Matrix
 
 Este documento es la **fuente de verdad del proyecto** a partir de este commit.
 
@@ -903,7 +903,7 @@ Documento Maestro v6.10
 Proyecto estable
 Capa analítica v1 cerrada
 Base sólida para calculadora, reporting, BI y dashboards dentro de la app
-Analytics UI consolidado en Executive, Operaciones, Quality y Desarrollo
+Analytics UI consolidado en Executive, Operaciones, Quality, Desarrollo y Clientes / Business Matrix
 Base preparada para siguiente bloque: Business Matrix UI / Clientes
 26. Analytics UI (v1 implementado)
 26.1 Estado general
@@ -1375,7 +1375,7 @@ Analytics UI Executive	✔
 Analytics UI Operaciones	✔
 Analytics UI Quality	✔
 Analytics UI Desarrollo	✔
-Analytics UI Clientes / Business Matrix	⏳ pendiente
+Analytics UI Clientes / Business Matrix	✔
 28. Punto de corte operativo
 
 Documento Maestro v6.10
@@ -1396,198 +1396,641 @@ Siguiente conversación o siguiente bloque natural:
 Construcción de Analytics → Clientes / Business Matrix UI
 29. Actualización de versión
 
-Nueva versión: v6.11
+Nueva versión: v6.12
 
 Motivo:
 
-Inicio del desarrollo del módulo Analytics → Clientes / Business Matrix UI
-Definición completa de arquitectura funcional, datasets e implementación v1
-Preparación para ejecución de código de la overview
+- Consolidación completa del módulo Analytics → Clientes / Business Matrix UI.
+- Evolución desde `vw_customer_business_matrix` hacia un modelo contextual de negocio.
+- Incorporación de reglas específicas para operativas Xiamen DIC y BSG.
+- Creación de señales BI de salud comercial (`health_signal`) y prioridad (`health_priority`).
+- Implementación del Customer Situation Board como vista ejecutiva principal.
+- Implementación del detail por cliente con score contextual, drivers e interpretación ejecutiva.
+
 30. Estado actual del sistema (actualizado)
+
 Módulo	Estado
 Executive	✔
 Operaciones	✔
 Quality	✔
 Desarrollo	✔
-Clientes / Business Matrix UI	🔄 En desarrollo (overview v1 definida)
+Clientes / Business Matrix UI	✔ Implementado
+Customer Situation Board	✔ Implementado
+Customer Detail contextual	✔ Implementado
+
 31. Nuevo módulo — Analytics → Clientes / Business Matrix UI
+
 31.1 Objetivo funcional
 
 El módulo Clientes / Business Matrix UI representa la capa de inteligencia comercial del sistema.
 
-Su función es:
+Su función es sintetizar información de:
 
-sintetizar información de:
-Cubo Operativo
-Cubo Desarrollo
-QC Analytics
-Logística
-clasificar clientes según su perfil de negocio
-permitir priorización comercial
-identificar:
-clientes estratégicos
-clientes rentables
-clientes conflictivos
-clientes de bajo valor
+- Cubo Operativo
+- Cubo Desarrollo
+- QC Analytics
+- Logística
+- Evolución de volumen Xiamen
+- Health Signal BI
 
-Se basa en la view:
+Objetivos funcionales:
 
-vw_customer_business_matrix
-31.2 Clasificación de clientes
+- Priorizar clientes por situación real de negocio.
+- Diferenciar correctamente clientes BSG y clientes Xiamen DIC.
+- Evitar interpretar clientes Xiamen únicamente por margen o fricción.
+- Detectar riesgo real en Xiamen mediante caída de volumen y facturación.
+- Mantener BSG bajo la lectura estándar de margen, contribución y fricción.
+- Convertir métricas BI en acciones visibles para negocio.
 
-Perfiles definidos:
+31.2 Cambio crítico de interpretación: Xiamen vs BSG
 
-STRATEGIC
-PROFITABLE
-NEGOTIATOR
-RISKY
-LOW_VALUE
+El sistema reconoce dos modelos de negocio distintos:
 
-Métricas clave:
+### Xiamen DIC — Comisión / intermediación
 
-customer_business_score
-customer_friction_score
-31.3 Arquitectura del módulo
+En Xiamen DIC, el valor principal del cliente se mide por:
 
-Rutas:
+- volumen de pares
+- facturación total
+- continuidad entre temporadas
+- evolución de volumen
+- caída o crecimiento respecto a temporada anterior
 
+El margen unitario o el business score estándar pueden ser secundarios y no deben interpretarse como juicio final del cliente.
+
+Una caída significativa de volumen, por ejemplo igual o superior al 30%, se considera una señal real de riesgo.
+
+### BSG — Compra / venta
+
+En BSG, el valor principal del cliente sigue vinculado a:
+
+- margen de compraventa
+- contribución
+- rentabilidad
+- presión comercial
+- fricción operativa
+
+Por tanto, BSG mantiene la lectura estándar de la Business Matrix.
+
+31.3 Views BI principales del módulo Clientes
+
+El módulo Clientes ya no se apoya únicamente en `vw_customer_business_matrix`.
+
+La arquitectura consolidada usa estas views:
+
+### `vw_customer_business_matrix`
+
+View base histórica de inteligencia de cliente.
+
+Incluye:
+
+- customer
+- customer_business_profile
+- customer_business_score
+- customer_friction_score
+
+Sigue siendo útil como matriz base, pero no es la única fuente de verdad visual para Clientes.
+
+### `vw_xiamen_customer_season_volume_evolution`
+
+View analítica de evolución de volumen para clientes Xiamen.
+
+Fuente base:
+
+- `mv_fact_operacion_linea`
+
+Filtro:
+
+- `operativa_code = 'XIAMEN_DIC'`
+
+Métricas:
+
+- customer
+- season
+- previous_season
+- qty_current
+- qty_previous
+- sell_current
+- sell_previous
+- po_count_current
+- po_count_previous
+- line_count_current
+- line_count_previous
+- qty_growth_pct
+- sell_growth_pct
+- po_count_growth_pct
+- volume_signal
+
+Señales disponibles:
+
+- `NO_BASELINE`
+- `VOLUME_DROP_RISK`
+- `VOLUME_SOFT_DROP`
+- `STABLE`
+- `GROWING`
+- `UNKNOWN`
+
+Regla crítica:
+
+- `VOLUME_DROP_RISK` se dispara cuando la caída de volumen es igual o superior al 30%.
+
+### `vw_customer_health_signal`
+
+View BI de salud del cliente.
+
+Combina:
+
+- Business Matrix
+- Ranking operativo
+- Evolución Xiamen
+
+Campos clave:
+
+- customer
+- customer_business_profile
+- customer_business_score
+- customer_friction_score
+- customer_size_band
+- profitability_band
+- contribution_pct
+- xiamen_sales_mix_pct
+- bsg_sales_mix_pct
+- xiamen_latest_season
+- xiamen_previous_season
+- qty_growth_pct
+- sell_growth_pct
+- volume_signal
+- health_signal
+- health_reason
+- xiamen_context_flag
+
+Health signals:
+
+- `CRITICAL`
+- `WARNING`
+- `MONITOR`
+- `HEALTHY`
+- `NEUTRAL`
+
+Reglas principales:
+
+- `VOLUME_DROP_RISK` → `CRITICAL`
+- `VOLUME_SOFT_DROP` → `WARNING`
+- `GROWING` → `HEALTHY`
+- `STABLE` / `NO_BASELINE` → `MONITOR`
+- Cliente RISKY con fricción alta fuera de Xiamen → `WARNING`
+- Sin señal específica → `NEUTRAL`
+
+### `vw_customer_business_contextual`
+
+View BI contextual final para la UI de Clientes.
+
+Objetivo:
+
+- Crear un business score adaptado al modelo operativo.
+- Mantener BSG con Business Matrix estándar.
+- Recalibrar Xiamen por volumen/evolución.
+- Añadir prioridad ejecutiva mediante `health_priority`.
+
+Campos clave:
+
+- customer
+- raw_business_profile
+- raw_business_score
+- customer_friction_score
+- health_signal
+- health_reason
+- volume_signal
+- qty_growth_pct
+- sell_growth_pct
+- xiamen_context_flag
+- customer_size_band
+- profitability_band
+- contribution_pct
+- xiamen_sales_mix_pct
+- bsg_sales_mix_pct
+- contextual_business_profile
+- contextual_business_score
+- score_model
+- health_priority
+
+Perfiles contextuales Xiamen:
+
+- `CRITICAL_XIAMEN`
+- `WATCH_XIAMEN`
+- `GROWING_XIAMEN`
+- `NEW_OR_UNTRACKED_XIAMEN`
+- `DEMANDING_XIAMEN`
+
+Score model:
+
+- `XIAMEN_VOLUME_BASED`
+- `STANDARD_BUSINESS_MATRIX`
+
+Reglas de score contextual Xiamen:
+
+- `VOLUME_DROP_RISK` → `-100`
+- `VOLUME_SOFT_DROP` → `-40`
+- `NO_BASELINE` → `0`
+- `STABLE` → `40`
+- `GROWING` → `80`
+
+Para clientes no Xiamen:
+
+- `contextual_business_score = customer_business_score`
+- `contextual_business_profile = customer_business_profile`
+
+Health priority:
+
+- `CRITICAL` → `1`
+- `WARNING` → `2`
+- `MONITOR` → `3`
+- `HEALTHY` → `4`
+- `NEUTRAL` → `5`
+- Otros → `9`
+
+32. Arquitectura del módulo Clientes
+
+Rutas implementadas:
+
+```text
 /analytics/clientes
 /analytics/clientes/[customer]
+```
 
-Estructura:
+Archivos principales:
 
-Overview (principal)
-Detail por cliente (pendiente)
-32. Overview v1 — definición funcional (cerrada)
-32.1 Objetivo
-
-Permitir una lectura rápida de la cartera de clientes:
-
-distribución de perfiles
-nivel de fricción
-nivel estratégico
-priorización
-32.2 Fuente de datos
-vw_customer_business_matrix
-
-Regla clave:
-
-1 sola query en v1
-sin views auxiliares
-32.3 Filtros soportados
-customer
-season (si existe en la view)
-profile
-sort
-
-Implementación:
-
-vía search params
-sin estado global
-32.4 KPI strip
-
-Incluye:
-
-Total Customers
-Strategic
-Profitable
-Risky
-Avg Business Score
-Avg Friction Score
-32.5 Tabla principal
-
-Columnas:
-
-Customer
-Profile
-Business Score
-Friction Score
-Action
-32.6 UX rules
-lectura ejecutiva
-simplicidad visual
-sin sobrecarga de datos
-jerarquía clara
-33. Arquitectura técnica implementada
-33.1 Tipos
+```text
 src/types/clientes.ts
-
-Incluye:
-
-CustomerBusinessProfile
-CustomerBusinessMatrixRow
-CustomerBusinessMatrixFilters
-CustomerBusinessKPISet
-FilterOptions
-33.2 Helper de datos
 src/lib/analytics/clientes.ts
+src/app/analytics/clientes/page.tsx
+src/app/analytics/clientes/[customer]/page.tsx
+```
 
-Funciones:
+32.1 Helper de datos
 
-parseClientesSearchParams
-getCustomerBusinessMatrix
-getCustomerBusinessFilterOptions
-buildCustomerBusinessKPIs
+Archivo:
+
+```text
+src/lib/analytics/clientes.ts
+```
+
+Funciones principales:
+
+- `parseClientesSearchParams`
+- `getCustomerBusinessMatrix`
+- `getCustomerBusinessDetail`
+- `getCustomerBusinessContextualDetail`
+- `getCustomerOperationalDetail`
+- `getCustomerDevelopmentDetail`
+- `getCustomerQualityDetail`
+- `getCustomerXiamenVolumeEvolution`
+- `getLatestXiamenVolumeSignals`
+- `getCustomerHealthSignals`
+- `getCustomerHealthSignal`
+- `getCustomerDetailBundle`
+- `getCustomerBusinessFilterOptions`
+- `buildCustomerBusinessKPIs`
 
 Reglas:
 
-no recalcular lógica de negocio
-no generar métricas nuevas
-solo preparar datos para UI
-33.3 Página overview
-src/app/analytics/clientes/page.tsx
+- La UI no recalcula Health.
+- La UI no recalcula Business Score contextual.
+- La UI consume `vw_customer_business_contextual` y `vw_customer_health_signal`.
+- El frontend solo formatea, agrupa y representa.
 
-Estructura:
+32.2 Tipos
 
-header
-filtros (form method="get")
-KPI strip
-tabla ranking
-34. Reglas clave del módulo
-❌ No duplicar lógica de negocio en frontend
-❌ No usar múltiples views en overview v1
-❌ No introducir filtros no soportados
-❌ No introducir lógica inferida
-✅ Usar exclusivamente vw_customer_business_matrix
-✅ Filtros vía URL
-✅ UI como representación fiel del dato
-✅ Mantener consistencia con resto de Analytics
-35. Siguientes fases definidas
-Fase 1 (actual)
+Archivo:
 
-✔ Overview v1 — arquitectura y código definidos
+```text
+src/types/clientes.ts
+```
 
-Fase 2 (siguiente)
-Implementación completa de overview
-Validación real con datos
-Fase 3
-Scatter / Business Matrix visual
-Fase 4
-Detail por cliente
-Fase 5
-Integración con:
-Operaciones
-Desarrollo
-Quality
-Fase 6
-Pulido UX
-Navegación cruzada
-36. Punto de corte actual
+Incluye, entre otros:
 
-El sistema se encuentra en:
+- `CustomerBusinessProfile`
+- `CustomerBusinessMatrixRow`
+- `CustomerBusinessMatrixFilters`
+- `CustomerBusinessKPISet`
+- `CustomerOperationalDetail`
+- `CustomerDevelopmentDetail`
+- `CustomerQualityDetail`
+- `CustomerXiamenVolumeEvolutionRow`
+- `CustomerDetailBundle`
+- `CustomerLatestXiamenVolumeSignal`
 
-Inicio de implementación real del módulo Clientes (overview v1)
+33. Overview — Customer Situation Board
 
-Con:
+Ruta:
 
-arquitectura cerrada
-datasets definidos
-tipos definidos
-helper definido
-página overview definida (lista para implementar)
-37. Mensaje para reiniciar conversación (MUY IMPORTANTE)
+```text
+/analytics/clientes
+```
 
-Este es el mensaje que debes usar en tu GPT para continuar sin pérdida de contexto:
+33.1 Objetivo
+
+Sustituir el ranking plano por una vista ejecutiva por situación.
+
+El objetivo no es preguntar:
+
+> ¿Quién tiene mejor score?
+
+sino:
+
+> ¿A quién tengo que mirar primero?
+
+33.2 Fuente de datos
+
+Fuente principal:
+
+```text
+vw_customer_business_contextual
+```
+
+Fuentes complementarias:
+
+```text
+vw_customer_health_signal
+vw_xiamen_customer_season_volume_evolution
+```
+
+33.3 Orden de prioridad
+
+El orden principal del board viene de BI:
+
+```text
+health_priority asc
+contextual_business_score asc
+```
+
+Esto garantiza:
+
+1. CRITICAL
+2. WARNING
+3. MONITOR
+4. HEALTHY
+5. NEUTRAL
+
+33.4 Filtros activos
+
+Filtros visibles:
+
+- customer
+- profile
+
+Filtro eliminado:
+
+- sort
+
+Motivo:
+
+El board ya tiene una jerarquía fija por prioridad BI. Mantener un selector de sort generaba ambigüedad y no aportaba claridad.
+
+Reglas UX:
+
+- filtros vía search params
+- sin estado global
+- no se fuerzan filtros no soportados
+- los labels visibles pueden ser humanos, pero los valores técnicos se mantienen en URL
+
+33.5 KPI strip
+
+KPIs consolidados:
+
+- Total
+- Critical
+- Warning
+- Monitor
+- Healthy
+- Avg Business Score
+
+Motivo:
+
+Estos KPIs reflejan mejor la situación real de cartera que los antiguos:
+
+- Strategic
+- Profitable
+- Risky
+
+33.6 Board por Health
+
+Bloques visuales:
+
+- CRITICAL
+- WARNING
+- MONITOR
+- HEALTHY
+- NEUTRAL
+
+Cada card de cliente muestra:
+
+- customer
+- contextual profile
+- health signal
+- contextual business score
+- friction score
+- volume signal cuando existe
+- qty growth cuando existe
+- sell growth cuando existe
+- health reason
+- call to action
+
+CTAs por health:
+
+- CRITICAL → Revisar caída de volumen
+- WARNING → Validar riesgo operativo
+- MONITOR → Seguir evolución
+- HEALTHY → Potencial crecimiento
+- NEUTRAL → Sin señal relevante
+
+33.7 Decisiones UX descartadas
+
+Se probó un bloque superior de Focus Mode para clientes CRITICAL.
+
+Decisión:
+
+- descartado
+
+Motivo:
+
+- duplicaba información, porque el board ya empieza por CRITICAL.
+- generaba redundancia visual.
+- el board por prioridad ya cumple esa función.
+
+34. Detail por cliente
+
+Ruta:
+
+```text
+/analytics/clientes/[customer]
+```
+
+34.1 Objetivo
+
+Explicar la situación de un cliente concreto usando la misma lógica BI que el overview.
+
+34.2 Fuente de datos
+
+El detail combina:
+
+- `vw_customer_business_contextual`
+- `vw_customer_health_signal`
+- `vw_exec_customer_ranking`
+- `vw_dev_customer_negotiation_score`
+- `vw_qc_by_customer`
+- `vw_xiamen_customer_season_volume_evolution`
+
+34.3 Bloques implementados
+
+Cabecera:
+
+- customer
+- contextual profile
+
+KPI strip:
+
+- Business Score contextual
+- Coordination Load / Friction Score
+- Profile contextual
+- Health
+
+Bloques analíticos:
+
+- Operaciones
+- Desarrollo
+- Quality
+- Evolución volumen Xiamen
+- Lectura ejecutiva
+
+34.4 Diferencia semántica en Xiamen
+
+Para clientes con:
+
+```text
+score_model = XIAMEN_VOLUME_BASED
+```
+
+La UI muestra:
+
+- `Business Score` basado en evolución de volumen
+- `Coordination Load` en vez de `Friction Score`
+- Profile contextual Xiamen
+- Health derivado de volumen
+
+Ejemplo:
+
+- `CRITICAL_XIAMEN`
+- `contextual_business_score = -100`
+- `health_signal = CRITICAL`
+
+34.5 Drivers del estado
+
+Para clientes críticos o con señal de volumen, el detail muestra:
+
+- latest season
+- previous season
+- qty growth
+- sell growth
+- PO growth cuando está disponible
+- health reason
+
+Objetivo:
+
+- explicar no solo el estado, sino la causa.
+
+35. Reglas clave consolidadas del módulo Clientes
+
+❌ No recalcular Health en frontend  
+❌ No recalcular Business Score contextual en React  
+❌ No modificar snapshots históricos  
+❌ No interpretar Xiamen solo por margen  
+❌ No duplicar datos entre pantallas  
+❌ No mantener controles UX que generen confusión  
+
+✅ La lógica de Health vive en SQL / BI Layer  
+✅ La lógica de Business Score contextual vive en SQL / BI Layer  
+✅ Xiamen se evalúa por volumen, facturación y evolución por temporada  
+✅ BSG mantiene la matriz estándar de margen, contribución y fricción  
+✅ La UI solo representa, agrupa y traduce a lectura ejecutiva  
+✅ Los filtros viven en URL mediante search params  
+✅ Los labels humanos no sustituyen los valores técnicos  
+✅ El overview y el detail usan la misma fuente semántica  
+✅ La prioridad visual viene de `health_priority`
+
+36. Estado técnico consolidado
+
+Nuevas views creadas:
+
+- `vw_xiamen_customer_season_volume_evolution`
+- `vw_customer_health_signal`
+- `vw_customer_business_contextual`
+
+Views existentes reutilizadas:
+
+- `vw_customer_business_matrix`
+- `vw_exec_customer_ranking`
+- `vw_dev_customer_negotiation_score`
+- `vw_qc_by_customer`
+- `mv_fact_operacion_linea`
+
+Rutas estabilizadas durante la fase:
+
+- `/analytics/clientes`
+- `/analytics/clientes/[customer]`
+- `/analytics/executive`
+- `/analytics/operaciones/customers`
+
+Decisión técnica:
+
+- Executive y Operaciones Customers se estabilizaron con implementaciones simples sobre datos reales cuando componentes reutilizables generaban errores de render de Server Components.
+- Esta decisión es coherente con la regla de estabilidad: layout simple y fiable antes que abstracción visual inestable.
+
+37. Estado Global actualizado
+
+Módulo	Estado
+Importadores	✔
+QC	✔
+Master Modelos	✔
+Snapshot precios	✔
+UI Modelos	✔
+Producción BSG	✔
+Pricing definido	✔
+Oferta Cliente (Price List)	✔
+Cubo Operativo	✔
+QC Analytics	✔
+Cubo Desarrollo	✔
+Executive KPIs	✔
+Customer Business Matrix	✔
+Analytics UI Executive	✔ Estabilizado
+Analytics UI Operaciones	✔ Estabilizado
+Analytics UI Quality	✔
+Analytics UI Desarrollo	✔
+Analytics UI Clientes / Business Matrix	✔ Implementado
+Customer Situation Board	✔ Implementado
+Customer Detail contextual	✔ Implementado
+
+38. Punto de corte actual
+
+Documento Maestro v6.12
+
+Punto de corte consolidado:
+
+- Clientes / Business Matrix UI implementado.
+- Customer Situation Board funcionando como vista principal.
+- Detail por cliente funcionando con score contextual.
+- Xiamen evaluado por volumen/evolución.
+- BSG evaluado por Business Matrix estándar.
+- Health Signal centralizado en BI Layer.
+- Business Score contextual centralizado en BI Layer.
+- Drivers inline visibles en cards.
+- Reason ejecutiva visible en cards y detail.
+- Sort eliminado del overview para evitar ambigüedad.
+- Navegación hacia Executive, Operaciones y Desarrollo estabilizada.
+
+39. Mensaje para reiniciar conversación (MUY IMPORTANTE)
+
+Este es el mensaje que debes usar para continuar sin pérdida de contexto:
 
 MENSAJE:
 
@@ -1595,31 +2038,60 @@ Continuamos el Production Tracker — Analytics UI.
 
 Contexto:
 
-Documento Maestro v6.11 actualizado
-Executive, Operaciones, Quality y Desarrollo ya implementados
-Módulo Clientes / Business Matrix UI en desarrollo
-Overview v1 completamente definida (tipos, helper y page.tsx)
+Documento Maestro v6.12 actualizado.
+Executive, Operaciones, Quality, Desarrollo y Clientes ya implementados.
+El módulo Clientes / Business Matrix UI está funcionalmente consolidado.
 
-Punto exacto:
-Vamos a implementar el código completo del módulo:
+Estado actual:
 
-src/types/clientes.ts
-src/lib/analytics/clientes.ts
-src/app/analytics/clientes/page.tsx
+- `/analytics/clientes` usa Customer Situation Board.
+- La fuente principal es `vw_customer_business_contextual`.
+- Health viene de `vw_customer_health_signal`.
+- Evolución Xiamen viene de `vw_xiamen_customer_season_volume_evolution`.
+- El board se agrupa por `health_signal`.
+- El orden viene de `health_priority`.
+- El frontend no recalcula health ni score contextual.
+- Xiamen se evalúa por volumen/evolución.
+- BSG mantiene matriz estándar.
+- `/analytics/clientes/[customer]` muestra score contextual, health, drivers y lectura ejecutiva.
+
+Archivos clave:
+
+- `src/types/clientes.ts`
+- `src/lib/analytics/clientes.ts`
+- `src/app/analytics/clientes/page.tsx`
+- `src/app/analytics/clientes/[customer]/page.tsx`
+
+Views clave:
+
+- `vw_customer_business_matrix`
+- `vw_xiamen_customer_season_volume_evolution`
+- `vw_customer_health_signal`
+- `vw_customer_business_contextual`
 
 Reglas:
 
-usar vw_customer_business_matrix
-filtros vía search params (form GET)
-no duplicar lógica en frontend
-mantener consistencia con Analytics existente
+- no modificar snapshots históricos
+- no recalcular BI en frontend
+- no duplicar lógica de negocio
+- filtros vía search params
+- UI como representación fiel de BI Layer
+- estabilidad antes que abstracción visual
 
-Empezamos por revisar y ajustar el código antes de pegarlo en el proyecto.
+Siguiente bloque recomendado:
 
-38. Conclusión
+- Pulido final del módulo Clientes.
+- Posible creación de alertas comerciales sobre `health_signal = CRITICAL`.
+- Integración futura del Customer Situation Board en Executive.
+- Revisión del módulo Operaciones para reutilizar parte del modelo contextual.
+
+40. Conclusión
 
 Con esta actualización:
 
-tienes el proyecto alineado con la realidad
-puedes continuar con cualquier GPT sin pérdida de contexto
-el siguiente paso ya es 100% ejecución
+- Production Tracker incorpora una capa de inteligencia comercial contextual.
+- El sistema distingue correctamente Xiamen DIC y BSG.
+- El módulo Clientes deja de ser una tabla de scores y pasa a ser un tablero de situación.
+- La UI muestra situación, causa y acción.
+- La BI Layer mantiene la lógica de decisión.
+- El proyecto queda preparado para alertas, reporting ejecutivo y priorización comercial real.
