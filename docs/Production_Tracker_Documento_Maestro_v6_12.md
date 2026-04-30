@@ -2028,6 +2028,24 @@ Punto de corte consolidado:
 - Sort eliminado del overview para evitar ambigüedad.
 - Navegación hacia Executive, Operaciones y Desarrollo estabilizada.
 
+38.1 Actualización incremental (post v6.12)
+
+Estado consolidado tras el último bloque de trabajo en Analytics UI:
+
+- Se integra `vw_customer_commercial_alerts` en Executive como bloque de priorización comercial.
+- Executive muestra conteo por severidad (`CRITICAL`, `WARNING`, `MONITOR`) y accesos directos a detalle de cliente.
+- Operaciones incorpora un bloque de foco (`Prioridad operativa`) para priorización diaria por presión logística y riesgo de fábrica.
+- Operaciones añade franja de insights rápidos con navegación directa a submódulos.
+- Se consolida navegación bidireccional en Operaciones con persistencia de filtros vía search params.
+- Se añade botón explícito de `Volver atrás` en subpantallas de Operaciones.
+- El módulo Clientes evita redundancia visual con el Situation Board y mantiene la lectura BI como fuente única.
+
+Regla de arquitectura aplicada en este bloque:
+
+- No se introduce lógica BI nueva en frontend.
+- El frontend solo selecciona, ordena visualmente y navega sobre datos ya calculados en views SQL.
+- Persistencia de contexto exclusivamente mediante URL/search params.
+
 39. Mensaje para reiniciar conversación (MUY IMPORTANTE)
 
 Este es el mensaje que debes usar para continuar sin pérdida de contexto:
@@ -2054,6 +2072,9 @@ Estado actual:
 - Xiamen se evalúa por volumen/evolución.
 - BSG mantiene matriz estándar.
 - `/analytics/clientes/[customer]` muestra score contextual, health, drivers y lectura ejecutiva.
+- `/analytics/executive` incorpora bloque de prioridad comercial desde `vw_customer_commercial_alerts`.
+- `/analytics/operaciones` incorpora foco operativo e insights con drill-down contextual.
+- `customers`, `factories`, `seasons` y `logistica` preservan contexto al volver a overview.
 
 Archivos clave:
 
@@ -2061,6 +2082,10 @@ Archivos clave:
 - `src/lib/analytics/clientes.ts`
 - `src/app/analytics/clientes/page.tsx`
 - `src/app/analytics/clientes/[customer]/page.tsx`
+- `src/app/analytics/executive/page.tsx`
+- `src/app/analytics/operaciones/page.tsx`
+- `src/components/analytics/operaciones/OperacionesFocusBoard.tsx`
+- `src/components/analytics/charts/AnalyticsBarChart.tsx`
 
 Views clave:
 
@@ -2068,6 +2093,7 @@ Views clave:
 - `vw_xiamen_customer_season_volume_evolution`
 - `vw_customer_health_signal`
 - `vw_customer_business_contextual`
+- `vw_customer_commercial_alerts`
 
 Reglas:
 
@@ -2080,10 +2106,10 @@ Reglas:
 
 Siguiente bloque recomendado:
 
-- Pulido final del módulo Clientes.
-- Posible creación de alertas comerciales sobre `health_signal = CRITICAL`.
-- Integración futura del Customer Situation Board en Executive.
-- Revisión del módulo Operaciones para reutilizar parte del modelo contextual.
+- Afinar priorización en Executive (menos ruido y mayor foco en `CRITICAL` y `WARNING`).
+- Extender cubo operativo con drill-down explicativo por causa (sin lógica duplicada en UI).
+- Consolidar cross-navigation Executive <-> Operaciones <-> Clientes preservando contexto.
+- Evaluar alertas transversales inter-módulo para seguimiento diario.
 
 40. Conclusión
 
