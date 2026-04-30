@@ -39,6 +39,21 @@ function parseOperacionesFilters(
   };
 }
 
+function buildOperacionesOverviewHref(
+  params: Record<string, string | string[] | undefined>
+) {
+  const query = new URLSearchParams();
+  const keys = ["season", "customer", "factory", "operativa", "dateType", "dateFrom", "dateTo"];
+
+  for (const key of keys) {
+    const value = getSingleParam(params[key]);
+    if (value) query.set(key, value);
+  }
+
+  const queryString = query.toString();
+  return queryString ? `/analytics/operaciones?${queryString}` : "/analytics/operaciones";
+}
+
 function formatValue(value: unknown) {
   if (value === null || value === undefined) return "-";
 
@@ -148,6 +163,7 @@ export default async function OperacionesCustomersPage({
 }: OperacionesCustomersPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const filters = parseOperacionesFilters(resolvedSearchParams);
+  const overviewHref = buildOperacionesOverviewHref(resolvedSearchParams);
 
   const [rowsRaw, filterOptions] = await Promise.all([
     getOperacionesCustomerRanking(filters),
@@ -170,6 +186,12 @@ export default async function OperacionesCustomersPage({
         </div>
 
         <div className="flex items-center gap-2">
+          <Link
+            href={overviewHref}
+            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Volver atrás
+          </Link>
           <Link
             href="/analytics/clientes"
             className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"

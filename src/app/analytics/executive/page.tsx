@@ -3,7 +3,10 @@ import {
   getExecutiveDashboardData,
   getExecutiveFilterOptions,
 } from "@/lib/analytics/queries/executive";
+import { getCustomerCommercialAlerts } from "@/lib/analytics/clientes";
+import { createClient } from "@/lib/supabase";
 import type { ExecutiveFilters } from "@/lib/analytics/types/executive";
+import type { CustomerCommercialAlert } from "@/types/clientes";
 
 type ExecutivePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -136,16 +139,38 @@ function KpiGrid({ rows }: { rows: GenericRow[] }) {
   );
 }
 
+function AlertBadge({ level }: { level: CustomerCommercialAlert["alert_level"] }) {
+  const className =
+    level === "CRITICAL"
+      ? "bg-red-100 text-red-700 ring-red-200"
+      : level === "WARNING"
+      ? "bg-amber-100 text-amber-700 ring-amber-200"
+      : "bg-blue-100 text-blue-700 ring-blue-200";
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${className}`}
+    >
+      {level}
+    </span>
+  );
+}
+
 export default async function ExecutivePage({
   searchParams,
 }: ExecutivePageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const filters = parseExecutiveFilters(resolvedSearchParams);
+  const supabase = await createClient();
 
-  const [data, filterOptions] = await Promise.all([
+  const [data, filterOptions, alerts] = await Promise.all([
     getExecutiveDashboardData(filters),
     getExecutiveFilterOptions(),
+    getCustomerCommercialAlerts(supabase),
   ]);
+  const criticalAlerts = alerts.filter((alert) => alert.alert_level === "CRITICAL");
+  const warningAlerts = alerts.filter((alert) => alert.alert_level === "WARNING");
+  const monitorAlerts = alerts.filter((alert) => alert.alert_level === "MONITOR");
 
   return (
     <div className="space-y-6 p-6">
@@ -276,6 +301,80 @@ export default async function ExecutivePage({
       </section>
 
       <KpiGrid rows={(data.kpis ?? []) as GenericRow[]} />
+
+      <section className="rounded-2xl border bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b px-5 py-4">
+          <div>
+            <h2 className="text-lg font-semibold">Prioridad comercial</h2>
+            <p className="text-sm text-muted-foreground">
+              Resumen transversal desde{" "}
+              <span className="font-medium">vw_customer_commercial_alerts</span>.
+            </p>
+          </div>
+          <Link
+            href="/analytics/clientes"
+            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Ver módulo Clientes
+          </Link>
+        </div>
+
+        <div className="space-y-4 p-5">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="rounded-xl border bg-red-50 p-4">
+              <p className="text-xs font-medium text-red-700">CRITICAL</p>
+              <p className="mt-1 text-2xl font-semibold text-red-900">
+                {criticalAlerts.length}
+              </p>
+            </div>
+            <div className="rounded-xl border bg-amber-50 p-4">
+              <p className="text-xs font-medium text-amber-700">WARNING</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-900">
+                {warningAlerts.length}
+              </p>
+            </div>
+            <div className="rounded-xl border bg-blue-50 p-4">
+              <p className="text-xs font-medium text-blue-700">MONITOR</p>
+              <p className="mt-1 text-2xl font-semibold text-blue-900">
+                {monitorAlerts.length}
+              </p>
+            </div>
+          </div>
+
+          {alerts.length === 0 ? (
+            <div className="rounded-xl border p-6 text-sm text-muted-foreground">
+              No hay alertas comerciales activas.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+              {alerts.slice(0, 8).map((alert) => (
+                <Link
+                  key={`${alert.customer}-${alert.alert_type}`}
+                  href={`/analytics/clientes/${encodeURIComponent(alert.customer)}`}
+                  className="rounded-xl border p-4 transition hover:bg-muted/30"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{alert.customer}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {alert.contextual_business_profile ?? "Sin perfil"}
+                      </p>
+                    </div>
+                    <AlertBadge level={alert.alert_level} />
+                  </div>
+
+                  <p className="mt-3 text-sm font-medium">
+                    {alert.alert_reason ?? "Sin motivo disponible"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {alert.recommended_action ?? "Sin acción recomendada"}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <GenericTable

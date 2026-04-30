@@ -12,6 +12,7 @@ import type {
   CustomerOperationalDetail,
   CustomerQualityDetail,
   CustomerXiamenVolumeEvolutionRow,
+  CustomerCommercialAlert,
 } from "@/types/clientes";
 
 type SearchParamsInput =
@@ -507,4 +508,60 @@ export function buildCustomerBusinessKPIs(
     avgBusinessScore: average(rows.map((row) => row.customer_business_score)),
     avgFrictionScore: average(rows.map((row) => row.customer_friction_score)),
   };
+}
+export async function getCustomerCommercialAlerts(
+  supabase: SupabaseClient,
+  filters?: { customer?: string; profile?: string }
+): Promise<CustomerCommercialAlert[]> {
+  const customer = filters?.customer?.trim() ?? "";
+  const profile = filters?.profile?.trim() ?? "";
+
+  let query = supabase.from("vw_customer_commercial_alerts").select("*");
+
+  if (customer) {
+    query = query.eq("customer", customer);
+  }
+
+  if (profile) {
+    query = query.eq("contextual_business_profile", profile);
+  }
+
+  const { data, error } = await query
+    .order("alert_priority", { ascending: true })
+    .order("contextual_business_score", {
+      ascending: true,
+      nullsFirst: false,
+    })
+    .order("customer", { ascending: true });
+
+  if (error) {
+    console.error("Error loading customer commercial alerts:", error);
+    return [];
+  }
+
+  return (data ?? []) as CustomerCommercialAlert[];
+}
+
+export async function getCustomerCommercialAlertsByCustomer(
+  supabase: SupabaseClient,
+  customer: string
+): Promise<CustomerCommercialAlert[]> {
+  const normalizedCustomer = customer.trim();
+
+  if (!normalizedCustomer) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("vw_customer_commercial_alerts")
+    .select("*")
+    .eq("customer", normalizedCustomer)
+    .order("alert_priority", { ascending: true });
+
+  if (error) {
+    console.error("Error loading customer commercial alerts by customer:", error);
+    return [];
+  }
+
+  return (data ?? []) as CustomerCommercialAlert[];
 }

@@ -32,6 +32,21 @@ function parseOperacionesFilters(
   };
 }
 
+function buildOperacionesOverviewHref(
+  params: Record<string, string | string[] | undefined>
+) {
+  const query = new URLSearchParams();
+  const keys = ["season", "customer", "factory", "operativa", "dateType", "dateFrom", "dateTo"];
+
+  for (const key of keys) {
+    const value = getSingleParam(params[key]);
+    if (value) query.set(key, value);
+  }
+
+  const queryString = query.toString();
+  return queryString ? `/analytics/operaciones?${queryString}` : "/analytics/operaciones";
+}
+
 const FACTORY_RISK_CONFIG: OperacionesRankingConfig = {
   title: "Factory Risk Ranking",
   labelKeys: ["factory"],
@@ -75,6 +90,7 @@ export default async function OperacionesFactoriesPage({
 }: OperacionesFactoriesPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const filters = parseOperacionesFilters(resolvedSearchParams);
+  const overviewHref = buildOperacionesOverviewHref(resolvedSearchParams);
 
   const [rows, filterOptions] = await Promise.all([
     getOperacionesFactoryRanking(filters),
@@ -88,10 +104,10 @@ export default async function OperacionesFactoriesPage({
     >
       <div className="flex items-center justify-between gap-4">
         <Link
-          href="/analytics/operaciones"
+          href={overviewHref}
           className="rounded-xl border px-3 py-2 text-sm transition-colors hover:bg-muted"
         >
-          Volver a Operaciones Overview
+          Volver atrás
         </Link>
       </div>
 

@@ -349,11 +349,6 @@ export default async function AnalyticsClientesPage({
                                 )}
                               </p>
                             </div>
-
-                            <Badge
-                              label={rowHealth}
-                              className={getBadgeClass(rowHealth)}
-                            />
                           </div>
 
                           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -420,19 +415,9 @@ export default async function AnalyticsClientesPage({
                               </div>
                             ) : null}
 
-                            <p className="text-xs font-medium">
-                              {rowHealth === "CRITICAL" &&
-                                "Revisar caída de volumen"}
-                              {rowHealth === "WARNING" &&
-                                "Validar riesgo operativo"}
-                              {rowHealth === "MONITOR" && "Seguir evolución"}
-                              {rowHealth === "HEALTHY" &&
-                                "Potencial crecimiento"}
-                              {rowHealth === "NEUTRAL" &&
-                                "Sin señal relevante"}
-                            </p>
-
-                            {healthData?.health_reason ? (
+                            {healthData?.health_reason &&
+                            (rowHealth === "CRITICAL" ||
+                              rowHealth === "WARNING") ? (
                               <p className="text-xs text-muted-foreground">
                                 {healthData.health_reason}
                               </p>

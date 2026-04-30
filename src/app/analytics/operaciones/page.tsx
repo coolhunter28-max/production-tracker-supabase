@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { AnalyticsBarChart } from "@/components/analytics/charts/AnalyticsBarChart";
 import { OperacionesFiltersBar } from "@/components/analytics/filters/OperacionesFiltersBar";
 import { AnalyticsPageShell } from "@/components/analytics/layout/AnalyticsPageShell";
 import { AnalyticsSectionHeader } from "@/components/analytics/layout/AnalyticsSectionHeader";
+import { OperacionesFocusBoard } from "@/components/analytics/operaciones/OperacionesFocusBoard";
 import { AnalyticsRankingTable } from "@/components/analytics/tables/AnalyticsRankingTable";
 import {
   getOperacionesFilterOptions,
@@ -15,6 +17,8 @@ import type {
 type OperacionesPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
+
+type GenericRow = Record<string, unknown>;
 
 function getSingleParam(
   value: string | string[] | undefined
@@ -48,6 +52,47 @@ function parseOperacionesFilters(
     dateFrom,
     dateTo,
   };
+}
+
+function toNumber(value: unknown) {
+  return typeof value === "number" && !Number.isNaN(value) ? value : null;
+}
+
+function topRowByMetric(rows: GenericRow[], metric: string) {
+  return rows.reduce<GenericRow | null>((best, row) => {
+    const current = toNumber(row[metric]);
+    if (current === null) return best;
+    if (!best) return row;
+    const bestValue = toNumber(best[metric]);
+    if (bestValue === null || current > bestValue) return row;
+    return best;
+  }, null);
+}
+
+function formatNumber(value: unknown, decimals = 2) {
+  const number = toNumber(value);
+  if (number === null) return "—";
+  return new Intl.NumberFormat("es-ES", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(number);
+}
+
+function buildBaseParams(filters: OperacionesFilters) {
+  const query = new URLSearchParams();
+  if (filters.season) query.set("season", filters.season);
+  if (filters.customer) query.set("customer", filters.customer);
+  if (filters.factory) query.set("factory", filters.factory);
+  if (filters.operativa) query.set("operativa", filters.operativa);
+  if (filters.dateType) query.set("dateType", filters.dateType);
+  if (filters.dateFrom) query.set("dateFrom", filters.dateFrom);
+  if (filters.dateTo) query.set("dateTo", filters.dateTo);
+  return query;
+}
+
+function withQuery(path: string, query: URLSearchParams) {
+  const value = query.toString();
+  return value ? `${path}?${value}` : path;
 }
 
 const CUSTOMER_CONFIG: OperacionesRankingConfig = {
@@ -132,6 +177,20 @@ export default async function OperacionesPage({
     getOperacionesFilterOptions(),
   ]);
 
+  const topLogisticsCustomer = topRowByMetric(
+    data.logisticsRanking as GenericRow[],
+    "logistics_pressure_score"
+  );
+  const topRiskFactory = topRowByMetric(
+    data.factoryRanking as GenericRow[],
+    "risk_score"
+  );
+  const topDelayedSeason = topRowByMetric(
+    data.seasonRanking as GenericRow[],
+    "production_late_rate_pct"
+  );
+  const baseQuery = buildBaseParams(filters);
+
   return (
     <AnalyticsPageShell
       title="Operaciones Overview"
@@ -142,6 +201,101 @@ export default async function OperacionesPage({
         customers={filterOptions.customers}
         factories={filterOptions.factories}
       />
+
+      <OperacionesFocusBoard
+        logisticsRows={data.logisticsRanking}
+        factoryRows={data.factoryRanking}
+        filters={filters}
+      />
+
+      <section className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+        <Link
+          href={withQuery(
+            "/analytics/operaciones/logistica",
+            (() => {
+              const query = new URLSearchParams(baseQuery);
+              const customer = topLogisticsCustomer?.customer;
+              if (typeof customer === "string" && customer.trim()) {
+                query.set("customer", customer);
+              }
+              return query;
+            })()
+          )}
+          className="rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-muted/40"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs text-muted-foreground">Alerta logística líder</p>
+            <span className="text-sm text-muted-foreground">→</span>
+          </div>
+          <p className="mt-1 text-sm font-semibold">
+            {String(topLogisticsCustomer?.customer ?? "Sin datos")}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Score: {formatNumber(topLogisticsCustomer?.logistics_pressure_score)}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground underline">
+            Ver detalle
+          </p>
+        </Link>
+
+        <Link
+          href={withQuery(
+            "/analytics/operaciones/factories",
+            (() => {
+              const query = new URLSearchParams(baseQuery);
+              const factory = topRiskFactory?.factory;
+              if (typeof factory === "string" && factory.trim()) {
+                query.set("factory", factory);
+              }
+              return query;
+            })()
+          )}
+          className="rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-muted/40"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs text-muted-foreground">Fábrica más expuesta</p>
+            <span className="text-sm text-muted-foreground">→</span>
+          </div>
+          <p className="mt-1 text-sm font-semibold">
+            {String(topRiskFactory?.factory ?? "Sin datos")}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Risk score: {formatNumber(topRiskFactory?.risk_score)}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground underline">
+            Ver detalle
+          </p>
+        </Link>
+
+        <Link
+          href={withQuery(
+            "/analytics/operaciones/seasons",
+            (() => {
+              const query = new URLSearchParams(baseQuery);
+              const season = topDelayedSeason?.season;
+              if (typeof season === "string" && season.trim()) {
+                query.set("season", season);
+              }
+              return query;
+            })()
+          )}
+          className="rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-muted/40"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs text-muted-foreground">Season con más retraso</p>
+            <span className="text-sm text-muted-foreground">→</span>
+          </div>
+          <p className="mt-1 text-sm font-semibold">
+            {String(topDelayedSeason?.season ?? "Sin datos")}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Late rate: {formatNumber(topDelayedSeason?.production_late_rate_pct)}%
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground underline">
+            Ver detalle
+          </p>
+        </Link>
+      </section>
 
       <section className="space-y-4">
         <AnalyticsSectionHeader

@@ -121,3 +121,48 @@ export interface CustomerLatestXiamenVolumeSignal {
   sell_growth_pct: number | null;
   volume_signal: string | null;
 }
+export type CustomerCommercialAlertLevel =
+  | "CRITICAL"
+  | "WARNING"
+  | "MONITOR";
+
+export type CustomerCommercialAlertType =
+  | "XIAMEN_VOLUME_DROP"
+  | "XIAMEN_VOLUME_SOFT_DROP"
+  | "XIAMEN_NO_BASELINE"
+  | "HIGH_FRICTION_RISK"
+  | "LOW_PROFITABILITY"
+  | "LOW_CONTRIBUTION"
+  | "COMMERCIAL_WARNING"
+  | "MONITOR_CUSTOMER";
+
+export type CustomerCommercialAlert = {
+  customer: string;
+  alert_level: CustomerCommercialAlertLevel;
+  alert_type: CustomerCommercialAlertType;
+  alert_reason: string | null;
+  recommended_action: string | null;
+  alert_priority: number;
+
+  contextual_business_profile: string | null;
+  contextual_business_score: number | null;
+  customer_friction_score: number | null;
+
+  health_signal: string | null;
+  health_reason: string | null;
+  volume_signal: string | null;
+
+  qty_growth_pct: number | null;
+  sell_growth_pct: number | null;
+
+  xiamen_context_flag: boolean | null;
+  customer_size_band: string | null;
+  profitability_band: string | null;
+  contribution_pct: number | null;
+
+  xiamen_sales_mix_pct: number | null;
+  bsg_sales_mix_pct: number | null;
+
+  score_model: string | null;
+  health_priority: number | null;
+};

@@ -42,7 +42,20 @@ function getProfileLabel(
     return "DEMANDING (Xiamen)";
   }
 
-  return profile ?? "-";
+  switch (profile) {
+    case "CRITICAL_XIAMEN":
+      return "CRITICAL (Xiamen)";
+    case "WATCH_XIAMEN":
+      return "WATCH (Xiamen)";
+    case "GROWING_XIAMEN":
+      return "GROWING (Xiamen)";
+    case "NEW_OR_UNTRACKED_XIAMEN":
+      return "NEW / UNTRACKED (Xiamen)";
+    case "DEMANDING_XIAMEN":
+      return "DEMANDING (Xiamen)";
+    default:
+      return profile ?? "-";
+  }
 }
 
 function getProfileBadgeClass(
@@ -57,10 +70,15 @@ function getProfileBadgeClass(
     case "STRATEGIC":
       return "bg-blue-50 text-blue-700 ring-blue-200";
     case "PROFITABLE":
+    case "GROWING_XIAMEN":
       return "bg-emerald-50 text-emerald-700 ring-emerald-200";
     case "NEGOTIATOR":
+    case "WATCH_XIAMEN":
+    case "DEMANDING_XIAMEN":
+    case "NEW_OR_UNTRACKED_XIAMEN":
       return "bg-amber-50 text-amber-700 ring-amber-200";
     case "RISKY":
+    case "CRITICAL_XIAMEN":
       return "bg-red-50 text-red-700 ring-red-200";
     case "LOW_VALUE":
       return "bg-slate-100 text-slate-700 ring-slate-200";
@@ -101,6 +119,46 @@ function getVolumeSignalBadgeClass(signal: string | null | undefined) {
       return "bg-slate-50 text-slate-700 ring-slate-200";
     default:
       return "bg-muted text-muted-foreground ring-border";
+  }
+}
+
+function getDiagnosisTitle(health: HealthSignal) {
+  switch (health) {
+    case "CRITICAL":
+      return "Riesgo prioritario";
+    case "WARNING":
+      return "Seguimiento recomendado";
+    case "MONITOR":
+    case "STABLE":
+      return "Vigilancia activa";
+    case "HEALTHY":
+      return "Cliente en buena situación";
+    case "NEUTRAL":
+    case "-":
+    default:
+      return "Sin señal crítica";
+  }
+}
+
+function getDiagnosisAction(health: HealthSignal, isXiamenContext: boolean) {
+  switch (health) {
+    case "CRITICAL":
+      return isXiamenContext
+        ? "Revisar forecast, pipeline y continuidad de volumen con el equipo comercial."
+        : "Revisar causas de fricción, rentabilidad y riesgo operativo.";
+    case "WARNING":
+      return isXiamenContext
+        ? "Monitorizar evolución de volumen en la siguiente temporada."
+        : "Validar si la fricción operativa requiere seguimiento comercial.";
+    case "MONITOR":
+    case "STABLE":
+      return "Mantener seguimiento y revisar evolución en próximos cierres.";
+    case "HEALTHY":
+      return "Explorar oportunidades de crecimiento y continuidad.";
+    case "NEUTRAL":
+    case "-":
+    default:
+      return "Sin acción urgente. Mantener lectura periódica.";
   }
 }
 
@@ -169,7 +227,9 @@ function MetricCard({
       <p className="text-sm text-muted-foreground">{title}</p>
       <p className="mt-2 text-3xl font-semibold tracking-tight">{value}</p>
       {helper ? (
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">{helper}</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          {helper}
+        </p>
       ) : null}
     </div>
   );
@@ -207,7 +267,7 @@ function DataRow({
   return (
     <div className="flex items-center justify-between gap-4 border-b py-3 last:border-b-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <div className="text-sm font-medium text-right">{value}</div>
+      <div className="text-right text-sm font-medium">{value}</div>
     </div>
   );
 }
@@ -236,12 +296,41 @@ export default async function AnalyticsClienteDetailPage({
   return (
     <div className="space-y-6 p-6">
       <header className="space-y-3">
-        <Link
-          href="/analytics/clientes"
-          className="inline-flex rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-        >
-          ← Volver a Clientes
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/analytics/clientes"
+            className="inline-flex rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            ← Volver a Clientes
+          </Link>
+
+          <Link
+            href={`/analytics/operaciones/customers?customer=${encodeURIComponent(
+              decodedCustomer
+            )}`}
+            className="inline-flex rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Operaciones
+          </Link>
+
+          <Link
+            href={`/analytics/desarrollo/customers?customer=${encodeURIComponent(
+              decodedCustomer
+            )}`}
+            className="inline-flex rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Desarrollo
+          </Link>
+
+          <Link
+            href={`/analytics/quality/customers?customer=${encodeURIComponent(
+              decodedCustomer
+            )}`}
+            className="inline-flex rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Quality
+          </Link>
+        </div>
 
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">Analytics · Clientes</p>
@@ -266,6 +355,7 @@ export default async function AnalyticsClienteDetailPage({
               : "Score consolidado de negocio"
           }
         />
+
         <MetricCard
           title={isXiamenContext ? "Coordination Load" : "Friction Score"}
           value={formatNumber(detail.business.customer_friction_score, 2)}
@@ -275,6 +365,7 @@ export default async function AnalyticsClienteDetailPage({
               : "Nivel consolidado de fricción"
           }
         />
+
         <MetricCard
           title="Profile"
           value={getProfileLabel(
@@ -283,12 +374,70 @@ export default async function AnalyticsClienteDetailPage({
           )}
           helper="Clasificación contextualizada"
         />
+
         <MetricCard
           title="Health"
           value={health}
           helper="Señal consolidada desde BI Layer"
         />
       </section>
+
+      <DetailSection
+        title="Customer Diagnosis"
+        description="Lectura ejecutiva basada en señales consolidadas de BI."
+      >
+        <div
+          className={`rounded-2xl p-4 ring-1 ring-inset ${getHealthBadgeClass(
+            health
+          )}`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">
+                {getDiagnosisTitle(health)}
+              </p>
+              <p className="mt-2 text-sm leading-6">
+                {healthData?.health_reason ??
+                  "Sin señal específica disponible."}
+              </p>
+            </div>
+
+            <HealthBadge health={health} />
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border bg-white/70 p-3">
+              <p className="text-xs text-muted-foreground">Señal volumen</p>
+              <div className="mt-2">
+                <VolumeSignalBadge signal={healthData?.volume_signal} />
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-white/70 p-3">
+              <p className="text-xs text-muted-foreground">Qty Growth</p>
+              <p className="mt-1 text-sm font-semibold">
+                {formatPercent(healthData?.qty_growth_pct, 2)}
+              </p>
+            </div>
+
+            <div className="rounded-lg border bg-white/70 p-3">
+              <p className="text-xs text-muted-foreground">Sell Growth</p>
+              <p className="mt-1 text-sm font-semibold">
+                {formatPercent(healthData?.sell_growth_pct, 2)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-lg border bg-white/70 p-3">
+            <p className="text-xs font-semibold text-muted-foreground">
+              Acción sugerida
+            </p>
+            <p className="mt-1 text-sm leading-6">
+              {getDiagnosisAction(health, isXiamenContext)}
+            </p>
+          </div>
+        </div>
+      </DetailSection>
 
       {isXiamenContext ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -408,12 +557,12 @@ export default async function AnalyticsClienteDetailPage({
                 <tr>
                   <th className="px-4 py-3 font-medium">Season</th>
                   <th className="px-4 py-3 font-medium">Previous</th>
-                  <th className="px-4 py-3 font-medium text-right">Qty</th>
-                  <th className="px-4 py-3 font-medium text-right">Prev Qty</th>
-                  <th className="px-4 py-3 font-medium text-right">
+                  <th className="px-4 py-3 text-right font-medium">Qty</th>
+                  <th className="px-4 py-3 text-right font-medium">Prev Qty</th>
+                  <th className="px-4 py-3 text-right font-medium">
                     Qty Growth
                   </th>
-                  <th className="px-4 py-3 font-medium text-right">
+                  <th className="px-4 py-3 text-right font-medium">
                     Sell Growth
                   </th>
                   <th className="px-4 py-3 font-medium">Signal</th>
@@ -464,50 +613,53 @@ export default async function AnalyticsClienteDetailPage({
             {healthData?.health_reason ?? "Sin señal específica disponible."}
           </p>
         </div>
- {healthData && healthData.health_signal === "CRITICAL" ? (
-  <div className="mt-4 rounded-xl border bg-red-50 p-4 text-sm text-red-900">
-    <p className="font-semibold mb-4">Drivers del estado</p>
 
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-      
-      <div className="rounded-lg border bg-white p-3">
-        <p className="text-xs text-muted-foreground">Última temporada</p>
-        <p className="text-sm font-semibold">
-          {healthData.xiamen_latest_season ?? "-"}
-        </p>
-      </div>
+        {healthData && healthData.health_signal === "CRITICAL" ? (
+          <div className="mt-4 rounded-xl border bg-red-50 p-4 text-sm text-red-900">
+            <p className="mb-4 font-semibold">Drivers del estado</p>
 
-      <div className="rounded-lg border bg-white p-3">
-        <p className="text-xs text-muted-foreground">Temporada previa</p>
-        <p className="text-sm font-semibold">
-          {healthData.xiamen_previous_season ?? "-"}
-        </p>
-      </div>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+              <div className="rounded-lg border bg-white p-3">
+                <p className="text-xs text-muted-foreground">
+                  Última temporada
+                </p>
+                <p className="text-sm font-semibold">
+                  {healthData.xiamen_latest_season ?? "-"}
+                </p>
+              </div>
 
-      <div className="rounded-lg border bg-white p-3">
-        <p className="text-xs text-muted-foreground">Qty Growth</p>
-        <p className="text-sm font-semibold text-red-600">
-          {formatPercent(healthData.qty_growth_pct, 2)}
-        </p>
-      </div>
+              <div className="rounded-lg border bg-white p-3">
+                <p className="text-xs text-muted-foreground">
+                  Temporada previa
+                </p>
+                <p className="text-sm font-semibold">
+                  {healthData.xiamen_previous_season ?? "-"}
+                </p>
+              </div>
 
-      <div className="rounded-lg border bg-white p-3">
-        <p className="text-xs text-muted-foreground">Sell Growth</p>
-        <p className="text-sm font-semibold text-red-600">
-          {formatPercent(healthData.sell_growth_pct, 2)}
-        </p>
-      </div>
+              <div className="rounded-lg border bg-white p-3">
+                <p className="text-xs text-muted-foreground">Qty Growth</p>
+                <p className="text-sm font-semibold text-red-600">
+                  {formatPercent(healthData.qty_growth_pct, 2)}
+                </p>
+              </div>
 
-      <div className="rounded-lg border bg-white p-3">
-        <p className="text-xs text-muted-foreground">PO Growth</p>
-        <p className="text-sm font-semibold text-red-600">
-          {formatPercent(healthData.po_count_growth_pct, 2)}
-        </p>
-      </div>
+              <div className="rounded-lg border bg-white p-3">
+                <p className="text-xs text-muted-foreground">Sell Growth</p>
+                <p className="text-sm font-semibold text-red-600">
+                  {formatPercent(healthData.sell_growth_pct, 2)}
+                </p>
+              </div>
 
-    </div>
-  </div>
-) : null}
+              <div className="rounded-lg border bg-white p-3">
+                <p className="text-xs text-muted-foreground">PO Growth</p>
+                <p className="text-sm font-semibold text-red-600">
+                  {formatPercent(healthData.po_count_growth_pct, 2)}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </DetailSection>
     </div>
   );

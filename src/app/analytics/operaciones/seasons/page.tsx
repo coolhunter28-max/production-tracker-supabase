@@ -32,6 +32,21 @@ function parseOperacionesFilters(
   };
 }
 
+function buildOperacionesOverviewHref(
+  params: Record<string, string | string[] | undefined>
+) {
+  const query = new URLSearchParams();
+  const keys = ["season", "customer", "factory", "operativa", "dateType", "dateFrom", "dateTo"];
+
+  for (const key of keys) {
+    const value = getSingleParam(params[key]);
+    if (value) query.set(key, value);
+  }
+
+  const queryString = query.toString();
+  return queryString ? `/analytics/operaciones?${queryString}` : "/analytics/operaciones";
+}
+
 const SEASON_PERFORMANCE_CONFIG: OperacionesRankingConfig = {
   title: "Season Performance Ranking",
   labelKeys: ["season"],
@@ -74,6 +89,7 @@ export default async function OperacionesSeasonsPage({
 }: OperacionesSeasonsPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const filters = parseOperacionesFilters(resolvedSearchParams);
+  const overviewHref = buildOperacionesOverviewHref(resolvedSearchParams);
 
   const [rows, filterOptions] = await Promise.all([
     getOperacionesSeasonRanking(filters),
@@ -87,10 +103,10 @@ export default async function OperacionesSeasonsPage({
     >
       <div className="flex items-center justify-between gap-4">
         <Link
-          href="/analytics/operaciones"
+          href={overviewHref}
           className="rounded-xl border px-3 py-2 text-sm transition-colors hover:bg-muted"
         >
-          Volver a Operaciones Overview
+          Volver atrás
         </Link>
       </div>
 
