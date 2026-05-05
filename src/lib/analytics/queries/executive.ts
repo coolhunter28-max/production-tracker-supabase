@@ -22,7 +22,10 @@ function uniqueSortedStrings(values: Array<string | null | undefined>) {
   return Array.from(
     new Set(
       values
-        .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+        .filter(
+          (value): value is string =>
+            typeof value === "string" && value.trim().length > 0
+        )
         .map((value) => value.trim())
     )
   ).sort((a, b) => a.localeCompare(b));
@@ -34,11 +37,28 @@ export async function getExecutiveKPIs(
   const supabase = createClient();
 
   const { data, error } = await supabase
-    .from("vw_exec_kpi_dashboard")
-    .select("*");
+    .from("vw_exec_summary_v2")
+    .select(`
+      po_count,
+      line_count,
+      customer_count,
+      factory_count,
+      model_count,
+      qty_total,
+      sell_amount_total,
+      buy_amount_total,
+      margin_bsg_total,
+      margin_xiamen_total,
+      contribution_total,
+      contribution_pct,
+      xiamen_sales_mix_pct,
+      bsg_sales_mix_pct,
+      xiamen_margin_pct,
+      bsg_margin_pct
+    `);
 
   if (error) {
-    throw new Error(`Error loading vw_exec_kpi_dashboard: ${error.message}`);
+    throw new Error(`Error loading vw_exec_summary_v2: ${error.message}`);
   }
 
   return (data ?? []) as ExecutiveKPIDashboardRow[];
@@ -49,9 +69,7 @@ export async function getExecutiveCustomerRanking(
 ): Promise<ExecutiveCustomerRankingRow[]> {
   const supabase = createClient();
 
-  let query: any = supabase
-    .from("vw_exec_customer_ranking")
-    .select("*");
+  let query: any = supabase.from("vw_exec_customer_ranking").select("*");
 
   query = applyTextFilter(query, "customer", filters.customer);
 
@@ -69,9 +87,7 @@ export async function getExecutiveFactoryRanking(
 ): Promise<ExecutiveFactoryRankingRow[]> {
   const supabase = createClient();
 
-  let query: any = supabase
-    .from("vw_exec_factory_ranking")
-    .select("*");
+  let query: any = supabase.from("vw_exec_factory_ranking").select("*");
 
   query = applyTextFilter(query, "factory", filters.factory);
 
@@ -109,29 +125,44 @@ export async function getExecutiveSeasonRanking(
 export async function getExecutiveFilterOptions() {
   const supabase = createClient();
 
-  const [{ data: customerData, error: customerError }, { data: factoryData, error: factoryError }, { data: seasonData, error: seasonError }] =
-    await Promise.all([
-      supabase.from("vw_exec_customer_ranking").select("customer"),
-      supabase.from("vw_exec_factory_ranking").select("factory"),
-      supabase.from("vw_exec_season_performance_ranking").select("season"),
-    ]);
+  const [
+    { data: customerData, error: customerError },
+    { data: factoryData, error: factoryError },
+    { data: seasonData, error: seasonError },
+  ] = await Promise.all([
+    supabase.from("vw_exec_customer_ranking").select("customer"),
+    supabase.from("vw_exec_factory_ranking").select("factory"),
+    supabase.from("vw_exec_season_performance_ranking").select("season"),
+  ]);
 
   if (customerError) {
-    throw new Error(`Error loading customer filter options: ${customerError.message}`);
+    throw new Error(
+      `Error loading customer filter options: ${customerError.message}`
+    );
   }
 
   if (factoryError) {
-    throw new Error(`Error loading factory filter options: ${factoryError.message}`);
+    throw new Error(
+      `Error loading factory filter options: ${factoryError.message}`
+    );
   }
 
   if (seasonError) {
-    throw new Error(`Error loading season filter options: ${seasonError.message}`);
+    throw new Error(
+      `Error loading season filter options: ${seasonError.message}`
+    );
   }
 
   return {
-    customers: uniqueSortedStrings((customerData ?? []).map((row: any) => row.customer)),
-    factories: uniqueSortedStrings((factoryData ?? []).map((row: any) => row.factory)),
-    seasons: uniqueSortedStrings((seasonData ?? []).map((row: any) => row.season)),
+    customers: uniqueSortedStrings(
+      (customerData ?? []).map((row: any) => row.customer)
+    ),
+    factories: uniqueSortedStrings(
+      (factoryData ?? []).map((row: any) => row.factory)
+    ),
+    seasons: uniqueSortedStrings(
+      (seasonData ?? []).map((row: any) => row.season)
+    ),
   };
 }
 
