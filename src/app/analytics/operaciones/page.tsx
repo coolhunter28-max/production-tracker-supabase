@@ -20,28 +20,20 @@ type OperacionesPageProps = {
 
 type GenericRow = Record<string, unknown>;
 
-function getSingleParam(
-  value: string | string[] | undefined
-): string | undefined {
+function getSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
 function parseOperacionesFilters(
   params: Record<string, string | string[] | undefined>
 ): OperacionesFilters {
-  const season = getSingleParam(params.season);
-  const customer = getSingleParam(params.customer);
-  const factory = getSingleParam(params.factory);
-  const operativa = getSingleParam(params.operativa);
   const dateType = getSingleParam(params.dateType);
-  const dateFrom = getSingleParam(params.dateFrom);
-  const dateTo = getSingleParam(params.dateTo);
 
   return {
-    season,
-    customer,
-    factory,
-    operativa,
+    season: getSingleParam(params.season),
+    customer: getSingleParam(params.customer),
+    factory: getSingleParam(params.factory),
+    operativa: getSingleParam(params.operativa),
     dateType:
       dateType === "po" ||
       dateType === "pi_etd" ||
@@ -49,8 +41,8 @@ function parseOperacionesFilters(
       dateType === "shipping"
         ? dateType
         : "shipping",
-    dateFrom,
-    dateTo,
+    dateFrom: getSingleParam(params.dateFrom),
+    dateTo: getSingleParam(params.dateTo),
   };
 }
 
@@ -98,12 +90,7 @@ function withQuery(path: string, query: URLSearchParams) {
 const CUSTOMER_CONFIG: OperacionesRankingConfig = {
   title: "Customers",
   labelKeys: ["customer"],
-  valueKeys: [
-    "contribution_total",
-    "sell_amount_total",
-    "margin_total",
-    "po_count",
-  ],
+  valueKeys: ["contribution_total", "sell_amount_total", "margin_total", "po_count"],
   preferredTableColumns: [
     "customer",
     "customer_size_band",
@@ -115,12 +102,7 @@ const CUSTOMER_CONFIG: OperacionesRankingConfig = {
 const FACTORY_CONFIG: OperacionesRankingConfig = {
   title: "Factories",
   labelKeys: ["factory"],
-  valueKeys: [
-    "risk_score",
-    "contribution_total",
-    "buy_amount_total",
-    "po_count",
-  ],
+  valueKeys: ["risk_score", "contribution_total", "buy_amount_total", "po_count"],
   preferredTableColumns: [
     "factory",
     "risk_level",
@@ -134,18 +116,8 @@ const FACTORY_CONFIG: OperacionesRankingConfig = {
 const SEASON_CONFIG: OperacionesRankingConfig = {
   title: "Seasons",
   labelKeys: ["season"],
-  valueKeys: [
-    "contribution_total",
-    "sell_amount_total",
-    "margin_total",
-    "po_count",
-  ],
-  preferredTableColumns: [
-    "season",
-    "po_count",
-    "line_count",
-    "qty_total",
-  ],
+  valueKeys: ["contribution_total", "sell_amount_total", "margin_total", "po_count"],
+  preferredTableColumns: ["season", "po_count", "line_count", "qty_total"],
 };
 
 const LOGISTICS_CONFIG: OperacionesRankingConfig = {
@@ -189,13 +161,24 @@ export default async function OperacionesPage({
     data.seasonRanking as GenericRow[],
     "production_late_rate_pct"
   );
+
   const baseQuery = buildBaseParams(filters);
+  const executiveHref = withQuery("/analytics/executive", baseQuery);
 
   return (
     <AnalyticsPageShell
       title="Operaciones Overview"
       description="Vista operativa global de volumen, contribución, retrasos y presión logística."
     >
+      <div className="flex justify-end">
+        <Link
+          href={executiveHref}
+          className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+        >
+          ← Volver a Executive
+        </Link>
+      </div>
+
       <OperacionesFiltersBar
         seasons={filterOptions.seasons}
         customers={filterOptions.customers}
@@ -298,10 +281,7 @@ export default async function OperacionesPage({
       </section>
 
       <section className="space-y-4">
-        <AnalyticsSectionHeader
-          title="Customers"
-          href="/analytics/operaciones/customers"
-        />
+        <AnalyticsSectionHeader title="Customers" href="/analytics/operaciones/customers" />
 
         <div className="grid gap-6 xl:grid-cols-2">
           <AnalyticsRankingTable
@@ -372,10 +352,7 @@ export default async function OperacionesPage({
       </section>
 
       <section className="space-y-4">
-        <AnalyticsSectionHeader
-          title="Seasons"
-          href="/analytics/operaciones/seasons"
-        />
+        <AnalyticsSectionHeader title="Seasons" href="/analytics/operaciones/seasons" />
 
         <div className="grid gap-6 xl:grid-cols-2">
           <AnalyticsRankingTable

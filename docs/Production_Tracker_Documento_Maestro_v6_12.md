@@ -2046,6 +2046,37 @@ Regla de arquitectura aplicada en este bloque:
 - El frontend solo selecciona, ordena visualmente y navega sobre datos ya calculados en views SQL.
 - Persistencia de contexto exclusivamente mediante URL/search params.
 
+### 38.2 Corrección de margen BSG y KPIs segmentados Executive
+
+Se detecta y corrige una infravaloración del margen BSG.
+
+Regla consolidada:
+
+- Xiamen DIC:
+  - margen = 10% de sell_amount_real
+- BSG:
+  - margen = (sell_amount_real - buy_amount_real) + 10% de buy_amount_real
+
+Se crea capa temporal de validación:
+
+- mv_fact_operacion_linea_v2
+- vw_exec_summary_v2
+
+Executive pasa a mostrar:
+
+- Margen total
+- Margen %
+- Mix Xiamen %
+- Mix BSG %
+- Margen Xiamen %
+- Margen BSG %
+
+Regla analítica:
+
+- El margen global % es una media ponderada por ventas.
+- No se suman porcentajes de operativas.
+- La UI no recalcula margen; solo representa métricas calculadas en SQL.
+
 39. Mensaje para reiniciar conversación (MUY IMPORTANTE)
 
 Este es el mensaje que debes usar para continuar sin pérdida de contexto:

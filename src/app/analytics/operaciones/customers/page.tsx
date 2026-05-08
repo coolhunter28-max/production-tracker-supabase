@@ -39,11 +39,20 @@ function parseOperacionesFilters(
   };
 }
 
-function buildOperacionesOverviewHref(
+function buildHref(
+  pathname: string,
   params: Record<string, string | string[] | undefined>
 ) {
   const query = new URLSearchParams();
-  const keys = ["season", "customer", "factory", "operativa", "dateType", "dateFrom", "dateTo"];
+  const keys = [
+    "season",
+    "customer",
+    "factory",
+    "operativa",
+    "dateType",
+    "dateFrom",
+    "dateTo",
+  ];
 
   for (const key of keys) {
     const value = getSingleParam(params[key]);
@@ -51,7 +60,7 @@ function buildOperacionesOverviewHref(
   }
 
   const queryString = query.toString();
-  return queryString ? `/analytics/operaciones?${queryString}` : "/analytics/operaciones";
+  return queryString ? `${pathname}?${queryString}` : pathname;
 }
 
 function formatValue(value: unknown) {
@@ -63,9 +72,7 @@ function formatValue(value: unknown) {
     }).format(value);
   }
 
-  if (typeof value === "boolean") {
-    return value ? "Sí" : "No";
-  }
+  if (typeof value === "boolean") return value ? "Sí" : "No";
 
   return String(value);
 }
@@ -163,7 +170,9 @@ export default async function OperacionesCustomersPage({
 }: OperacionesCustomersPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const filters = parseOperacionesFilters(resolvedSearchParams);
-  const overviewHref = buildOperacionesOverviewHref(resolvedSearchParams);
+
+  const overviewHref = buildHref("/analytics/operaciones", resolvedSearchParams);
+  const executiveHref = buildHref("/analytics/executive", resolvedSearchParams);
 
   const [rowsRaw, filterOptions] = await Promise.all([
     getOperacionesCustomerRanking(filters),
@@ -187,23 +196,26 @@ export default async function OperacionesCustomersPage({
 
         <div className="flex items-center gap-2">
           <Link
+            href={executiveHref}
+            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            ← Volver a Executive
+          </Link>
+
+          <Link
             href={overviewHref}
             className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
           >
-            Volver atrás
+            Volver a Operaciones
           </Link>
+
           <Link
             href="/analytics/clientes"
             className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
           >
             Clientes
           </Link>
-          <Link
-            href="/analytics/executive"
-            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Executive
-          </Link>
+
           <Link
             href="/analytics/desarrollo/customers"
             className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
@@ -288,7 +300,7 @@ export default async function OperacionesCustomersPage({
             </select>
           </div>
 
-          <div className="md:col-span-4 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 md:col-span-4">
             <button
               type="submit"
               className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
@@ -296,19 +308,22 @@ export default async function OperacionesCustomersPage({
               Aplicar filtros
             </button>
 
-            <Link
+            <a
               href="/analytics/operaciones/customers"
               className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted"
             >
-              Clear
-            </Link>
+              Limpiar filtros
+            </a>
           </div>
         </form>
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard title="Customers" value={rows.length} />
-        <KpiCard title="PO Count" value={formatValue(sumNumber(rows, "po_count"))} />
+        <KpiCard
+          title="PO Count"
+          value={formatValue(sumNumber(rows, "po_count"))}
+        />
         <KpiCard
           title="Qty Total"
           value={formatValue(sumNumber(rows, "qty_total"))}

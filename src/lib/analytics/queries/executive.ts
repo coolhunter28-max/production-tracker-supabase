@@ -31,34 +31,33 @@ function uniqueSortedStrings(values: Array<string | null | undefined>) {
   ).sort((a, b) => a.localeCompare(b));
 }
 
+function emptyToNull(value?: string) {
+  return value && value.trim().length > 0 ? value.trim() : null;
+}
+
 export async function getExecutiveKPIs(
-  _filters: ExecutiveFilters
+  filters: ExecutiveFilters
 ): Promise<ExecutiveKPIDashboardRow[]> {
   const supabase = createClient();
 
-  const { data, error } = await supabase
-    .from("vw_exec_summary_v2")
-    .select(`
-      po_count,
-      line_count,
-      customer_count,
-      factory_count,
-      model_count,
-      qty_total,
-      sell_amount_total,
-      buy_amount_total,
-      margin_bsg_total,
-      margin_xiamen_total,
-      contribution_total,
-      contribution_pct,
-      xiamen_sales_mix_pct,
-      bsg_sales_mix_pct,
-      xiamen_margin_pct,
-      bsg_margin_pct
-    `);
+  const season = emptyToNull(filters.season);
+  const customer = emptyToNull(filters.customer);
+  const factory = emptyToNull(filters.factory);
+
+  const { data, error } = season
+    ? await supabase.rpc("get_exec_summary_with_delta_v2", {
+        p_season: season,
+        p_customer: customer,
+        p_factory: factory,
+      })
+    : await supabase.rpc("get_exec_summary_v2", {
+        p_season: null,
+        p_customer: customer,
+        p_factory: factory,
+      });
 
   if (error) {
-    throw new Error(`Error loading vw_exec_summary_v2: ${error.message}`);
+    throw new Error(`Error loading Executive KPIs: ${error.message}`);
   }
 
   return (data ?? []) as ExecutiveKPIDashboardRow[];

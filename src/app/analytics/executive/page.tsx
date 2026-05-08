@@ -50,9 +50,7 @@ function formatValue(value: unknown) {
     }).format(value);
   }
 
-  if (typeof value === "boolean") {
-    return value ? "Sí" : "No";
-  }
+  if (typeof value === "boolean") return value ? "Sí" : "No";
 
   return String(value);
 }
@@ -123,74 +121,219 @@ function GenericTable({
   );
 }
 
-function getKpiLabel(key: string) {
-  const labels: Record<string, string> = {
-    po_count: "POs",
-    line_count: "Líneas",
-    customer_count: "Clientes",
-    factory_count: "Fábricas",
-    model_count: "Modelos",
-    qty_total: "Pares ",
-    sell_amount_total: "Ventas $",
-    buy_amount_total: "Coste $",
-    margin_bsg_total: "Margen BSG $",
-    margin_xiamen_total: "Margen Xiamen $",
-    contribution_total: "Margen total $",
-    contribution_pct: "Margen %",
-    xiamen_sales_mix_pct: "Mix Xiamen %",
-    bsg_sales_mix_pct: "Mix BSG %",
-    xiamen_margin_pct: "Margen Xiamen %",
-    bsg_margin_pct: "Margen BSG %",
-  };
+function KpiGrid({ rows }: { rows: GenericRow[] }) {
+  const kpi = rows[0] ?? {};
 
-  return labels[key] ?? key;
+  return (
+    <section className="space-y-4">
+      <section className="rounded-2xl border bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">Performance</h2>
+          <p className="text-sm text-muted-foreground">
+            Resultado principal del filtro actual.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <ExecutiveHeroCard
+  label="Ventas"
+  value={kpi.sell_amount_total}
+  delta={kpi.sell_amount_delta_pct as number | null}
+  previousSeason={kpi.previous_season as string | null}
+  subtitle="Facturación"
+  href={`/analytics/operaciones?${new URLSearchParams({
+    ...(kpi.season ? { season: String(kpi.season) } : {}),
+  }).toString()}`}
+/>
+
+<ExecutiveHeroCard
+  label="Margen total"
+  value={kpi.contribution_total}
+  delta={kpi.contribution_delta_pct as number | null}
+  previousSeason={kpi.previous_season as string | null}
+  subtitle="Beneficio estimado"
+  href="/analytics/clientes"
+/>
+
+<ExecutiveHeroCard
+  label="Margen %"
+  value={kpi.contribution_pct}
+  delta={kpi.contribution_pct_delta_pp as number | null}
+  deltaType="pp"
+  previousSeason={kpi.previous_season as string | null}
+  isPct
+  subtitle="Rentabilidad ponderada"
+  href="/analytics/clientes"
+/>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section className="rounded-2xl border bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold">Mix operativo</h2>
+          <p className="text-xs text-muted-foreground">
+            Peso de cada operativa sobre ventas.
+          </p>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <CompactMetric
+              label="Mix Xiamen"
+              value={kpi.xiamen_sales_mix_pct}
+              isPct
+            />
+            <CompactMetric label="Mix BSG" value={kpi.bsg_sales_mix_pct} isPct />
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold">Margen por operativa</h2>
+          <p className="text-xs text-muted-foreground">
+            Rentabilidad real de cada modelo.
+          </p>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <CompactMetric
+              label="Margen Xiamen"
+              value={kpi.xiamen_margin_pct}
+              isPct
+            />
+            <CompactMetric label="Margen BSG" value={kpi.bsg_margin_pct} isPct />
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-semibold">Actividad</h2>
+        <p className="text-xs text-muted-foreground">
+          Volumen operativo del filtro actual.
+        </p>
+
+        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <CompactMetric label="POs" value={kpi.po_count} />
+          <CompactMetric label="Líneas" value={kpi.line_count} />
+          <CompactMetric label="Clientes" value={kpi.customer_count} />
+          <CompactMetric label="Fábricas" value={kpi.factory_count} />
+          <CompactMetric label="Modelos" value={kpi.model_count} />
+          <CompactMetric label="Pares" value={kpi.qty_total} />
+        </div>
+      </section>
+    </section>
+  );
 }
 
-function KpiGrid({ rows }: { rows: GenericRow[] }) {
-  const firstRow = rows[0] ?? {};
+function ExecutiveHeroCard({
+  label,
+  value,
+  subtitle,
+  isPct = false,
+  delta,
+  deltaType = "pct",
+  previousSeason,
+  href,
+}: {
+  label: string;
+  value: unknown;
+  subtitle: string;
+  isPct?: boolean;
+  delta?: number | null;
+  deltaType?: "pct" | "pp";
+  previousSeason?: string | null;
+  href?: string;
+}) {
+  const numericValue = typeof value === "number" ? value : null;
 
-  const preferredOrder = [
-    "po_count",
-    "line_count",
-    "customer_count",
-    "factory_count",
-    "model_count",
-    "qty_total",
-    "sell_amount_total",
-    "buy_amount_total",
-    "margin_bsg_total",
-    "margin_xiamen_total",
-    "contribution_total",
-    "contribution_pct",
-    "xiamen_sales_mix_pct",
-    "bsg_sales_mix_pct",
-    "xiamen_margin_pct",
-    "bsg_margin_pct",
-  ];
+  const valueClass =
+    isPct && numericValue !== null
+      ? numericValue >= 15
+        ? "text-emerald-600"
+        : numericValue >= 10
+          ? "text-amber-600"
+          : "text-red-600"
+      : "";
 
-  const entries = preferredOrder
-    .filter((key) => Object.prototype.hasOwnProperty.call(firstRow, key))
-    .map((key) => [key, firstRow[key]] as const);
+  const hasDelta = delta !== null && delta !== undefined;
+  const isPositive = typeof delta === "number" && delta > 0;
+  const isNegative = typeof delta === "number" && delta < 0;
 
-    return (
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-        {entries.map(([key, value]) => (
-          <div
-            key={key}
-            className="rounded-xl border bg-white px-3 py-2 shadow-sm"
+  const deltaClass = isPositive
+    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+    : isNegative
+      ? "bg-red-50 text-red-700 ring-red-200"
+      : "bg-slate-50 text-slate-600 ring-slate-200";
+
+  const content = (
+    <>
+      <p className="text-sm text-muted-foreground">{label}</p>
+
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <p className={`text-3xl font-semibold tracking-tight ${valueClass}`}>
+          {value === null || value === undefined
+            ? "-"
+            : isPct
+              ? `${formatValue(value)}%`
+              : formatValue(value)}
+        </p>
+
+        {hasDelta ? (
+          <span
+            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset ${deltaClass}`}
           >
-            <p className="text-xs text-muted-foreground leading-none">
-              {getKpiLabel(key)}
-            </p>
-            <p className="mt-1 text-lg font-semibold leading-none">
-              {key.endsWith("_pct")
-                ? `${formatValue(value)}%`
-                : formatValue(value)}
-            </p>
-          </div>
-        ))}
-      </section>
+            {isPositive ? "▲" : isNegative ? "▼" : "→"}{" "}
+            {isPositive ? "+" : ""}
+            {formatValue(delta)}
+            {deltaType === "pp" ? "pp" : "%"}
+          </span>
+        ) : null}
+      </div>
+
+      <p className="mt-2 text-xs text-muted-foreground">
+        {subtitle}
+        {previousSeason ? ` · vs ${previousSeason}` : ""}
+      </p>
+
+      {href ? (
+        <p className="mt-3 text-xs font-medium text-slate-500">
+          Click para profundizar →
+        </p>
+      ) : null}
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="block rounded-2xl border bg-white p-5 shadow-sm transition hover:bg-slate-50"
+      >
+        {content}
+      </Link>
     );
+  }
+
+  return <div className="rounded-2xl border bg-white p-5 shadow-sm">{content}</div>;
+}
+
+function CompactMetric({
+  label,
+  value,
+  isPct = false,
+}: {
+  label: string;
+  value: unknown;
+  isPct?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border bg-slate-50 px-3 py-2">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-semibold">
+        {value === null || value === undefined
+          ? "-"
+          : isPct
+            ? `${formatValue(value)}%`
+            : formatValue(value)}
+      </p>
+    </div>
+  );
 }
 
 function AlertBadge({
@@ -480,12 +623,12 @@ export default async function ExecutivePage({
               Aplicar filtros
             </button>
 
-            <Link
-              href="/analytics/executive"
-              className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted"
-            >
-              Clear
-            </Link>
+            <a
+  href="/analytics/executive"
+  className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted"
+>
+Limpiar filtros
+</a>
           </div>
         </form>
       </section>
@@ -494,43 +637,54 @@ export default async function ExecutivePage({
 
       <CommercialPriorityStrip alerts={alerts} filters={filters} />
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <GenericTable
-          title="Customer Ranking"
-          rows={(data.customerRanking ?? []) as GenericRow[]}
-          preferredColumns={[
-            "customer",
-            "customer_size_band",
-            "profitability_band",
-            "po_count",
-            "contribution_total",
-          ]}
-        />
+      <details className="rounded-2xl border bg-white shadow-sm">
+        <summary className="cursor-pointer px-5 py-4 text-lg font-semibold">
+          Detalles ejecutivos
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            rankings de clientes, fábricas y temporadas
+          </span>
+        </summary>
 
-        <GenericTable
-          title="Factory Ranking"
-          rows={(data.factoryRanking ?? []) as GenericRow[]}
-          preferredColumns={[
-            "factory",
-            "risk_level",
-            "risk_score",
-            "late_lines",
-            "production_late_rate_pct",
-          ]}
-        />
-      </div>
+        <div className="space-y-6 border-t p-5">
+          <div className="grid gap-6 xl:grid-cols-2">
+            <GenericTable
+              title="Customer Ranking"
+              rows={(data.customerRanking ?? []) as GenericRow[]}
+              preferredColumns={[
+                "customer",
+                "customer_size_band",
+                "profitability_band",
+                "po_count",
+                "contribution_total",
+              ]}
+            />
 
-      <GenericTable
-        title="Season Performance Ranking"
-        rows={(data.seasonRanking ?? []) as GenericRow[]}
-        preferredColumns={[
-          "season",
-          "po_count",
-          "line_count",
-          "qty_total",
-          "contribution_total",
-        ]}
-      />
+            <GenericTable
+              title="Factory Ranking"
+              rows={(data.factoryRanking ?? []) as GenericRow[]}
+              preferredColumns={[
+                "factory",
+                "risk_level",
+                "risk_score",
+                "late_lines",
+                "production_late_rate_pct",
+              ]}
+            />
+          </div>
+
+          <GenericTable
+            title="Season Performance Ranking"
+            rows={(data.seasonRanking ?? []) as GenericRow[]}
+            preferredColumns={[
+              "season",
+              "po_count",
+              "line_count",
+              "qty_total",
+              "contribution_total",
+            ]}
+          />
+        </div>
+      </details>
     </div>
   );
 }
