@@ -1,4 +1,4 @@
-# Production Tracker — Documento Maestro v6.12
+# Production Tracker — Documento Maestro v6.13
 
 Versión consolidada tras:
 
@@ -2077,6 +2077,125 @@ Regla analítica:
 - No se suman porcentajes de operativas.
 - La UI no recalcula margen; solo representa métricas calculadas en SQL.
 
+38.3 Executive & Operaciones — Consolidación UX ejecutiva
+
+Durante esta fase se consolida la experiencia ejecutiva y operativa de Analytics UI.
+
+Executive Dashboard
+Cambios implementados
+Migración desde vw_exec_kpi_dashboard hacia:
+vw_exec_summary_v2
+get_exec_summary_v2
+
+Motivo:
+
+Permitir filtros reales por:
+season
+customer
+factory
+
+sin recalcular lógica en frontend.
+
+Nuevos KPIs segmentados
+
+Executive incorpora:
+
+Margen Xiamen %
+Margen BSG %
+Mix Xiamen %
+Mix BSG %
+
+Reglas:
+
+Los porcentajes se calculan íntegramente en SQL.
+El frontend no calcula márgenes.
+El margen global es ponderado por ventas.
+Los porcentajes segmentados son métricas independientes.
+Corrección crítica de margen BSG
+
+Se consolida definitivamente la fórmula:
+
+BSG margin =
+(sell_amount_real - buy_amount_real)
++ (buy_amount_real * 0.10)
+
+Esto corrige la infravaloración histórica del margen BSG.
+
+RPC consolidada
+
+Nueva función SQL:
+
+get_exec_summary_v2(
+  p_season,
+  p_customer,
+  p_factory
+)
+
+Objetivo:
+
+aplicar filtros reales sobre KPIs
+mantener BI Layer en PostgreSQL
+evitar lógica condicional en React
+UX ejecutiva consolidada
+
+Cambios visuales:
+
+KPI strip compacto
+reducción de ruido visual
+tarjetas simplificadas
+separación clara entre:
+KPIs
+prioridad comercial
+rankings
+drill-downs
+
+Objetivo:
+
+lectura rápida tipo CEO
+menos scroll
+mayor foco operativo
+Commercial Priority
+
+Executive incorpora un bloque contextual:
+
+Commercial Priority
+
+Fuente:
+
+vw_customer_commercial_alerts
+
+Reglas:
+
+si existe filtro customer, las alertas se limitan visualmente a ese cliente
+si no existe filtro, se muestran prioridades globales
+el frontend NO recalcula alertas
+la UI solo filtra visualmente resultados ya calculados
+
+Objetivo:
+
+mantener coherencia entre filtros y lectura ejecutiva
+evitar ruido visual cuando el CEO analiza un cliente concreto
+Operaciones — navegación contextual
+
+Se consolida navegación bidireccional entre:
+
+Executive
+Operaciones
+Clientes
+
+Características:
+
+persistencia vía search params
+botones explícitos:
+Volver atrás
+Executive
+Clientes
+preservación de contexto analítico
+
+Regla UX:
+
+la navegación nunca debe romper el contexto del análisis.
+
 39. Mensaje para reiniciar conversación (MUY IMPORTANTE)
 
 Este es el mensaje que debes usar para continuar sin pérdida de contexto:
@@ -2152,3 +2271,19 @@ Con esta actualización:
 - La UI muestra situación, causa y acción.
 - La BI Layer mantiene la lógica de decisión.
 - El proyecto queda preparado para alertas, reporting ejecutivo y priorización comercial real.
+
+41. Nueva versión
+
+Documento Maestro v6.13
+
+42. Estado consolidado actual
+
+Módulo Estado
+
+Executive Analytics ✔ Consolidado
+Operaciones Analytics ✔ Consolidado
+Clientes / Business Matrix ✔ Consolidado
+Commercial Priority ✔ Implementado
+Cross-navigation Analytics ✔ Implementado
+Executive KPI Filters ✔ Implementado
+Executive Margin Segmentation ✔ Implementado

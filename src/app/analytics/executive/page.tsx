@@ -379,10 +379,19 @@ function CommercialPriorityStrip({
   alerts: CustomerCommercialAlert[];
   filters: ExecutiveFilters;
 }) {
-  const criticalAlerts = alerts.filter(
+  const selectedCustomer = filters.customer?.trim().toLowerCase();
+
+  const visibleAlerts = selectedCustomer
+    ? alerts.filter(
+        (alert) => alert.customer.trim().toLowerCase() === selectedCustomer
+      )
+    : alerts;
+
+  const criticalAlerts = visibleAlerts.filter(
     (alert) => alert.alert_level === "CRITICAL"
   );
-  const warningAlerts = alerts.filter(
+
+  const warningAlerts = visibleAlerts.filter(
     (alert) => alert.alert_level === "WARNING"
   );
 
@@ -394,8 +403,9 @@ function CommercialPriorityStrip({
         <div>
           <h2 className="text-lg font-semibold">Commercial Priority</h2>
           <p className="text-sm text-muted-foreground">
-            Solo clientes CRITICAL y WARNING desde{" "}
-            <span className="font-medium">vw_customer_commercial_alerts</span>.
+            {selectedCustomer
+              ? "Prioridad comercial filtrada por customer."
+              : "Solo clientes CRITICAL y WARNING desde vw_customer_commercial_alerts."}
           </p>
         </div>
 
@@ -432,7 +442,7 @@ function CommercialPriorityStrip({
 
         {priorityAlerts.length === 0 ? (
           <div className="rounded-xl border p-6 text-sm text-muted-foreground">
-            No hay prioridades comerciales críticas o warning.
+            No hay prioridades comerciales para el filtro actual.
           </div>
         ) : (
           <div className="space-y-3">
