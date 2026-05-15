@@ -4,6 +4,13 @@ import {
   getExecutiveFilterOptions,
 } from "@/lib/analytics/queries/executive";
 import { getCustomerCommercialAlerts } from "@/lib/analytics/clientes";
+import {
+  buildExecutiveIntelligenceKPIs,
+  type ExecutiveIntelligenceSignal,
+} from "@/lib/analytics/executive-intelligence";
+import { getExecutiveNarrative } from "@/lib/analytics/executive-narrative";
+import { ExecutiveIntelligenceBoard } from "@/components/analytics/executive/ExecutiveIntelligenceBoard";
+import { ExecutiveNarrativePanel } from "@/components/analytics/executive/ExecutiveNarrativePanel";
 import { createClient } from "@/lib/supabase";
 import type { ExecutiveFilters } from "@/lib/analytics/types/executive";
 import type { CustomerCommercialAlert } from "@/types/clientes";
@@ -17,7 +24,10 @@ type GenericRow = Record<string, unknown>;
 function getSingleParam(
   value: string | string[] | undefined
 ): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const cleanValue = rawValue?.trim();
+
+  return cleanValue ? cleanValue : undefined;
 }
 
 function parseExecutiveFilters(
@@ -39,6 +49,19 @@ function parseExecutiveFilters(
     dateFrom: getSingleParam(params.dateFrom),
     dateTo: getSingleParam(params.dateTo),
   };
+}
+
+function buildQueryString(
+  params: Record<string, string | string[] | undefined>
+) {
+  const query = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    const cleanValue = getSingleParam(value);
+    if (cleanValue) query.set(key, cleanValue);
+  });
+
+  return query.toString();
 }
 
 function formatValue(value: unknown) {
@@ -135,36 +158,36 @@ function KpiGrid({ rows }: { rows: GenericRow[] }) {
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <ExecutiveHeroCard
-  label="Ventas"
-  value={kpi.sell_amount_total}
-  delta={kpi.sell_amount_delta_pct as number | null}
-  previousSeason={kpi.previous_season as string | null}
-  subtitle="Facturación"
-  href={`/analytics/operaciones?${new URLSearchParams({
-    ...(kpi.season ? { season: String(kpi.season) } : {}),
-  }).toString()}`}
-/>
+          <ExecutiveHeroCard
+            label="Ventas"
+            value={kpi.sell_amount_total}
+            delta={kpi.sell_amount_delta_pct as number | null}
+            previousSeason={kpi.previous_season as string | null}
+            subtitle="Facturación"
+            href={`/analytics/operaciones?${new URLSearchParams({
+              ...(kpi.season ? { season: String(kpi.season) } : {}),
+            }).toString()}`}
+          />
 
-<ExecutiveHeroCard
-  label="Margen total"
-  value={kpi.contribution_total}
-  delta={kpi.contribution_delta_pct as number | null}
-  previousSeason={kpi.previous_season as string | null}
-  subtitle="Beneficio estimado"
-  href="/analytics/clientes"
-/>
+          <ExecutiveHeroCard
+            label="Margen total"
+            value={kpi.contribution_total}
+            delta={kpi.contribution_delta_pct as number | null}
+            previousSeason={kpi.previous_season as string | null}
+            subtitle="Beneficio estimado"
+            href="/analytics/clientes"
+          />
 
-<ExecutiveHeroCard
-  label="Margen %"
-  value={kpi.contribution_pct}
-  delta={kpi.contribution_pct_delta_pp as number | null}
-  deltaType="pp"
-  previousSeason={kpi.previous_season as string | null}
-  isPct
-  subtitle="Rentabilidad ponderada"
-  href="/analytics/clientes"
-/>
+          <ExecutiveHeroCard
+            label="Margen %"
+            value={kpi.contribution_pct}
+            delta={kpi.contribution_pct_delta_pp as number | null}
+            deltaType="pp"
+            previousSeason={kpi.previous_season as string | null}
+            isPct
+            subtitle="Rentabilidad ponderada"
+            href="/analytics/clientes"
+          />
         </div>
       </section>
 
@@ -336,6 +359,30 @@ function CompactMetric({
   );
 }
 
+function ExecutiveIntelligenceSummary({
+  total,
+  critical,
+  warning,
+  monitor,
+  healthy,
+}: {
+  total: number;
+  critical: number;
+  warning: number;
+  monitor: number;
+  healthy: number;
+}) {
+  return (
+    <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <CompactMetric label="Signals" value={total} />
+      <CompactMetric label="Critical" value={critical} />
+      <CompactMetric label="Warning" value={warning} />
+      <CompactMetric label="Monitor" value={monitor} />
+      <CompactMetric label="Healthy" value={healthy} />
+    </section>
+  );
+}
+
 function AlertBadge({
   level,
 }: {
@@ -475,10 +522,7 @@ function CommercialPriorityStrip({
                     </Link>
 
                     <Link
-                      href={buildOperacionesCustomerHref(
-                        alert.customer,
-                        filters
-                      )}
+                      href={buildOperacionesCustomerHref(alert.customer, filters)}
                       className="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted"
                     >
                       Ver operaciones
@@ -507,13 +551,37 @@ export default async function ExecutivePage({
 }: ExecutivePageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const filters = parseExecutiveFilters(resolvedSearchParams);
+  const queryString = buildQueryString(resolvedSearchParams);
   const supabase = await createClient();
 
-  const [data, filterOptions, alerts] = await Promise.all([
+  const [
+    data,
+    filterOptions,
+    alerts,
+    intelligenceResponse,
+    narrativeRows,
+  ] = await Promise.all([
     getExecutiveDashboardData(filters),
     getExecutiveFilterOptions(),
     getCustomerCommercialAlerts(supabase),
+    supabase.rpc("get_exec_intelligence_focus_season_v1", {
+      p_season: filters.season ?? null,
+      p_customer: filters.customer ?? null,
+      p_factory: filters.factory ?? null,
+      p_alert_level: null,
+      p_source_module: null,
+    }),
+    getExecutiveNarrative({
+      season: filters.season ?? null,
+      customer: filters.customer ?? null,
+      factory: filters.factory ?? null,
+    }),
   ]);
+
+  const intelligenceRows =
+    (intelligenceResponse.data ?? []) as ExecutiveIntelligenceSignal[];
+
+  const intelligenceKpis = buildExecutiveIntelligenceKPIs(intelligenceRows);
 
   return (
     <div className="space-y-6 p-6">
@@ -634,18 +702,38 @@ export default async function ExecutivePage({
             </button>
 
             <a
-  href="/analytics/executive"
-  className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted"
->
-Limpiar filtros
-</a>
+              href="/analytics/executive"
+              className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Limpiar filtros
+            </a>
           </div>
         </form>
       </section>
 
       <KpiGrid rows={(data.kpis ?? []) as GenericRow[]} />
 
-      <CommercialPriorityStrip alerts={alerts} filters={filters} />
+      <ExecutiveNarrativePanel rows={narrativeRows} queryString={queryString} />
+
+      <ExecutiveIntelligenceSummary {...intelligenceKpis} />
+
+      <ExecutiveIntelligenceBoard
+        rows={intelligenceRows}
+        queryString={queryString}
+      />
+
+      <details className="rounded-2xl border bg-white shadow-sm">
+        <summary className="cursor-pointer px-5 py-4 text-lg font-semibold">
+          Commercial Priority
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            alertas comerciales y seguimiento contextual
+          </span>
+        </summary>
+
+        <div className="border-t p-5">
+          <CommercialPriorityStrip alerts={alerts} filters={filters} />
+        </div>
+      </details>
 
       <details className="rounded-2xl border bg-white shadow-sm">
         <summary className="cursor-pointer px-5 py-4 text-lg font-semibold">
