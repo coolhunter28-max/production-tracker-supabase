@@ -9,6 +9,10 @@ import {
   type ExecutiveIntelligenceSignal,
 } from "@/lib/analytics/executive-intelligence";
 import { getExecutiveNarrative } from "@/lib/analytics/executive-narrative";
+import {
+  buildExecutiveCrossModuleKPIs,
+  getExecutiveCrossModuleRisk,
+} from "@/lib/analytics/executive-cross-module";
 import { ExecutiveIntelligenceBoard } from "@/components/analytics/executive/ExecutiveIntelligenceBoard";
 import { ExecutiveNarrativePanel } from "@/components/analytics/executive/ExecutiveNarrativePanel";
 import { createClient } from "@/lib/supabase";
@@ -404,6 +408,31 @@ function AlertBadge({
   );
 }
 
+function CrossModuleRiskBadge({ level }: { level: string }) {
+  const className =
+    level === "CRITICAL"
+      ? "bg-red-100 text-red-700 ring-red-200"
+      : level === "WARNING"
+        ? "bg-amber-100 text-amber-700 ring-amber-200"
+        : "bg-blue-100 text-blue-700 ring-blue-200";
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${className}`}
+    >
+      {level}
+    </span>
+  );
+}
+
+function CrossModuleDriverBadge({ driver }: { driver: string }) {
+  return (
+    <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+      {driver}
+    </span>
+  );
+}
+
 function buildOperacionesCustomerHref(
   customer: string,
   filters: ExecutiveFilters
@@ -560,6 +589,7 @@ export default async function ExecutivePage({
     alerts,
     intelligenceResponse,
     narrativeRows,
+    crossModuleRows,
   ] = await Promise.all([
     getExecutiveDashboardData(filters),
     getExecutiveFilterOptions(),
@@ -576,12 +606,34 @@ export default async function ExecutivePage({
       customer: filters.customer ?? null,
       factory: filters.factory ?? null,
     }),
+    getExecutiveCrossModuleRisk(),
   ]);
 
   const intelligenceRows =
     (intelligenceResponse.data ?? []) as ExecutiveIntelligenceSignal[];
 
   const intelligenceKpis = buildExecutiveIntelligenceKPIs(intelligenceRows);
+  const crossModuleKpis = buildExecutiveCrossModuleKPIs(crossModuleRows);
+
+  const levelPriority: Record<string, number> = {
+    CRITICAL: 0,
+    WARNING: 1,
+    MONITOR: 2,
+    HEALTHY: 3,
+  };
+
+  const sortedCrossModuleRows = [...crossModuleRows].sort((a, b) => {
+    const levelDiff =
+      (levelPriority[a.cross_module_risk_level] ?? 999) -
+      (levelPriority[b.cross_module_risk_level] ?? 999);
+
+    if (levelDiff !== 0) return levelDiff;
+
+    return (
+      (b.cross_module_risk_score ?? 0) -
+      (a.cross_module_risk_score ?? 0)
+    );
+  });
 
   return (
     <div className="space-y-6 p-6">
@@ -721,6 +773,102 @@ export default async function ExecutivePage({
         rows={intelligenceRows}
         queryString={queryString}
       />
+
+      <section className="rounded-2xl border bg-white shadow-sm">
+        <div className="border-b px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Cross-module Risk
+              </p>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                Riesgo transversal
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Clientes con señales combinadas entre comercial, operaciones y
+                desarrollo.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Critical</p>
+                <p className="text-lg font-semibold">
+                  {crossModuleKpis.critical}
+                </p>
+              </div>
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Warning</p>
+                <p className="text-lg font-semibold">
+                  {crossModuleKpis.warning}
+                </p>
+              </div>
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Monitor</p>
+                <p className="text-lg font-semibold">
+                  {crossModuleKpis.monitor}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 p-5">
+          {sortedCrossModuleRows.map((row) => (
+            <div key={row.customer} className="rounded-2xl border p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CrossModuleRiskBadge
+                      level={row.cross_module_risk_level}
+                    />
+                    <CrossModuleDriverBadge driver={row.primary_driver} />
+                    <span className="text-xs text-muted-foreground">
+                      Score {row.cross_module_risk_score}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-semibold">{row.customer}</h3>
+                    <p className="mt-1 text-sm">{row.executive_summary}</p>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    Acción: {row.recommended_cross_module_action}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-xl bg-slate-50 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Commercial</p>
+                    <p className="font-semibold">
+                      {row.commercial_risk_points}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Production</p>
+                    <p className="font-semibold">
+                      {row.production_risk_points}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Margin</p>
+                    <p className="font-semibold">{row.margin_risk_points}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">
+                      Concentration
+                    </p>
+                    <p className="font-semibold">
+                      {row.concentration_risk_points}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <details className="rounded-2xl border bg-white shadow-sm">
         <summary className="cursor-pointer px-5 py-4 text-lg font-semibold">
