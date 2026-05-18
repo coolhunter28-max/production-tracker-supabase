@@ -13,8 +13,13 @@ import {
   buildExecutiveCrossModuleKPIs,
   getExecutiveCrossModuleRisk,
 } from "@/lib/analytics/executive-cross-module";
+import {
+  buildExecutiveCorrelationKPIs,
+  getExecutiveCorrelationSignals,
+} from "@/lib/analytics/executive-correlations";
 import { ExecutiveIntelligenceBoard } from "@/components/analytics/executive/ExecutiveIntelligenceBoard";
 import { ExecutiveNarrativePanel } from "@/components/analytics/executive/ExecutiveNarrativePanel";
+import { ExecutiveCorrelationBoard } from "@/components/analytics/executive/ExecutiveCorrelationBoard";
 import { createClient } from "@/lib/supabase";
 import type { ExecutiveFilters } from "@/lib/analytics/types/executive";
 import type { CustomerCommercialAlert } from "@/types/clientes";
@@ -590,6 +595,7 @@ export default async function ExecutivePage({
     intelligenceResponse,
     narrativeRows,
     crossModuleRows,
+    correlationRows,
   ] = await Promise.all([
     getExecutiveDashboardData(filters),
     getExecutiveFilterOptions(),
@@ -607,6 +613,7 @@ export default async function ExecutivePage({
       factory: filters.factory ?? null,
     }),
     getExecutiveCrossModuleRisk(),
+    getExecutiveCorrelationSignals(),
   ]);
 
   const intelligenceRows =
@@ -614,6 +621,7 @@ export default async function ExecutivePage({
 
   const intelligenceKpis = buildExecutiveIntelligenceKPIs(intelligenceRows);
   const crossModuleKpis = buildExecutiveCrossModuleKPIs(crossModuleRows);
+  const correlationKpis = buildExecutiveCorrelationKPIs(correlationRows);
 
   const levelPriority: Record<string, number> = {
     CRITICAL: 0,
@@ -868,6 +876,29 @@ export default async function ExecutivePage({
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <CompactMetric
+            label="Correlation Signals"
+            value={correlationKpis.total}
+          />
+          <CompactMetric
+            label="Critical Correlations"
+            value={correlationKpis.critical}
+          />
+          <CompactMetric
+            label="Warning Correlations"
+            value={correlationKpis.warning}
+          />
+          <CompactMetric
+            label="Monitor Correlations"
+            value={correlationKpis.monitor}
+          />
+        </div>
+
+        <ExecutiveCorrelationBoard rows={correlationRows} />
       </section>
 
       <details className="rounded-2xl border bg-white shadow-sm">
