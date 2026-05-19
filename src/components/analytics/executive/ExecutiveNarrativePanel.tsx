@@ -6,82 +6,115 @@ type Props = {
   queryString?: string;
 };
 
-function getLevelClass(level: string) {
-  if (level === "CRITICAL") return "bg-red-50 text-red-800 ring-red-200";
-  if (level === "WARNING") return "bg-amber-50 text-amber-800 ring-amber-200";
-  if (level === "HEALTHY") return "bg-emerald-50 text-emerald-800 ring-emerald-200";
-  return "bg-slate-50 text-slate-700 ring-slate-200";
+function severityClass(severity: ExecutiveNarrativeRow["severity"]) {
+  if (severity === "CRITICAL") {
+    return "border-red-200 bg-red-50 text-red-800";
+  }
+
+  if (severity === "WARNING") {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+
+  if (severity === "HEALTHY") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+
+  return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
-export function ExecutiveNarrativePanel({ rows, queryString }: Props) {
-  if (rows.length === 0) return null;
+function formatValue(value: string | number | null) {
+  if (value === null || value === undefined || value === "") return "—";
+
+  if (typeof value === "number") {
+    return new Intl.NumberFormat("es-ES", {
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+
+  return value;
+}
+
+export function ExecutiveNarrativePanel({ rows }: Props) {
+  const orderedRows = [...rows].sort(
+    (a, b) => a.sort_order - b.sort_order
+  );
 
   return (
-    <section className="rounded-2xl border bg-white p-5 shadow-sm">
-      <div className="mb-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+    <section className="rounded-2xl border bg-white shadow-sm">
+      <div className="border-b px-5 py-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Executive Narrative
         </p>
-        <h2 className="text-xl font-semibold text-slate-950">
-          Qué está pasando
+        <h2 className="text-lg font-semibold">
+          Daily Executive Brief
         </h2>
-        <p className="text-sm text-slate-500">
-          Lectura ejecutiva generada desde BI Layer para el contexto actual.
+        <p className="text-sm text-muted-foreground">
+          Resumen ejecutivo generado desde BI y workflow lifecycle.
         </p>
       </div>
 
-      <div className="space-y-3">
-        {rows.map((row) => {
-          const href = row.customer
-            ? `/analytics/clientes/${encodeURIComponent(row.customer)}${
-                queryString ? `?${queryString}` : ""
-              }`
-            : null;
-
-          return (
+      <div className="grid gap-4 p-5 lg:grid-cols-3">
+        {orderedRows.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground lg:col-span-3">
+            No hay narrativa ejecutiva disponible.
+          </div>
+        ) : (
+          orderedRows.map((row) => (
             <article
-              key={`${row.narrative_order}-${row.narrative_code}`}
-              className="rounded-xl border p-4"
+              key={row.id}
+              className={`rounded-xl border p-4 ${severityClass(
+                row.severity
+              )}`}
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${getLevelClass(
-                        row.narrative_level
-                      )}`}
-                    >
-                      {row.narrative_level}
-                    </span>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide">
+                  {row.section}
+                </span>
 
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                      {row.narrative_code.replaceAll("_", " ")}
-                    </span>
-                  </div>
+                <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold">
+                  {row.severity}
+                </span>
+              </div>
 
-                  <p className="text-sm font-medium text-slate-950">
-                    {row.narrative_text}
+              <h3 className="text-sm font-semibold text-slate-950">
+                {row.title}
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-slate-700">
+                {row.summary}
+              </p>
+
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg bg-white/70 p-2">
+                  <p className="text-slate-500">{row.primary_label}</p>
+                  <p className="mt-1 font-semibold text-slate-950">
+                    {formatValue(row.primary_value)}
                   </p>
-
-                  {row.recommended_action ? (
-                    <p className="mt-2 text-sm text-slate-600">
-                      Acción: {row.recommended_action}
-                    </p>
-                  ) : null}
                 </div>
 
-                {href ? (
-                  <Link
-                    href={href}
-                    className="shrink-0 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted"
-                  >
-                    Ver cliente
-                  </Link>
+                {row.secondary_label ? (
+                  <div className="rounded-lg bg-white/70 p-2">
+                    <p className="text-slate-500">
+                      {row.secondary_label}
+                    </p>
+                    <p className="mt-1 font-semibold text-slate-950">
+                      {formatValue(row.secondary_value)}
+                    </p>
+                  </div>
                 ) : null}
               </div>
+
+              {row.href && row.action_label ? (
+                <Link
+                  href={row.href}
+                  className="mt-4 inline-flex rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"
+                >
+                  {row.action_label}
+                </Link>
+              ) : null}
             </article>
-          );
-        })}
+          ))
+        )}
       </div>
     </section>
   );

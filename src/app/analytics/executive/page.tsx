@@ -17,9 +17,16 @@ import {
   buildExecutiveCorrelationKPIs,
   getExecutiveCorrelationSignals,
 } from "@/lib/analytics/executive-correlations";
+import {
+  buildExecutiveActionKPIs,
+  buildExecutiveWorkflowKPIs,
+  getExecutiveActionLifecycle,
+  getExecutiveActionQueue,
+} from "@/lib/analytics/executive-actions";
 import { ExecutiveIntelligenceBoard } from "@/components/analytics/executive/ExecutiveIntelligenceBoard";
 import { ExecutiveNarrativePanel } from "@/components/analytics/executive/ExecutiveNarrativePanel";
 import { ExecutiveCorrelationBoard } from "@/components/analytics/executive/ExecutiveCorrelationBoard";
+import { ExecutiveActionQueue } from "@/components/analytics/executive/ExecutiveActionQueue";
 import { createClient } from "@/lib/supabase";
 import type { ExecutiveFilters } from "@/lib/analytics/types/executive";
 import type { CustomerCommercialAlert } from "@/types/clientes";
@@ -87,169 +94,26 @@ function formatValue(value: unknown) {
   return String(value);
 }
 
-function getColumns(rows: GenericRow[], preferred: string[]) {
-  const available = new Set(rows.flatMap((row) => Object.keys(row)));
-  const preferredExisting = preferred.filter((key) => available.has(key));
-  const fallback = Array.from(available).slice(0, 8);
-
-  return preferredExisting.length > 0 ? preferredExisting : fallback;
-}
-
-function GenericTable({
-  title,
-  rows,
-  preferredColumns,
+function CompactMetric({
+  label,
+  value,
+  isPct = false,
 }: {
-  title: string;
-  rows: GenericRow[];
-  preferredColumns: string[];
+  label: string;
+  value: unknown;
+  isPct?: boolean;
 }) {
-  const columns = getColumns(rows, preferredColumns);
-
   return (
-    <section className="rounded-2xl border bg-white shadow-sm">
-      <div className="border-b px-5 py-4">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <p className="text-sm text-muted-foreground">{rows.length} registros</p>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/40 text-left">
-            <tr>
-              {columns.map((column) => (
-                <th key={column} className="px-5 py-3 font-medium">
-                  {column}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={Math.max(columns.length, 1)}
-                  className="px-5 py-10 text-center text-muted-foreground"
-                >
-                  No hay datos.
-                </td>
-              </tr>
-            ) : (
-              rows.map((row, index) => (
-                <tr key={index} className="border-t">
-                  {columns.map((column) => (
-                    <td key={column} className="px-5 py-4">
-                      {formatValue(row[column])}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function KpiGrid({ rows }: { rows: GenericRow[] }) {
-  const kpi = rows[0] ?? {};
-
-  return (
-    <section className="space-y-4">
-      <section className="rounded-2xl border bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold">Performance</h2>
-          <p className="text-sm text-muted-foreground">
-            Resultado principal del filtro actual.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <ExecutiveHeroCard
-            label="Ventas"
-            value={kpi.sell_amount_total}
-            delta={kpi.sell_amount_delta_pct as number | null}
-            previousSeason={kpi.previous_season as string | null}
-            subtitle="Facturación"
-            href={`/analytics/operaciones?${new URLSearchParams({
-              ...(kpi.season ? { season: String(kpi.season) } : {}),
-            }).toString()}`}
-          />
-
-          <ExecutiveHeroCard
-            label="Margen total"
-            value={kpi.contribution_total}
-            delta={kpi.contribution_delta_pct as number | null}
-            previousSeason={kpi.previous_season as string | null}
-            subtitle="Beneficio estimado"
-            href="/analytics/clientes"
-          />
-
-          <ExecutiveHeroCard
-            label="Margen %"
-            value={kpi.contribution_pct}
-            delta={kpi.contribution_pct_delta_pp as number | null}
-            deltaType="pp"
-            previousSeason={kpi.previous_season as string | null}
-            isPct
-            subtitle="Rentabilidad ponderada"
-            href="/analytics/clientes"
-          />
-        </div>
-      </section>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <section className="rounded-2xl border bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold">Mix operativo</h2>
-          <p className="text-xs text-muted-foreground">
-            Peso de cada operativa sobre ventas.
-          </p>
-
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <CompactMetric
-              label="Mix Xiamen"
-              value={kpi.xiamen_sales_mix_pct}
-              isPct
-            />
-            <CompactMetric label="Mix BSG" value={kpi.bsg_sales_mix_pct} isPct />
-          </div>
-        </section>
-
-        <section className="rounded-2xl border bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold">Margen por operativa</h2>
-          <p className="text-xs text-muted-foreground">
-            Rentabilidad real de cada modelo.
-          </p>
-
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <CompactMetric
-              label="Margen Xiamen"
-              value={kpi.xiamen_margin_pct}
-              isPct
-            />
-            <CompactMetric label="Margen BSG" value={kpi.bsg_margin_pct} isPct />
-          </div>
-        </section>
-      </div>
-
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-semibold">Actividad</h2>
-        <p className="text-xs text-muted-foreground">
-          Volumen operativo del filtro actual.
-        </p>
-
-        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <CompactMetric label="POs" value={kpi.po_count} />
-          <CompactMetric label="Líneas" value={kpi.line_count} />
-          <CompactMetric label="Clientes" value={kpi.customer_count} />
-          <CompactMetric label="Fábricas" value={kpi.factory_count} />
-          <CompactMetric label="Modelos" value={kpi.model_count} />
-          <CompactMetric label="Pares" value={kpi.qty_total} />
-        </div>
-      </section>
-    </section>
+    <div className="rounded-xl border bg-slate-50 px-3 py-2">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-semibold">
+        {value === null || value === undefined
+          ? "-"
+          : isPct
+            ? `${formatValue(value)}%`
+            : formatValue(value)}
+      </p>
+    </div>
   );
 }
 
@@ -342,29 +206,106 @@ function ExecutiveHeroCard({
     );
   }
 
-  return <div className="rounded-2xl border bg-white p-5 shadow-sm">{content}</div>;
+  return (
+    <div className="rounded-2xl border bg-white p-5 shadow-sm">{content}</div>
+  );
 }
 
-function CompactMetric({
-  label,
-  value,
-  isPct = false,
-}: {
-  label: string;
-  value: unknown;
-  isPct?: boolean;
-}) {
+function KpiGrid({ rows }: { rows: GenericRow[] }) {
+  const kpi = rows[0] ?? {};
+
   return (
-    <div className="rounded-xl border bg-slate-50 px-3 py-2">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-lg font-semibold">
-        {value === null || value === undefined
-          ? "-"
-          : isPct
-            ? `${formatValue(value)}%`
-            : formatValue(value)}
-      </p>
-    </div>
+    <section className="space-y-4">
+      <section className="rounded-2xl border bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">Performance</h2>
+          <p className="text-sm text-muted-foreground">
+            Resultado principal del filtro actual.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <ExecutiveHeroCard
+            label="Ventas"
+            value={kpi.sell_amount_total}
+            delta={kpi.sell_amount_delta_pct as number | null}
+            previousSeason={kpi.previous_season as string | null}
+            subtitle="Facturación"
+            href={`/analytics/operaciones?${new URLSearchParams({
+              ...(kpi.season ? { season: String(kpi.season) } : {}),
+            }).toString()}`}
+          />
+
+          <ExecutiveHeroCard
+            label="Margen total"
+            value={kpi.contribution_total}
+            delta={kpi.contribution_delta_pct as number | null}
+            previousSeason={kpi.previous_season as string | null}
+            subtitle="Beneficio estimado"
+            href="/analytics/clientes"
+          />
+
+          <ExecutiveHeroCard
+            label="Margen %"
+            value={kpi.contribution_pct}
+            delta={kpi.contribution_pct_delta_pp as number | null}
+            deltaType="pp"
+            previousSeason={kpi.previous_season as string | null}
+            isPct
+            subtitle="Rentabilidad ponderada"
+            href="/analytics/clientes"
+          />
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section className="rounded-2xl border bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold">Mix operativo</h2>
+          <p className="text-xs text-muted-foreground">
+            Peso de cada operativa sobre ventas.
+          </p>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <CompactMetric
+              label="Mix Xiamen"
+              value={kpi.xiamen_sales_mix_pct}
+              isPct
+            />
+            <CompactMetric label="Mix BSG" value={kpi.bsg_sales_mix_pct} isPct />
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold">Margen por operativa</h2>
+          <p className="text-xs text-muted-foreground">
+            Rentabilidad real de cada modelo.
+          </p>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <CompactMetric
+              label="Margen Xiamen"
+              value={kpi.xiamen_margin_pct}
+              isPct
+            />
+            <CompactMetric label="Margen BSG" value={kpi.bsg_margin_pct} isPct />
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-semibold">Actividad</h2>
+        <p className="text-xs text-muted-foreground">
+          Volumen operativo del filtro actual.
+        </p>
+
+        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <CompactMetric label="POs" value={kpi.po_count} />
+          <CompactMetric label="Líneas" value={kpi.line_count} />
+          <CompactMetric label="Qty" value={kpi.qty_total} />
+          <CompactMetric label="Factories" value={kpi.factory_count} />
+        </div>
+      </section>
+    </section>
   );
 }
 
@@ -596,6 +537,8 @@ export default async function ExecutivePage({
     narrativeRows,
     crossModuleRows,
     correlationRows,
+    actionRows,
+    lifecycleRows,
   ] = await Promise.all([
     getExecutiveDashboardData(filters),
     getExecutiveFilterOptions(),
@@ -614,6 +557,8 @@ export default async function ExecutivePage({
     }),
     getExecutiveCrossModuleRisk(),
     getExecutiveCorrelationSignals(),
+    getExecutiveActionQueue(),
+    getExecutiveActionLifecycle(),
   ]);
 
   const intelligenceRows =
@@ -622,6 +567,8 @@ export default async function ExecutivePage({
   const intelligenceKpis = buildExecutiveIntelligenceKPIs(intelligenceRows);
   const crossModuleKpis = buildExecutiveCrossModuleKPIs(crossModuleRows);
   const correlationKpis = buildExecutiveCorrelationKPIs(correlationRows);
+  const actionKpis = buildExecutiveActionKPIs(actionRows);
+  const workflowKpis = buildExecutiveWorkflowKPIs(lifecycleRows);
 
   const levelPriority: Record<string, number> = {
     CRITICAL: 0,
@@ -644,14 +591,14 @@ export default async function ExecutivePage({
   });
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-5 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
             Executive Dashboard
           </h1>
           <p className="text-sm text-muted-foreground">
-            Vista ejecutiva basada en views reales de Supabase.
+            Panel de situación: performance, narrativa y acciones prioritarias.
           </p>
         </div>
 
@@ -775,26 +722,126 @@ export default async function ExecutivePage({
 
       <ExecutiveNarrativePanel rows={narrativeRows} queryString={queryString} />
 
-      <ExecutiveIntelligenceSummary {...intelligenceKpis} />
+      <section className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <CompactMetric
+            label="Workflow Health"
+            value={workflowKpis.workflowHealth}
+          />
 
-      <ExecutiveIntelligenceBoard
-        rows={intelligenceRows}
-        queryString={queryString}
-      />
+          <CompactMetric
+            label="Without Owner"
+            value={workflowKpis.withoutOwner}
+          />
 
-      <section className="rounded-2xl border bg-white shadow-sm">
-        <div className="border-b px-5 py-4">
+          <CompactMetric
+            label="Critical Aging"
+            value={workflowKpis.criticalAging}
+          />
+
+          <CompactMetric
+            label="Escalations"
+            value={workflowKpis.escalations}
+          />
+
+          <CompactMetric label="Stale" value={workflowKpis.stale} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+          <CompactMetric label="Total Actions" value={actionKpis.total} />
+          <CompactMetric label="Open" value={actionKpis.open} />
+          <CompactMetric label="In Progress" value={actionKpis.inProgress} />
+          <CompactMetric label="Waiting" value={actionKpis.waiting} />
+          <CompactMetric label="Critical" value={actionKpis.critical} />
+          <CompactMetric label="Resolved" value={actionKpis.resolved} />
+        </div>
+
+        <ExecutiveActionQueue actions={actionRows} />
+      </section>
+
+      <details className="rounded-2xl border bg-white shadow-sm">
+        <summary className="cursor-pointer list-none px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Executive Intelligence
+              </p>
+              <h2 className="text-lg font-semibold">
+                Señales ejecutivas detectadas
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Desplegar solo cuando haga falta explicar el origen de las acciones.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Critical</p>
+                <p className="text-lg font-semibold">
+                  {intelligenceKpis.critical}
+                </p>
+              </div>
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Warning</p>
+                <p className="text-lg font-semibold">
+                  {intelligenceKpis.warning}
+                </p>
+              </div>
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Monitor</p>
+                <p className="text-lg font-semibold">
+                  {intelligenceKpis.monitor}
+                </p>
+              </div>
+            </div>
+          </div>
+        </summary>
+
+        <div className="space-y-4 border-t p-5">
+          <ExecutiveIntelligenceSummary {...intelligenceKpis} />
+          <ExecutiveIntelligenceBoard
+            rows={intelligenceRows}
+            queryString={queryString}
+          />
+        </div>
+      </details>
+
+      <details className="rounded-2xl border bg-white shadow-sm">
+        <summary className="cursor-pointer list-none px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Commercial Priority
+              </p>
+              <h2 className="text-lg font-semibold">Alertas comerciales</h2>
+              <p className="text-sm text-muted-foreground">
+                Priorización comercial contextual generada por BI.
+              </p>
+            </div>
+
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
+              {alerts.length} alertas
+            </span>
+          </div>
+        </summary>
+
+        <div className="border-t p-5">
+          <CommercialPriorityStrip alerts={alerts} filters={filters} />
+        </div>
+      </details>
+
+      <details className="rounded-2xl border bg-white shadow-sm">
+        <summary className="cursor-pointer list-none px-5 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Cross-module Risk
               </p>
-              <h2 className="text-2xl font-semibold tracking-tight">
-                Riesgo transversal
+              <h2 className="text-lg font-semibold">
+                Riesgo transversal por cliente
               </h2>
               <p className="text-sm text-muted-foreground">
-                Clientes con señales combinadas entre comercial, operaciones y
-                desarrollo.
+                Desplegar para revisar drivers y explicación BI.
               </p>
             </div>
 
@@ -819,147 +866,86 @@ export default async function ExecutivePage({
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="space-y-4 p-5">
-          {sortedCrossModuleRows.map((row) => (
-            <div key={row.customer} className="rounded-2xl border p-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CrossModuleRiskBadge
-                      level={row.cross_module_risk_level}
-                    />
-                    <CrossModuleDriverBadge driver={row.primary_driver} />
-                    <span className="text-xs text-muted-foreground">
-                      Score {row.cross_module_risk_score}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h3 className="text-lg font-semibold">{row.customer}</h3>
-                    <p className="mt-1 text-sm">{row.executive_summary}</p>
-                  </div>
-
-                  <p className="text-sm text-muted-foreground">
-                    Acción: {row.recommended_cross_module_action}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-xl bg-slate-50 px-3 py-2">
-                    <p className="text-xs text-muted-foreground">Commercial</p>
-                    <p className="font-semibold">
-                      {row.commercial_risk_points}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 px-3 py-2">
-                    <p className="text-xs text-muted-foreground">Production</p>
-                    <p className="font-semibold">
-                      {row.production_risk_points}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 px-3 py-2">
-                    <p className="text-xs text-muted-foreground">Margin</p>
-                    <p className="font-semibold">{row.margin_risk_points}</p>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 px-3 py-2">
-                    <p className="text-xs text-muted-foreground">
-                      Concentration
-                    </p>
-                    <p className="font-semibold">
-                      {row.concentration_risk_points}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <CompactMetric
-            label="Correlation Signals"
-            value={correlationKpis.total}
-          />
-          <CompactMetric
-            label="Critical Correlations"
-            value={correlationKpis.critical}
-          />
-          <CompactMetric
-            label="Warning Correlations"
-            value={correlationKpis.warning}
-          />
-          <CompactMetric
-            label="Monitor Correlations"
-            value={correlationKpis.monitor}
-          />
-        </div>
-
-        <ExecutiveCorrelationBoard rows={correlationRows} />
-      </section>
-
-      <details className="rounded-2xl border bg-white shadow-sm">
-        <summary className="cursor-pointer px-5 py-4 text-lg font-semibold">
-          Commercial Priority
-          <span className="ml-2 text-sm font-normal text-muted-foreground">
-            alertas comerciales y seguimiento contextual
-          </span>
         </summary>
 
-        <div className="border-t p-5">
-          <CommercialPriorityStrip alerts={alerts} filters={filters} />
+        <div className="space-y-3 border-t p-5">
+          {sortedCrossModuleRows.length === 0 ? (
+            <div className="rounded-xl border p-6 text-sm text-muted-foreground">
+              No hay riesgo transversal para el filtro actual.
+            </div>
+          ) : (
+            sortedCrossModuleRows.slice(0, 8).map((row) => (
+              <div key={row.customer} className="rounded-xl border p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold">{row.customer}</p>
+                      <CrossModuleRiskBadge
+                        level={row.cross_module_risk_level}
+                      />
+                      <CrossModuleDriverBadge driver={row.primary_driver} />
+                    </div>
+
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {row.executive_summary}
+                    </p>
+                  </div>
+
+                  <Link
+                    href={`/analytics/clientes/${encodeURIComponent(
+                      row.customer
+                    )}`}
+                    className="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted"
+                  >
+                    Ver cliente
+                  </Link>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </details>
 
       <details className="rounded-2xl border bg-white shadow-sm">
-        <summary className="cursor-pointer px-5 py-4 text-lg font-semibold">
-          Detalles ejecutivos
-          <span className="ml-2 text-sm font-normal text-muted-foreground">
-            rankings de clientes, fábricas y temporadas
-          </span>
+        <summary className="cursor-pointer list-none px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Executive Correlations
+              </p>
+              <h2 className="text-lg font-semibold">
+                Correlaciones entre módulos
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Patrones BI explicativos entre comercial, operaciones, desarrollo y QC.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Critical</p>
+                <p className="text-lg font-semibold">
+                  {correlationKpis.critical}
+                </p>
+              </div>
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Warning</p>
+                <p className="text-lg font-semibold">
+                  {correlationKpis.warning}
+                </p>
+              </div>
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Monitor</p>
+                <p className="text-lg font-semibold">
+                  {correlationKpis.monitor}
+                </p>
+              </div>
+            </div>
+          </div>
         </summary>
 
-        <div className="space-y-6 border-t p-5">
-          <div className="grid gap-6 xl:grid-cols-2">
-            <GenericTable
-              title="Customer Ranking"
-              rows={(data.customerRanking ?? []) as GenericRow[]}
-              preferredColumns={[
-                "customer",
-                "customer_size_band",
-                "profitability_band",
-                "po_count",
-                "contribution_total",
-              ]}
-            />
-
-            <GenericTable
-              title="Factory Ranking"
-              rows={(data.factoryRanking ?? []) as GenericRow[]}
-              preferredColumns={[
-                "factory",
-                "risk_level",
-                "risk_score",
-                "late_lines",
-                "production_late_rate_pct",
-              ]}
-            />
-          </div>
-
-          <GenericTable
-            title="Season Performance Ranking"
-            rows={(data.seasonRanking ?? []) as GenericRow[]}
-            preferredColumns={[
-              "season",
-              "po_count",
-              "line_count",
-              "qty_total",
-              "contribution_total",
-            ]}
-          />
+        <div className="border-t p-5">
+          <ExecutiveCorrelationBoard rows={correlationRows} />
         </div>
       </details>
     </div>

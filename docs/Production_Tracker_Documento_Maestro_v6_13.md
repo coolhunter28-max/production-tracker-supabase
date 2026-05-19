@@ -2287,3 +2287,277 @@ Commercial Priority ✔ Implementado
 Cross-navigation Analytics ✔ Implementado
 Executive KPI Filters ✔ Implementado
 Executive Margin Segmentation ✔ Implementado
+
+43. Executive Intelligence Layer (Cross-Module BI)
+
+Nueva consolidación ejecutiva implementada sobre la capa BI transversal.
+
+Objetivo:
+
+Detectar clientes con riesgo combinado entre:
+
+- Comercial
+- Operaciones
+- Márgenes
+- Concentración operativa
+- Desarrollo
+
+La lógica deja de depender de rankings aislados y pasa a generar:
+
+- señales ejecutivas
+- correlaciones entre módulos
+- priorización transversal
+
+44. Arquitectura Cross-Module
+
+44.1 Nueva capa BI transversal
+
+Nueva librería:
+
+src/lib/analytics/executive-cross-module.ts
+
+Objetivo:
+
+Centralizar inteligencia ejecutiva transversal sin recalcular lógica en frontend.
+
+Reglas:
+
+- frontend no calcula riesgo
+- frontend no combina módulos
+- frontend solo representa resultados SQL
+- lógica consolidada en views y helpers BI
+
+45. Cross-Module Risk Engine
+
+45.1 Fuente principal
+
+View principal:
+
+vw_exec_cross_module_risk_v1
+
+Objetivo:
+
+Construir un score ejecutivo transversal por cliente.
+
+Cruza:
+
+- presión comercial
+- retrasos producción
+- presión margen
+- concentración fábrica
+- señales desarrollo
+
+45.2 Campos principales
+
+customer
+cross_module_risk_score
+cross_module_risk_level
+primary_driver
+executive_summary
+recommended_cross_module_action
+alert_level
+
+Desglose interno:
+
+commercial_risk_points
+production_risk_points
+margin_risk_points
+development_risk_points
+concentration_risk_points
+
+Métricas auxiliares:
+
+contribution_pct
+production_late_rate_pct
+factory_count
+
+45.3 Niveles de riesgo
+
+CRITICAL
+WARNING
+MONITOR
+HEALTHY
+
+45.4 Regla visual consolidada
+
+Orden visual oficial:
+
+1. CRITICAL
+2. WARNING
+3. MONITOR
+4. HEALTHY
+
+Orden secundario:
+
+cross_module_risk_score DESC
+
+Regla UX:
+
+la prioridad ejecutiva SIEMPRE domina sobre score numérico.
+
+46. Correlation Intelligence
+
+46.1 Nueva capa de correlaciones
+
+View principal:
+
+vw_exec_cross_module_correlations_v1
+
+Objetivo:
+
+Detectar patrones automáticos entre módulos.
+
+Ejemplos:
+
+- caída comercial + deterioro operativo
+- cliente alto valor + riesgo producción
+- crecimiento + deterioro calidad
+- presión comercial + retraso recurrente
+
+46.2 Tipos de correlación
+
+COMMERCIAL_OPERATIONAL_DIVERGENCE
+HIGH_VALUE_OPERATIONAL_RISK
+GROWTH_UNDER_STRESS
+
+46.3 Severidad
+
+CRITICAL
+WARNING
+MONITOR
+
+46.4 Campos principales
+
+customer
+correlation_type
+severity
+correlation_reason
+correlation_score
+
+47. Executive Dashboard — Evolución
+
+Ruta:
+
+/analytics/executive
+
+Nuevos bloques implementados:
+
+- Cross-module Risk
+- Executive Correlations
+
+48. Cross-module Risk UI
+
+48.1 Objetivo
+
+Convertir Executive en un panel de situación transversal.
+
+No responde:
+
+“¿qué cliente vende más?”
+
+Ahora responde:
+
+“¿qué cliente requiere atención ejecutiva inmediata?”
+
+48.2 Cards de riesgo
+
+Cada card muestra:
+
+- customer
+- risk level
+- primary driver
+- executive summary
+- recommended action
+- score
+- breakdown parcial:
+  - commercial
+  - production
+  - margin
+  - concentration
+
+48.3 Regla UX consolidada
+
+La acción recomendada SIEMPRE visible inline.
+
+Objetivo:
+
+que Executive sea accionable, no solo descriptivo.
+
+49. Executive Correlations UI
+
+49.1 Objetivo
+
+Mostrar relaciones automáticas detectadas por BI Layer.
+
+49.2 Lectura ejecutiva
+
+La correlación NO sustituye al riesgo transversal.
+
+Complementa:
+
+- contexto
+- causa
+- patrón detectado
+
+49.3 Regla arquitectónica
+
+Las correlaciones:
+
+- se calculan exclusivamente en SQL
+- no se infieren en React
+- no se recombinan en frontend
+
+50. Reglas técnicas consolidadas
+
+❌ No calcular scores en frontend
+❌ No recalcular correlaciones en React
+❌ No mezclar lógica BI en UI
+❌ No ordenar visualmente por score ignorando severidad
+
+✅ SQL determina riesgo transversal
+✅ SQL determina correlaciones
+✅ Executive representa prioridad real
+✅ CRITICAL y WARNING dominan visualmente
+✅ Contexto se preserva vía search params
+
+51. Estado Global actualizado
+
+Módulo Estado
+
+Executive Intelligence ✔ Implementado
+Cross-Module Risk ✔ Implementado
+Correlation Intelligence ✔ Implementado
+Executive Correlations UI ✔ Implementado
+Cross-Module Executive Signals ✔ Implementado
+
+52. Próximo bloque recomendado
+
+Executive Action System
+
+Objetivo:
+
+Convertir señales BI en workflows operativos reales.
+
+Bloques previstos:
+
+- Action Queue
+- Executive Tasks
+- Owner Assignment
+- Follow-up Status
+- Resolution Tracking
+- Executive Notes
+- Historical Decisions
+- AI Recommendations
+
+53. Punto de corte actualizado
+
+Documento Maestro v6.13 consolidado.
+
+Estado:
+
+- Executive deja de ser solo KPI Dashboard.
+- Executive ya funciona como sistema de priorización transversal.
+- Riesgo multiárea consolidado.
+- Correlaciones automáticas activas.
+- BI Layer centraliza interpretación ejecutiva.
+- Frontend actúa únicamente como capa de representación.
