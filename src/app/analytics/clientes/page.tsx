@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AnalyticsPageHeader } from "@/components/navigation/analytics-page-header";
 import {
   getCustomerBusinessMatrix,
   getCustomerBusinessFilterOptions,
@@ -98,13 +99,7 @@ function getDriverClass(value: number | null | undefined) {
   return "text-muted-foreground";
 }
 
-function KpiCard({
-  title,
-  value,
-}: {
-  title: string;
-  value: string | number;
-}) {
+function KpiCard({ title, value }: { title: string; value: string | number }) {
   return (
     <div className="rounded-2xl border bg-white p-5 shadow-sm">
       <p className="text-sm text-muted-foreground">{title}</p>
@@ -113,13 +108,7 @@ function KpiCard({
   );
 }
 
-function Badge({
-  label,
-  className,
-}: {
-  label: string;
-  className: string;
-}) {
+function Badge({ label, className }: { label: string; className: string }) {
   return (
     <span
       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${className}`}
@@ -179,38 +168,37 @@ export default async function AnalyticsClientesPage({
 
   return (
     <div className="space-y-6 p-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Analytics · Clientes
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Customer Situation Board sobre{" "}
-            <span className="font-medium">vw_customer_business_contextual</span>
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Link
-            href="/analytics/executive"
-            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Executive
-          </Link>
-          <Link
-            href="/analytics/operaciones/customers"
-            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Operaciones
-          </Link>
-          <Link
-            href="/analytics/desarrollo/customers"
-            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Desarrollo
-          </Link>
-        </div>
-      </header>
+      <AnalyticsPageHeader
+        title="Analytics · Clientes"
+        description="Customer Situation Board sobre vw_customer_business_contextual."
+        breadcrumbs={[
+          { label: "Inicio", href: "/" },
+          { label: "Analytics" },
+          { label: "Clientes" },
+        ]}
+        actions={
+          <>
+            <Link
+              href="/analytics/executive"
+              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Executive
+            </Link>
+            <Link
+              href="/analytics/operaciones/customers"
+              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Operaciones
+            </Link>
+            <Link
+              href="/analytics/desarrollo/customers"
+              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Desarrollo
+            </Link>
+          </>
+        }
+      />
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
         <form method="get" className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -252,7 +240,7 @@ export default async function AnalyticsClientesPage({
             </select>
           </div>
 
-          <div className="md:col-span-2 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 md:col-span-2">
             <button
               type="submit"
               className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
@@ -276,10 +264,7 @@ export default async function AnalyticsClientesPage({
         <KpiCard title="Warning" value={healthCounts.WARNING} />
         <KpiCard title="Monitor" value={healthCounts.MONITOR} />
         <KpiCard title="Healthy" value={healthCounts.HEALTHY} />
-        <KpiCard
-          title="Avg Business Score"
-          value={formatNumber(avgBusiness, 2)}
-        />
+        <KpiCard title="Avg Business Score" value={formatNumber(avgBusiness, 2)} />
       </section>
 
       <section className="rounded-2xl border bg-white shadow-sm">
@@ -309,9 +294,7 @@ export default async function AnalyticsClientesPage({
               return (
                 <section
                   key={health}
-                  className={`rounded-2xl border p-4 ${getHealthClass(
-                    health
-                  )}`}
+                  className={`rounded-2xl border p-4 ${getHealthClass(health)}`}
                 >
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -336,7 +319,7 @@ export default async function AnalyticsClientesPage({
                         <Link
                           key={row.customer}
                           href={`/analytics/clientes/${encodeURIComponent(
-                            row.customer
+                            row.customer,
                           )}`}
                           className="rounded-xl border bg-white p-4 shadow-sm transition hover:bg-muted/40"
                         >
@@ -344,9 +327,7 @@ export default async function AnalyticsClientesPage({
                             <div>
                               <p className="font-semibold">{row.customer}</p>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {formatProfileLabel(
-                                  row.customer_business_profile
-                                )}
+                                {formatProfileLabel(row.customer_business_profile)}
                               </p>
                             </div>
                           </div>
@@ -384,8 +365,7 @@ export default async function AnalyticsClientesPage({
                             )}
 
                             {(qtyGrowth !== null && qtyGrowth !== undefined) ||
-                            (sellGrowth !== null &&
-                              sellGrowth !== undefined) ? (
+                            (sellGrowth !== null && sellGrowth !== undefined) ? (
                               <div className="grid grid-cols-2 gap-2 rounded-lg border bg-slate-50 p-2 text-xs">
                                 <div>
                                   <p className="text-muted-foreground">
@@ -393,7 +373,7 @@ export default async function AnalyticsClientesPage({
                                   </p>
                                   <p
                                     className={`font-semibold ${getDriverClass(
-                                      qtyGrowth
+                                      qtyGrowth,
                                     )}`}
                                   >
                                     {formatPercent(qtyGrowth, 2)}
@@ -406,7 +386,7 @@ export default async function AnalyticsClientesPage({
                                   </p>
                                   <p
                                     className={`font-semibold ${getDriverClass(
-                                      sellGrowth
+                                      sellGrowth,
                                     )}`}
                                   >
                                     {formatPercent(sellGrowth, 2)}

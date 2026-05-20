@@ -5,6 +5,7 @@ import { AnalyticsPageShell } from "@/components/analytics/layout/AnalyticsPageS
 import { AnalyticsSectionHeader } from "@/components/analytics/layout/AnalyticsSectionHeader";
 import { OperacionesFocusBoard } from "@/components/analytics/operaciones/OperacionesFocusBoard";
 import { AnalyticsRankingTable } from "@/components/analytics/tables/AnalyticsRankingTable";
+import { AnalyticsPageHeader } from "@/components/navigation/analytics-page-header";
 import {
   getOperacionesFilterOptions,
   getOperacionesOverviewData,
@@ -25,7 +26,7 @@ function getSingleParam(value: string | string[] | undefined): string | undefine
 }
 
 function parseOperacionesFilters(
-  params: Record<string, string | string[] | undefined>
+  params: Record<string, string | string[] | undefined>,
 ): OperacionesFilters {
   const dateType = getSingleParam(params.dateType);
 
@@ -151,15 +152,15 @@ export default async function OperacionesPage({
 
   const topLogisticsCustomer = topRowByMetric(
     data.logisticsRanking as GenericRow[],
-    "logistics_pressure_score"
+    "logistics_pressure_score",
   );
   const topRiskFactory = topRowByMetric(
     data.factoryRanking as GenericRow[],
-    "risk_score"
+    "risk_score",
   );
   const topDelayedSeason = topRowByMetric(
     data.seasonRanking as GenericRow[],
-    "production_late_rate_pct"
+    "production_late_rate_pct",
   );
 
   const baseQuery = buildBaseParams(filters);
@@ -170,14 +171,23 @@ export default async function OperacionesPage({
       title="Operaciones Overview"
       description="Vista operativa global de volumen, contribución, retrasos y presión logística."
     >
-      <div className="flex justify-end">
-        <Link
-          href={executiveHref}
-          className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-        >
-          ← Volver a Executive
-        </Link>
-      </div>
+      <AnalyticsPageHeader
+        title="Operaciones Overview"
+        description="Vista operativa global de volumen, contribución, retrasos y presión logística."
+        breadcrumbs={[
+          { label: "Inicio", href: "/" },
+          { label: "Analytics" },
+          { label: "Operaciones" },
+        ]}
+        actions={
+          <Link
+            href={executiveHref}
+            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Executive
+          </Link>
+        }
+      />
 
       <OperacionesFiltersBar
         seasons={filterOptions.seasons}
@@ -202,12 +212,14 @@ export default async function OperacionesPage({
                 query.set("customer", customer);
               }
               return query;
-            })()
+            })(),
           )}
           className="rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-muted/40"
         >
           <div className="flex items-start justify-between gap-3">
-            <p className="text-xs text-muted-foreground">Alerta logística líder</p>
+            <p className="text-xs text-muted-foreground">
+              Alerta logística líder
+            </p>
             <span className="text-sm text-muted-foreground">→</span>
           </div>
           <p className="mt-1 text-sm font-semibold">
@@ -231,12 +243,14 @@ export default async function OperacionesPage({
                 query.set("factory", factory);
               }
               return query;
-            })()
+            })(),
           )}
           className="rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-muted/40"
         >
           <div className="flex items-start justify-between gap-3">
-            <p className="text-xs text-muted-foreground">Fábrica más expuesta</p>
+            <p className="text-xs text-muted-foreground">
+              Fábrica más expuesta
+            </p>
             <span className="text-sm text-muted-foreground">→</span>
           </div>
           <p className="mt-1 text-sm font-semibold">
@@ -260,12 +274,14 @@ export default async function OperacionesPage({
                 query.set("season", season);
               }
               return query;
-            })()
+            })(),
           )}
           className="rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-muted/40"
         >
           <div className="flex items-start justify-between gap-3">
-            <p className="text-xs text-muted-foreground">Season con más retraso</p>
+            <p className="text-xs text-muted-foreground">
+              Season con más retraso
+            </p>
             <span className="text-sm text-muted-foreground">→</span>
           </div>
           <p className="mt-1 text-sm font-semibold">
@@ -281,7 +297,10 @@ export default async function OperacionesPage({
       </section>
 
       <section className="space-y-4">
-        <AnalyticsSectionHeader title="Customers" href="/analytics/operaciones/customers" />
+        <AnalyticsSectionHeader
+          title="Customers"
+          href="/analytics/operaciones/customers"
+        />
 
         <div className="grid gap-6 xl:grid-cols-2">
           <AnalyticsRankingTable
@@ -336,23 +355,26 @@ export default async function OperacionesPage({
         </div>
 
         <div className="flex gap-3">
-          <a
+          <Link
             href="/analytics/operaciones/factories"
             className="rounded-xl border px-3 py-2 text-sm transition-colors hover:bg-muted"
           >
             Ver factories
-          </a>
-          <a
+          </Link>
+          <Link
             href="/analytics/operaciones/logistica"
             className="rounded-xl border px-3 py-2 text-sm transition-colors hover:bg-muted"
           >
             Ver logística
-          </a>
+          </Link>
         </div>
       </section>
 
       <section className="space-y-4">
-        <AnalyticsSectionHeader title="Seasons" href="/analytics/operaciones/seasons" />
+        <AnalyticsSectionHeader
+          title="Seasons"
+          href="/analytics/operaciones/seasons"
+        />
 
         <div className="grid gap-6 xl:grid-cols-2">
           <AnalyticsRankingTable

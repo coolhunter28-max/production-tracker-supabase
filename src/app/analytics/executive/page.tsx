@@ -30,6 +30,7 @@ import { ExecutiveActionQueue } from "@/components/analytics/executive/Executive
 import { createClient } from "@/lib/supabase";
 import type { ExecutiveFilters } from "@/lib/analytics/types/executive";
 import type { CustomerCommercialAlert } from "@/types/clientes";
+import { AnalyticsPageHeader } from "@/components/navigation/analytics-page-header";
 
 type ExecutivePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -459,7 +460,16 @@ function CommercialPriorityStrip({
             </p>
           </div>
         </div>
-
+        
+        <AnalyticsPageHeader
+  title="Executive Analytics"
+  description="Prioridades ejecutivas, riesgos transversales y acciones críticas."
+  breadcrumbs={[
+    { label: "Inicio", href: "/" },
+    { label: "Analytics" },
+    { label: "Executive" },
+  ]}
+/>
         {priorityAlerts.length === 0 ? (
           <div className="rounded-xl border p-6 text-sm text-muted-foreground">
             No hay prioridades comerciales para el filtro actual.
@@ -590,37 +600,36 @@ export default async function ExecutivePage({
 
   return (
     <div className="space-y-5 p-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Executive Dashboard
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Panel de situación: performance, narrativa y acciones prioritarias.
-          </p>
-        </div>
+      <AnalyticsPageHeader
+  title="Executive Dashboard"
+  description="Panel de situación: performance, narrativa y acciones prioritarias."
+  breadcrumbs={[
+    { label: "Inicio", href: "/" },
+    { label: "Analytics" },
+    { label: "Executive" },
+  ]}
+/>
 
-        <div className="flex items-center gap-2">
-          <Link
-            href="/analytics/clientes"
-            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Clientes
-          </Link>
-          <Link
-            href="/analytics/operaciones/customers"
-            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Operaciones
-          </Link>
-          <Link
-            href="/analytics/desarrollo/customers"
-            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Desarrollo
-          </Link>
-        </div>
-      </header>
+<div className="flex flex-wrap items-center gap-2">
+  <Link
+    href="/analytics/clientes"
+    className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+  >
+    Clientes
+  </Link>
+  <Link
+    href="/analytics/operaciones/customers"
+    className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+  >
+    Operaciones
+  </Link>
+  <Link
+    href="/analytics/desarrollo/customers"
+    className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+  >
+    Desarrollo
+  </Link>
+</div>
 
       <section className="sticky top-0 z-20 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur">
         <form method="get" className="grid gap-4 lg:grid-cols-4">

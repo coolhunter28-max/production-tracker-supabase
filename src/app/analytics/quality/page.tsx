@@ -3,6 +3,7 @@ import { QualityFiltersBar } from "@/components/analytics/filters/QualityFilters
 import { AnalyticsPageShell } from "@/components/analytics/layout/AnalyticsPageShell";
 import { AnalyticsSectionHeader } from "@/components/analytics/layout/AnalyticsSectionHeader";
 import { AnalyticsRankingTable } from "@/components/analytics/tables/AnalyticsRankingTable";
+import { AnalyticsPageHeader } from "@/components/navigation/analytics-page-header";
 import {
   getQualityFilterOptions,
   getQualityOverviewData,
@@ -17,13 +18,13 @@ type QualityPageProps = {
 };
 
 function getSingleParam(
-  value: string | string[] | undefined
+  value: string | string[] | undefined,
 ): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
 function parseQualityFilters(
-  params: Record<string, string | string[] | undefined>
+  params: Record<string, string | string[] | undefined>,
 ): QualityFilters {
   const customer = getSingleParam(params.customer);
   const factory = getSingleParam(params.factory);
@@ -92,9 +93,7 @@ const MODEL_CONFIG: QualityRankingConfig = {
   ],
 };
 
-export default async function QualityPage({
-  searchParams,
-}: QualityPageProps) {
+export default async function QualityPage({ searchParams }: QualityPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const filters = parseQualityFilters(resolvedSearchParams);
 
@@ -108,13 +107,22 @@ export default async function QualityPage({
       title="Quality Overview"
       description="Vista global de calidad por customer, factory y style."
     >
+      <AnalyticsPageHeader
+        title="Quality Overview"
+        description="Vista global de calidad por customer, factory y style."
+        breadcrumbs={[
+          { label: "Inicio", href: "/" },
+          { label: "Analytics" },
+          { label: "Quality" },
+        ]}
+      />
+
       <QualityFiltersBar
         customers={filterOptions.customers}
         factories={filterOptions.factories}
         styles={filterOptions.styles}
       />
 
-      {/* CUSTOMERS */}
       <section className="space-y-4">
         <AnalyticsSectionHeader
           title="Customers"
@@ -137,7 +145,6 @@ export default async function QualityPage({
         </div>
       </section>
 
-      {/* FACTORIES */}
       <section className="space-y-4">
         <AnalyticsSectionHeader
           title="Factories"
@@ -160,12 +167,8 @@ export default async function QualityPage({
         </div>
       </section>
 
-      {/* STYLES */}
       <section className="space-y-4">
-        <AnalyticsSectionHeader
-          title="Styles"
-          href="/analytics/quality/models"
-        />
+        <AnalyticsSectionHeader title="Styles" href="/analytics/quality/models" />
 
         <div className="grid gap-6 xl:grid-cols-2">
           <AnalyticsRankingTable

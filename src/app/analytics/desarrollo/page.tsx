@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { AnalyticsPageHeader } from '@/components/navigation/analytics-page-header'
 import {
   getDevelopmentConversionByCustomer,
   getDevelopmentCustomerRanking,
@@ -71,49 +72,41 @@ export default async function DevelopmentAnalyticsPage({
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 px-6 py-6">
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border bg-muted px-3 py-1 text-xs font-medium">
-            Analytics
-          </span>
-          <span className="rounded-full border bg-muted px-3 py-1 text-xs font-medium">
-            Desarrollo
-          </span>
-        </div>
+      <AnalyticsPageHeader
+        title="Desarrollo"
+        description="Pricing, negotiation and quote conversion analytics."
+        breadcrumbs={[
+          { label: 'Inicio', href: '/' },
+          { label: 'Analytics' },
+          { label: 'Desarrollo' },
+        ]}
+      />
 
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Desarrollo</h1>
-          <p className="text-sm text-muted-foreground">
-            Pricing, negotiation and quote conversion analytics.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={{ pathname: '/analytics/desarrollo', query: sharedQuery }}
-            className="rounded-xl border bg-foreground px-4 py-2 text-sm font-medium text-background"
-          >
-            Overview
-          </Link>
-          <Link
-            href={{
-              pathname: '/analytics/desarrollo/customers',
-              query: sharedQuery,
-            }}
-            className="rounded-xl border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
-          >
-            Customers
-          </Link>
-          <Link
-            href={{
-              pathname: '/analytics/desarrollo/quotes',
-              query: quotesQuery,
-            }}
-            className="rounded-xl border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
-          >
-            Quotes
-          </Link>
-        </div>
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href={{ pathname: '/analytics/desarrollo', query: sharedQuery }}
+          className="rounded-xl border bg-foreground px-4 py-2 text-sm font-medium text-background"
+        >
+          Overview
+        </Link>
+        <Link
+          href={{
+            pathname: '/analytics/desarrollo/customers',
+            query: sharedQuery,
+          }}
+          className="rounded-xl border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+        >
+          Customers
+        </Link>
+        <Link
+          href={{
+            pathname: '/analytics/desarrollo/quotes',
+            query: quotesQuery,
+          }}
+          className="rounded-xl border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+        >
+          Quotes
+        </Link>
       </div>
 
       <section className="rounded-2xl border bg-card p-5 shadow-sm">

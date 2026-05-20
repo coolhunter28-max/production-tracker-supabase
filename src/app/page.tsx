@@ -1,117 +1,270 @@
-﻿// src/app/page.tsx
-"use client";
-
-import Link from "next/link";
+﻿import Link from "next/link";
 import Image from "next/image";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+  AlertTriangle,
+  ClipboardList,
+  Factory,
+  GitBranch,
+  ShieldCheck,
+  Upload,
+  Zap,
+} from "lucide-react";
 
-export default function HomePage() {
+import { getExecutiveActionQueue } from "@/lib/analytics/executive-actions";
+import { getExecutiveDailyBrief } from "@/lib/analytics/executive-daily-brief";
+
+function asText(value: unknown, fallback = "") {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function priorityStyle(priority?: string | null) {
+  if (priority === "CRITICAL") return "border-red-300 bg-red-50 text-red-900";
+  if (priority === "WARNING") return "border-amber-300 bg-amber-50 text-amber-900";
+  return "border-slate-200 bg-white text-slate-800";
+}
+
+function getActionId(action: unknown) {
+  const row = action as Record<string, unknown>;
+  return asText(row.action_id ?? row.id ?? row.queue_id, "unknown");
+}
+
+function getActionPriority(action: unknown) {
+  const row = action as Record<string, unknown>;
+  return asText(row.priority ?? row.risk_level ?? row.severity, "INFO");
+}
+
+function getActionTitle(action: unknown) {
+  const row = action as Record<string, unknown>;
+  return asText(
+    row.title ?? row.action_title ?? row.recommended_action,
+    "Acción ejecutiva",
+  );
+}
+
+function getActionModule(action: unknown) {
+  const row = action as Record<string, unknown>;
+  return asText(row.source_module ?? row.module ?? row.area, "Executive");
+}
+
+function getActionStatus(action: unknown) {
+  const row = action as Record<string, unknown>;
+  return asText(row.status ?? row.action_status, "OPEN");
+}
+
+export default async function HomePage() {
+  const [dailyBrief, actionQueue] = await Promise.all([
+    getExecutiveDailyBrief(),
+    getExecutiveActionQueue(),
+  ]);
+
+  const priorityActions = actionQueue
+    .filter((action) => {
+      const priority = getActionPriority(action);
+      return priority === "CRITICAL" || priority === "WARNING";
+    })
+    .slice(0, 6);
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center py-16 px-6">
-      {/* HEADER */}
-      <div className="flex flex-col items-center mb-8">
-        <Image
-          src="/logo-bsg.png"
-          alt="BSG Logo"
-          width={80}
-          height={80}
-          className="mb-4"
-          priority
-        />
-        <h1 className="text-4xl font-bold text-center">Sistema de Producción</h1>
-        <p className="text-gray-600 mt-4 text-center max-w-2xl">
-          Bienvenido al sistema de gestión de pedidos, producción, importación y
-          alertas. Selecciona una sección para comenzar.
-        </p>
-      </div>
+    <main className="min-h-screen bg-slate-50 px-6 py-6">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        <header className="flex items-center gap-4">
+          <Image
+            src="/logo-bsg.png"
+            alt="BSG Logo"
+            width={56}
+            height={56}
+            priority
+          />
 
-      {/* GRID DE MÓDULOS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-5xl">
-        {/* Dashboard */}
-        <Link href="/produccion/dashboard">
-          <Card className="p-6 hover:shadow-lg transition">
-            <CardHeader>
-              <CardTitle>Dashboard</CardTitle>
-              <CardDescription>
-                Ver KPIs, gráficos y estado de producción.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
-        {/* Lista de POs */}
-        <Link href="/produccion/pos">
-          <Card className="p-6 hover:shadow-lg transition">
-            <CardHeader>
-              <CardTitle>Lista de POs</CardTitle>
-              <CardDescription>Ver y filtrar los Purchase Orders.</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
-        {/* Import/Export */}
-        <Link href="/import">
-          <Card className="p-6 hover:shadow-lg transition">
-            <CardHeader>
-              <CardTitle>Importar Datos</CardTitle>
-              <CardDescription>
-                Importar desde España, China o exportar Excel de producción.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
-        {/* Alertas */}
-        <Link href="/alertas">
-          <Card className="p-6 hover:shadow-lg transition">
-            <CardHeader>
-              <CardTitle>Alertas</CardTitle>
-              <CardDescription>Ver y gestionar alertas del sistema.</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
-        {/* ✅ NUEVO: DESARROLLO */}
-        <Link href="/desarrollo">
-          <Card className="p-6 hover:shadow-lg transition">
-            <CardHeader>
-              <CardTitle>Desarrollo</CardTitle>
-              <CardDescription>
-                Catálogo de modelos · Imágenes · Precios · Cotizaciones
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
-        {/* QC MODULE */}
-        <Card className="p-6 hover:shadow-lg transition">
-          <CardHeader>
-            <CardTitle>Quality Control (QC)</CardTitle>
-            <CardDescription>Inspecciones de calidad · Upload · Reportes</CardDescription>
-          </CardHeader>
-
-          <div className="flex gap-2 mt-4">
-            <Link
-              href="/qc"
-              className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 transition"
-            >
-              Ver inspecciones
-            </Link>
-
-            <Link
-              href="/qc/upload"
-              className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-500 transition"
-            >
-              Subir QC
-            </Link>
+          <div>
+            <p className="text-sm font-medium text-slate-500">
+              Production Tracker
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
+              Command Center
+            </h1>
+            <p className="text-sm text-slate-600">
+              Qué mirar hoy. Prioridades reales, navegación rápida y cero ruido.
+            </p>
           </div>
-        </Card>
+        </header>
+
+        <section className="grid gap-4 md:grid-cols-4">
+          <CommandCard
+            title="Executive Today"
+            icon={<Zap className="h-5 w-5" />}
+            href="/analytics/executive"
+            value={dailyBrief?.critical_count ?? 0}
+            label="críticos"
+            critical
+          />
+
+          <CommandCard
+            title="Production Today"
+            icon={<Factory className="h-5 w-5" />}
+            href="/analytics/operaciones"
+            value={dailyBrief?.production_risk_count ?? 0}
+            label="riesgos producción"
+          />
+
+          <CommandCard
+            title="QC Today"
+            icon={<ShieldCheck className="h-5 w-5" />}
+            href="/analytics/quality"
+            value={dailyBrief?.quality_risk_count ?? 0}
+            label="riesgos calidad"
+          />
+
+          <CommandCard
+            title="Development Today"
+            icon={<GitBranch className="h-5 w-5" />}
+            href="/analytics/desarrollo"
+            value={dailyBrief?.development_risk_count ?? 0}
+            label="riesgos desarrollo"
+          />
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              <h2 className="text-base font-semibold text-slate-950">
+                Priority Actions
+              </h2>
+            </div>
+
+            {priorityActions.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                No hay acciones críticas o warning pendientes.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {priorityActions.map((action) => {
+                  const actionId = getActionId(action);
+                  const priority = getActionPriority(action);
+
+                  return (
+                    <Link
+                      key={actionId}
+                      href={`/analytics/executive?action=${actionId}`}
+                      className={`block rounded-lg border p-3 text-sm transition hover:shadow-sm ${priorityStyle(
+                        priority,
+                      )}`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium">
+                            {getActionTitle(action)}
+                          </p>
+                          <p className="mt-1 text-xs opacity-80">
+                            {getActionModule(action)} · {getActionStatus(action)}
+                          </p>
+                        </div>
+
+                        <span className="rounded-full bg-white/70 px-2 py-1 text-xs font-semibold">
+                          {priority}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <Panel
+              title="Quick Navigation"
+              icon={<ClipboardList className="h-5 w-5" />}
+            >
+              <QuickLink href="/analytics/executive" label="Executive Analytics" />
+              <QuickLink href="/analytics/operaciones" label="Operaciones Analytics" />
+              <QuickLink href="/analytics/quality" label="Quality Analytics" />
+              <QuickLink href="/analytics/desarrollo" label="Desarrollo Analytics" />
+              <QuickLink href="/analytics/clientes" label="Clientes / Business Matrix" />
+            </Panel>
+
+            <Panel title="Operativa diaria" icon={<Upload className="h-5 w-5" />}>
+              <QuickLink href="/produccion/pos" label="Lista de POs" />
+              <QuickLink href="/produccion/dashboard" label="Dashboard producción" />
+              <QuickLink href="/import" label="Importar datos" />
+              <QuickLink href="/qc" label="QC inspecciones" />
+              <QuickLink href="/qc/upload" label="Subir QC" />
+              <QuickLink href="/alertas" label="Alertas" />
+            </Panel>
+          </div>
+        </section>
       </div>
+    </main>
+  );
+}
+
+function CommandCard({
+  title,
+  icon,
+  href,
+  value,
+  label,
+  critical = false,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  href: string;
+  value: number;
+  label: string;
+  critical?: boolean;
+}) {
+  const isCritical = critical && value > 0;
+
+  return (
+    <Link
+      href={href}
+      className={`rounded-xl border p-4 shadow-sm transition hover:shadow-sm ${
+        isCritical ? "border-red-300 bg-red-50" : "border-slate-200 bg-white"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="text-slate-700">{icon}</div>
+        <span className="text-2xl font-semibold text-slate-950">{value}</span>
+      </div>
+
+      <div className="mt-4">
+        <h2 className="text-sm font-semibold text-slate-950">{title}</h2>
+        <p className="text-xs text-slate-500">{label}</p>
+      </div>
+    </Link>
+  );
+}
+
+function Panel({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-center gap-2 text-slate-700">
+        {icon}
+        <h2 className="text-base font-semibold text-slate-950">{title}</h2>
+      </div>
+
+      <div className="grid gap-2">{children}</div>
     </div>
+  );
+}
+
+function QuickLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+    >
+      {label}
+    </Link>
   );
 }
