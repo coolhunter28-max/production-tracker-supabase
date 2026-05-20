@@ -231,9 +231,7 @@ function KpiGrid({ rows }: { rows: GenericRow[] }) {
             delta={kpi.sell_amount_delta_pct as number | null}
             previousSeason={kpi.previous_season as string | null}
             subtitle="Facturación"
-            href={`/analytics/operaciones?${new URLSearchParams({
-              ...(kpi.season ? { season: String(kpi.season) } : {}),
-            }).toString()}`}
+            href="/analytics/operaciones"
           />
 
           <ExecutiveHeroCard
@@ -624,19 +622,20 @@ export default async function ExecutivePage({
         </div>
       </header>
 
-      <section className="rounded-2xl border bg-white p-5 shadow-sm">
-        <form method="get" className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="season">
+      <section className="sticky top-0 z-20 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur">
+        <form method="get" className="grid gap-4 lg:grid-cols-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
               Season
             </label>
+
             <select
-              id="season"
               name="season"
               defaultValue={filters.season ?? ""}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
             >
               <option value="">Todas</option>
+
               {filterOptions.seasons.map((season) => (
                 <option key={season} value={season}>
                   {season}
@@ -645,17 +644,18 @@ export default async function ExecutivePage({
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="customer">
+          <div className="space-y-1">
+            <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
               Customer
             </label>
+
             <select
-              id="customer"
               name="customer"
               defaultValue={filters.customer ?? ""}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
             >
               <option value="">Todos</option>
+
               {filterOptions.customers.map((customer) => (
                 <option key={customer} value={customer}>
                   {customer}
@@ -664,17 +664,18 @@ export default async function ExecutivePage({
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="factory">
+          <div className="space-y-1">
+            <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
               Factory
             </label>
+
             <select
-              id="factory"
               name="factory"
               defaultValue={filters.factory ?? ""}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
             >
               <option value="">Todas</option>
+
               {filterOptions.factories.map((factory) => (
                 <option key={factory} value={factory}>
                   {factory}
@@ -683,15 +684,15 @@ export default async function ExecutivePage({
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="dateType">
+          <div className="space-y-1">
+            <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
               Date Type
             </label>
+
             <select
-              id="dateType"
               name="dateType"
-              defaultValue={filters.dateType}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+              defaultValue={filters.dateType ?? "shipping"}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
             >
               <option value="shipping">Shipping</option>
               <option value="po">PO</option>
@@ -700,20 +701,20 @@ export default async function ExecutivePage({
             </select>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 md:col-span-4">
+          <div className="flex items-end gap-2 lg:col-span-4">
             <button
               type="submit"
-              className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
             >
               Aplicar filtros
             </button>
 
-            <a
+            <Link
               href="/analytics/executive"
-              className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
               Limpiar filtros
-            </a>
+            </Link>
           </div>
         </form>
       </section>

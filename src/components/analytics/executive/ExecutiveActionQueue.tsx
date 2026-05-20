@@ -7,134 +7,141 @@ type Props = {
 
 function priorityClass(priority: string) {
   if (priority === "CRITICAL") {
-    return "border-red-300 bg-red-50 text-red-700";
+    return "bg-red-100 text-red-700";
   }
 
   if (priority === "HIGH") {
-    return "border-orange-300 bg-orange-50 text-orange-700";
+    return "bg-orange-100 text-orange-700";
   }
 
   if (priority === "MEDIUM") {
-    return "border-yellow-300 bg-yellow-50 text-yellow-700";
+    return "bg-yellow-100 text-yellow-700";
   }
 
-  return "border-slate-300 bg-slate-50 text-slate-700";
+  return "bg-slate-100 text-slate-700";
 }
 
 function statusClass(status: string) {
   if (status === "OPEN") {
-    return "bg-blue-50 text-blue-700";
+    return "bg-blue-100 text-blue-700";
   }
 
   if (status === "IN_PROGRESS") {
-    return "bg-purple-50 text-purple-700";
+    return "bg-purple-100 text-purple-700";
   }
 
   if (status === "WAITING") {
-    return "bg-amber-50 text-amber-700";
+    return "bg-amber-100 text-amber-700";
   }
 
   if (status === "RESOLVED") {
-    return "bg-emerald-50 text-emerald-700";
+    return "bg-emerald-100 text-emerald-700";
   }
 
   return "bg-slate-100 text-slate-600";
 }
 
 export function ExecutiveActionQueue({ actions }: Props) {
-  const visibleActions = actions.slice(0, 6);
+  const visibleActions = actions.slice(0, 10);
 
   return (
-    <section className="rounded-2xl border bg-white p-5 shadow-sm">
-      <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+    <section
+      id="executive-action-queue"
+      className="rounded-2xl border bg-white shadow-sm"
+    >
+      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">
+          <h2 className="text-base font-semibold text-slate-900">
             Executive Action Queue
           </h2>
-          <p className="text-sm text-slate-500">
-            Workflows generados desde señales BI críticas y warning.
+          <p className="text-xs text-slate-500">
+            Acciones ejecutivas generadas desde señales BI.
           </p>
         </div>
 
-        <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
           {actions.length} abiertas
-        </div>
+        </span>
       </div>
 
       {visibleActions.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-6 text-sm text-slate-500">
+        <div className="p-5 text-sm text-slate-500">
           No hay acciones ejecutivas abiertas.
         </div>
       ) : (
-        <div className="space-y-3">
-          {visibleActions.map((action) => (
-            <article
-              key={action.id}
-              className={`rounded-xl border p-4 ${priorityClass(
-                action.priority
-              )}`}
-            >
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs text-slate-500">
+              <tr>
+                <th className="px-4 py-2 font-medium">Priority</th>
+                <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium">Customer</th>
+                <th className="px-4 py-2 font-medium">Action</th>
+                <th className="px-4 py-2 font-medium">Owner</th>
+                <th className="px-4 py-2 text-right font-medium">Notes</th>
+                <th className="px-4 py-2 text-right font-medium"></th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {visibleActions.map((action) => (
+                <tr key={action.id} className="border-t">
+                  <td className="px-4 py-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${priorityClass(
+                        action.priority
+                      )}`}
+                    >
                       {action.priority}
                     </span>
+                  </td>
 
+                  <td className="px-4 py-2">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusClass(
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusClass(
                         action.status
                       )}`}
                     >
                       {action.status}
                     </span>
+                  </td>
 
-                    {action.customer ? (
-                      <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium">
-                        {action.customer}
-                      </span>
+                  <td className="px-4 py-2 font-medium text-slate-900">
+                    {action.customer || "—"}
+                  </td>
+
+                  <td className="max-w-xl px-4 py-2">
+                    <p className="font-medium text-slate-900">
+                      {action.title}
+                    </p>
+
+                    {action.recommended_action ? (
+                      <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
+                        {action.recommended_action}
+                      </p>
                     ) : null}
-                  </div>
+                  </td>
 
-                  <h3 className="text-sm font-semibold text-slate-950">
-                    {action.title}
-                  </h3>
+                  <td className="px-4 py-2 text-slate-700">
+                    {action.owner_label || "Sin asignar"}
+                  </td>
 
-                  {action.description ? (
-                    <p className="mt-1 line-clamp-2 text-sm text-slate-700">
-                      {action.description}
-                    </p>
-                  ) : null}
+                  <td className="px-4 py-2 text-right text-slate-700">
+                    {action.notes_count}
+                  </td>
 
-                  {action.recommended_action ? (
-                    <p className="mt-2 text-sm font-medium text-slate-900">
-                      Acción recomendada: {action.recommended_action}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="flex shrink-0 flex-col gap-2 text-xs text-slate-600 lg:text-right">
-                  <span>
-                    Owner:{" "}
-                    <strong className="text-slate-900">
-                      {action.owner_label || "Sin asignar"}
-                    </strong>
-                  </span>
-
-                  <span>
-                    Notas: <strong>{action.notes_count}</strong>
-                  </span>
-
-                  <Link
-                    href={`/analytics/executive/actions/${action.id}`}
-                    className="rounded-lg bg-slate-900 px-3 py-2 text-center text-xs font-semibold text-white hover:bg-slate-700"
-                  >
-                    Gestionar acción
-                  </Link>
-                </div>
-              </div>
-            </article>
-          ))}
+                  <td className="px-4 py-2 text-right">
+                    <Link
+                      href={`/analytics/executive/actions/${action.id}`}
+                      className="rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+                    >
+                      Gestionar
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </section>
