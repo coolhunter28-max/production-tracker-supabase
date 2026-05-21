@@ -1,8 +1,14 @@
 import Link from "next/link";
+
+import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
+import { AnalyticsPageHeader } from "@/components/navigation/analytics-page-header";
+import { AnalyticsTableShell } from "@/components/analytics/analytics-table-shell";
+
 import {
   getOperacionesCustomerRanking,
   getOperacionesFilterOptions,
 } from "@/lib/analytics/queries/operaciones";
+
 import type { OperacionesFilters } from "@/lib/analytics/types/operaciones";
 
 type OperacionesCustomersPageProps = {
@@ -12,13 +18,13 @@ type OperacionesCustomersPageProps = {
 type GenericRow = Record<string, unknown>;
 
 function getSingleParam(
-  value: string | string[] | undefined
+  value: string | string[] | undefined,
 ): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
 function parseOperacionesFilters(
-  params: Record<string, string | string[] | undefined>
+  params: Record<string, string | string[] | undefined>,
 ): OperacionesFilters {
   const dateType = getSingleParam(params.dateType);
 
@@ -41,9 +47,10 @@ function parseOperacionesFilters(
 
 function buildHref(
   pathname: string,
-  params: Record<string, string | string[] | undefined>
+  params: Record<string, string | string[] | undefined>,
 ) {
   const query = new URLSearchParams();
+
   const keys = [
     "season",
     "customer",
@@ -56,10 +63,14 @@ function buildHref(
 
   for (const key of keys) {
     const value = getSingleParam(params[key]);
-    if (value) query.set(key, value);
+
+    if (value) {
+      query.set(key, value);
+    }
   }
 
   const queryString = query.toString();
+
   return queryString ? `${pathname}?${queryString}` : pathname;
 }
 
@@ -72,17 +83,25 @@ function formatValue(value: unknown) {
     }).format(value);
   }
 
-  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (typeof value === "boolean") {
+    return value ? "Sí" : "No";
+  }
 
   return String(value);
 }
 
 function getColumns(rows: GenericRow[], preferred: string[]) {
   const available = new Set(rows.flatMap((row) => Object.keys(row)));
-  const preferredExisting = preferred.filter((key) => available.has(key));
+
+  const preferredExisting = preferred.filter((key) =>
+    available.has(key),
+  );
+
   const fallback = Array.from(available).slice(0, 8);
 
-  return preferredExisting.length > 0 ? preferredExisting : fallback;
+  return preferredExisting.length > 0
+    ? preferredExisting
+    : fallback;
 }
 
 function GenericTable({
@@ -97,18 +116,26 @@ function GenericTable({
   const columns = getColumns(rows, preferredColumns);
 
   return (
-    <section className="rounded-2xl border bg-white shadow-sm">
-      <div className="border-b px-5 py-4">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <p className="text-sm text-muted-foreground">{rows.length} registros</p>
-      </div>
-
-      <div className="overflow-x-auto">
+    <AnalyticsTableShell
+      title={title}
+      description={`${rows.length} registros`}
+    >
+      {rows.length === 0 ? (
+        <div className="p-5">
+          <AnalyticsEmptyState
+            title="Sin resultados"
+            description="No existen datos para los filtros actuales."
+          />
+        </div>
+      ) : (
         <table className="min-w-full text-sm">
-          <thead className="bg-muted/40 text-left">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500 shadow-sm">
             <tr>
               {columns.map((column) => (
-                <th key={column} className="px-5 py-3 font-medium">
+                <th
+                  key={column}
+                  className="bg-slate-50 px-5 py-3 font-medium"
+                >
                   {column}
                 </th>
               ))}
@@ -116,30 +143,22 @@ function GenericTable({
           </thead>
 
           <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={Math.max(columns.length, 1)}
-                  className="px-5 py-10 text-center text-muted-foreground"
-                >
-                  No hay datos.
-                </td>
+            {rows.map((row, index) => (
+              <tr
+                key={index}
+                className="border-t transition hover:bg-slate-50"
+              >
+                {columns.map((column) => (
+                  <td key={column} className="px-5 py-4">
+                    {formatValue(row[column])}
+                  </td>
+                ))}
               </tr>
-            ) : (
-              rows.map((row, index) => (
-                <tr key={index} className="border-t">
-                  {columns.map((column) => (
-                    <td key={column} className="px-5 py-4">
-                      {formatValue(row[column])}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
-      </div>
-    </section>
+      )}
+    </AnalyticsTableShell>
   );
 }
 
@@ -152,8 +171,13 @@ function KpiCard({
 }) {
   return (
     <div className="rounded-2xl border bg-white p-5 shadow-sm">
-      <p className="text-sm text-muted-foreground">{title}</p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight">{value}</p>
+      <p className="text-sm text-muted-foreground">
+        {title}
+      </p>
+
+      <p className="mt-2 text-3xl font-semibold tracking-tight">
+        {value}
+      </p>
     </div>
   );
 }
@@ -161,6 +185,7 @@ function KpiCard({
 function sumNumber(rows: GenericRow[], key: string) {
   return rows.reduce((total, row) => {
     const value = row[key];
+
     return total + (typeof value === "number" ? value : 0);
   }, 0);
 }
@@ -168,11 +193,22 @@ function sumNumber(rows: GenericRow[], key: string) {
 export default async function OperacionesCustomersPage({
   searchParams,
 }: OperacionesCustomersPageProps) {
-  const resolvedSearchParams = searchParams ? await searchParams : {};
-  const filters = parseOperacionesFilters(resolvedSearchParams);
+  const resolvedSearchParams = searchParams
+    ? await searchParams
+    : {};
 
-  const overviewHref = buildHref("/analytics/operaciones", resolvedSearchParams);
-  const executiveHref = buildHref("/analytics/executive", resolvedSearchParams);
+  const filters =
+    parseOperacionesFilters(resolvedSearchParams);
+
+  const overviewHref = buildHref(
+    "/analytics/operaciones",
+    resolvedSearchParams,
+  );
+
+  const executiveHref = buildHref(
+    "/analytics/executive",
+    resolvedSearchParams,
+  );
 
   const [rowsRaw, filterOptions] = await Promise.all([
     getOperacionesCustomerRanking(filters),
@@ -182,55 +218,56 @@ export default async function OperacionesCustomersPage({
   const rows = (rowsRaw ?? []) as GenericRow[];
 
   return (
-    <div className="space-y-6 p-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Operaciones · Customers
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Análisis operativo por customer: volumen, contribución y
-            posicionamiento.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <AnalyticsPageHeader
+        title="Operaciones · Customers"
+        description="Análisis operativo por customer: volumen, contribución y posicionamiento."
+        actions={
+          <>
+            <Link
+              href={executiveHref}
+              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Executive
+            </Link>
 
-        <div className="flex items-center gap-2">
-          <Link
-            href={executiveHref}
-            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            ← Volver a Executive
-          </Link>
+            <Link
+              href={overviewHref}
+              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Operaciones
+            </Link>
 
-          <Link
-            href={overviewHref}
-            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Volver a Operaciones
-          </Link>
+            <Link
+              href="/analytics/clientes"
+              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Clientes
+            </Link>
 
-          <Link
-            href="/analytics/clientes"
-            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Clientes
-          </Link>
+            <Link
+              href="/analytics/desarrollo/customers"
+              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Desarrollo
+            </Link>
+          </>
+        }
+      />
 
-          <Link
-            href="/analytics/desarrollo/customers"
-            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Desarrollo
-          </Link>
-        </div>
-      </header>
-
-      <section className="rounded-2xl border bg-white p-5 shadow-sm">
-        <form method="get" className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <section className="sticky top-[168px] z-20 rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm backdrop-blur">
+        <form
+          method="get"
+          className="grid grid-cols-1 gap-4 md:grid-cols-4"
+        >
           <div className="space-y-2">
-            <label htmlFor="customer" className="text-sm font-medium">
+            <label
+              htmlFor="customer"
+              className="text-sm font-medium"
+            >
               Customer
             </label>
+
             <select
               id="customer"
               name="customer"
@@ -238,6 +275,7 @@ export default async function OperacionesCustomersPage({
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
             >
               <option value="">Todos</option>
+
               {filterOptions.customers.map((customer) => (
                 <option key={customer} value={customer}>
                   {customer}
@@ -247,9 +285,13 @@ export default async function OperacionesCustomersPage({
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="season" className="text-sm font-medium">
+            <label
+              htmlFor="season"
+              className="text-sm font-medium"
+            >
               Season
             </label>
+
             <select
               id="season"
               name="season"
@@ -257,6 +299,7 @@ export default async function OperacionesCustomersPage({
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
             >
               <option value="">Todas</option>
+
               {(filterOptions.seasons ?? []).map((season) => (
                 <option key={season} value={season}>
                   {season}
@@ -266,9 +309,13 @@ export default async function OperacionesCustomersPage({
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="factory" className="text-sm font-medium">
+            <label
+              htmlFor="factory"
+              className="text-sm font-medium"
+            >
               Factory
             </label>
+
             <select
               id="factory"
               name="factory"
@@ -276,6 +323,7 @@ export default async function OperacionesCustomersPage({
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
             >
               <option value="">Todas</option>
+
               {(filterOptions.factories ?? []).map((factory) => (
                 <option key={factory} value={factory}>
                   {factory}
@@ -285,9 +333,13 @@ export default async function OperacionesCustomersPage({
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="operativa" className="text-sm font-medium">
+            <label
+              htmlFor="operativa"
+              className="text-sm font-medium"
+            >
               Operativa
             </label>
+
             <select
               id="operativa"
               name="operativa"
@@ -296,7 +348,9 @@ export default async function OperacionesCustomersPage({
             >
               <option value="">Todas</option>
               <option value="BSG">BSG</option>
-              <option value="XIAMEN_DIC">XIAMEN_DIC</option>
+              <option value="XIAMEN_DIC">
+                XIAMEN_DIC
+              </option>
             </select>
           </div>
 
@@ -320,17 +374,22 @@ export default async function OperacionesCustomersPage({
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard title="Customers" value={rows.length} />
+
         <KpiCard
           title="PO Count"
           value={formatValue(sumNumber(rows, "po_count"))}
         />
+
         <KpiCard
           title="Qty Total"
           value={formatValue(sumNumber(rows, "qty_total"))}
         />
+
         <KpiCard
           title="Contribution"
-          value={formatValue(sumNumber(rows, "contribution_total"))}
+          value={formatValue(
+            sumNumber(rows, "contribution_total"),
+          )}
         />
       </section>
 
