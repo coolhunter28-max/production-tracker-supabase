@@ -27,10 +27,12 @@ import { ExecutiveIntelligenceBoard } from "@/components/analytics/executive/Exe
 import { ExecutiveNarrativePanel } from "@/components/analytics/executive/ExecutiveNarrativePanel";
 import { ExecutiveCorrelationBoard } from "@/components/analytics/executive/ExecutiveCorrelationBoard";
 import { ExecutiveActionQueue } from "@/components/analytics/executive/ExecutiveActionQueue";
+import { AnalyticsPageHeader } from "@/components/navigation/analytics-page-header";
+import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { createClient } from "@/lib/supabase";
 import type { ExecutiveFilters } from "@/lib/analytics/types/executive";
 import type { CustomerCommercialAlert } from "@/types/clientes";
-import { AnalyticsPageHeader } from "@/components/navigation/analytics-page-header";
+import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
 
 type ExecutivePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -39,7 +41,7 @@ type ExecutivePageProps = {
 type GenericRow = Record<string, unknown>;
 
 function getSingleParam(
-  value: string | string[] | undefined
+  value: string | string[] | undefined,
 ): string | undefined {
   const rawValue = Array.isArray(value) ? value[0] : value;
   const cleanValue = rawValue?.trim();
@@ -48,7 +50,7 @@ function getSingleParam(
 }
 
 function parseExecutiveFilters(
-  params: Record<string, string | string[] | undefined>
+  params: Record<string, string | string[] | undefined>,
 ): ExecutiveFilters {
   const dateType = getSingleParam(params.dateType);
 
@@ -68,9 +70,7 @@ function parseExecutiveFilters(
   };
 }
 
-function buildQueryString(
-  params: Record<string, string | string[] | undefined>
-) {
+function buildQueryString(params: Record<string, string | string[] | undefined>) {
   const query = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -207,9 +207,7 @@ function ExecutiveHeroCard({
     );
   }
 
-  return (
-    <div className="rounded-2xl border bg-white p-5 shadow-sm">{content}</div>
-  );
+  return <div className="rounded-2xl border bg-white p-5 shadow-sm">{content}</div>;
 }
 
 function KpiGrid({ rows }: { rows: GenericRow[] }) {
@@ -217,14 +215,10 @@ function KpiGrid({ rows }: { rows: GenericRow[] }) {
 
   return (
     <section className="space-y-4">
-      <section className="rounded-2xl border bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold">Performance</h2>
-          <p className="text-sm text-muted-foreground">
-            Resultado principal del filtro actual.
-          </p>
-        </div>
-
+      <AnalyticsSection
+        title="Performance"
+        description="Resultado principal del filtro actual."
+      >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <ExecutiveHeroCard
             label="Ventas"
@@ -255,55 +249,41 @@ function KpiGrid({ rows }: { rows: GenericRow[] }) {
             href="/analytics/clientes"
           />
         </div>
-      </section>
+      </AnalyticsSection>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <section className="rounded-2xl border bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold">Mix operativo</h2>
-          <p className="text-xs text-muted-foreground">
-            Peso de cada operativa sobre ventas.
-          </p>
-
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <CompactMetric
-              label="Mix Xiamen"
-              value={kpi.xiamen_sales_mix_pct}
-              isPct
-            />
+        <AnalyticsSection
+          title="Mix operativo"
+          description="Peso de cada operativa sobre ventas."
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <CompactMetric label="Mix Xiamen" value={kpi.xiamen_sales_mix_pct} isPct />
             <CompactMetric label="Mix BSG" value={kpi.bsg_sales_mix_pct} isPct />
           </div>
-        </section>
+        </AnalyticsSection>
 
-        <section className="rounded-2xl border bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold">Margen por operativa</h2>
-          <p className="text-xs text-muted-foreground">
-            Rentabilidad real de cada modelo.
-          </p>
-
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <CompactMetric
-              label="Margen Xiamen"
-              value={kpi.xiamen_margin_pct}
-              isPct
-            />
+        <AnalyticsSection
+          title="Margen por operativa"
+          description="Rentabilidad real de cada modelo."
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <CompactMetric label="Margen Xiamen" value={kpi.xiamen_margin_pct} isPct />
             <CompactMetric label="Margen BSG" value={kpi.bsg_margin_pct} isPct />
           </div>
-        </section>
+        </AnalyticsSection>
       </div>
 
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-semibold">Actividad</h2>
-        <p className="text-xs text-muted-foreground">
-          Volumen operativo del filtro actual.
-        </p>
-
-        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <AnalyticsSection
+        title="Actividad"
+        description="Volumen operativo del filtro actual."
+      >
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <CompactMetric label="POs" value={kpi.po_count} />
           <CompactMetric label="Líneas" value={kpi.line_count} />
           <CompactMetric label="Qty" value={kpi.qty_total} />
           <CompactMetric label="Factories" value={kpi.factory_count} />
         </div>
-      </section>
+      </AnalyticsSection>
     </section>
   );
 }
@@ -378,10 +358,7 @@ function CrossModuleDriverBadge({ driver }: { driver: string }) {
   );
 }
 
-function buildOperacionesCustomerHref(
-  customer: string,
-  filters: ExecutiveFilters
-) {
+function buildOperacionesCustomerHref(customer: string, filters: ExecutiveFilters) {
   const query = new URLSearchParams();
   query.set("customer", customer);
 
@@ -404,41 +381,38 @@ function CommercialPriorityStrip({
 
   const visibleAlerts = selectedCustomer
     ? alerts.filter(
-        (alert) => alert.customer.trim().toLowerCase() === selectedCustomer
+        (alert) => alert.customer.trim().toLowerCase() === selectedCustomer,
       )
     : alerts;
 
   const criticalAlerts = visibleAlerts.filter(
-    (alert) => alert.alert_level === "CRITICAL"
+    (alert) => alert.alert_level === "CRITICAL",
   );
 
   const warningAlerts = visibleAlerts.filter(
-    (alert) => alert.alert_level === "WARNING"
+    (alert) => alert.alert_level === "WARNING",
   );
 
   const priorityAlerts = [...criticalAlerts, ...warningAlerts].slice(0, 5);
 
   return (
-    <section className="rounded-2xl border bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
-        <div>
-          <h2 className="text-lg font-semibold">Commercial Priority</h2>
-          <p className="text-sm text-muted-foreground">
-            {selectedCustomer
-              ? "Prioridad comercial filtrada por customer."
-              : "Solo clientes CRITICAL y WARNING desde vw_customer_commercial_alerts."}
-          </p>
-        </div>
-
+    <AnalyticsSection
+      title="Commercial Priority"
+      description={
+        selectedCustomer
+          ? "Prioridad comercial filtrada por customer."
+          : "Solo clientes CRITICAL y WARNING desde vw_customer_commercial_alerts."
+      }
+      actions={
         <Link
           href="/analytics/clientes"
           className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
         >
           Ver Situation Board
         </Link>
-      </div>
-
-      <div className="space-y-4 p-5">
+      }
+    >
+      <div className="space-y-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="rounded-xl border bg-red-50 p-4">
             <p className="text-xs font-medium text-red-700">CRITICAL</p>
@@ -460,20 +434,12 @@ function CommercialPriorityStrip({
             </p>
           </div>
         </div>
-        
-        <AnalyticsPageHeader
-  title="Executive Analytics"
-  description="Prioridades ejecutivas, riesgos transversales y acciones críticas."
-  breadcrumbs={[
-    { label: "Inicio", href: "/" },
-    { label: "Analytics" },
-    { label: "Executive" },
-  ]}
-/>
+
         {priorityAlerts.length === 0 ? (
-          <div className="rounded-xl border p-6 text-sm text-muted-foreground">
-            No hay prioridades comerciales para el filtro actual.
-          </div>
+          <AnalyticsEmptyState
+          title="Sin prioridades comerciales"
+          description="No hay clientes CRITICAL o WARNING para el filtro actual."
+        />
         ) : (
           <div className="space-y-3">
             {priorityAlerts.map((alert) => (
@@ -497,7 +463,7 @@ function CommercialPriorityStrip({
                   <div className="flex flex-wrap gap-2">
                     <Link
                       href={`/analytics/clientes/${encodeURIComponent(
-                        alert.customer
+                        alert.customer,
                       )}`}
                       className="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted"
                     >
@@ -525,7 +491,7 @@ function CommercialPriorityStrip({
           </div>
         )}
       </div>
-    </section>
+    </AnalyticsSection>
   );
 }
 
@@ -592,46 +558,39 @@ export default async function ExecutivePage({
 
     if (levelDiff !== 0) return levelDiff;
 
-    return (
-      (b.cross_module_risk_score ?? 0) -
-      (a.cross_module_risk_score ?? 0)
-    );
+    return (b.cross_module_risk_score ?? 0) - (a.cross_module_risk_score ?? 0);
   });
 
   return (
-    <div className="space-y-5 p-6">
+    <div className="space-y-5">
       <AnalyticsPageHeader
-  title="Executive Dashboard"
-  description="Panel de situación: performance, narrativa y acciones prioritarias."
-  breadcrumbs={[
-    { label: "Inicio", href: "/" },
-    { label: "Analytics" },
-    { label: "Executive" },
-  ]}
-/>
+        title="Executive Dashboard"
+        description="Panel de situación: performance, narrativa y acciones prioritarias."
+        actions={
+          <>
+            <Link
+              href="/analytics/clientes"
+              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Clientes
+            </Link>
+            <Link
+              href="/analytics/operaciones/customers"
+              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Operaciones
+            </Link>
+            <Link
+              href="/analytics/desarrollo/customers"
+              className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Desarrollo
+            </Link>
+          </>
+        }
+      />
 
-<div className="flex flex-wrap items-center gap-2">
-  <Link
-    href="/analytics/clientes"
-    className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-  >
-    Clientes
-  </Link>
-  <Link
-    href="/analytics/operaciones/customers"
-    className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-  >
-    Operaciones
-  </Link>
-  <Link
-    href="/analytics/desarrollo/customers"
-    className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
-  >
-    Desarrollo
-  </Link>
-</div>
-
-      <section className="sticky top-0 z-20 rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur">
+<section className="sticky top-[168px] z-20 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm backdrop-blur">
         <form method="get" className="grid gap-4 lg:grid-cols-4">
           <div className="space-y-1">
             <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -732,42 +691,31 @@ export default async function ExecutivePage({
 
       <ExecutiveNarrativePanel rows={narrativeRows} queryString={queryString} />
 
-      <section className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          <CompactMetric
-            label="Workflow Health"
-            value={workflowKpis.workflowHealth}
-          />
+      <AnalyticsSection
+        title="Action Queue"
+        description="Seguimiento operativo consolidado de acciones ejecutivas activas."
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <CompactMetric label="Workflow Health" value={workflowKpis.workflowHealth} />
+            <CompactMetric label="Without Owner" value={workflowKpis.withoutOwner} />
+            <CompactMetric label="Critical Aging" value={workflowKpis.criticalAging} />
+            <CompactMetric label="Escalations" value={workflowKpis.escalations} />
+            <CompactMetric label="Stale" value={workflowKpis.stale} />
+          </div>
 
-          <CompactMetric
-            label="Without Owner"
-            value={workflowKpis.withoutOwner}
-          />
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+            <CompactMetric label="Total Actions" value={actionKpis.total} />
+            <CompactMetric label="Open" value={actionKpis.open} />
+            <CompactMetric label="In Progress" value={actionKpis.inProgress} />
+            <CompactMetric label="Waiting" value={actionKpis.waiting} />
+            <CompactMetric label="Critical" value={actionKpis.critical} />
+            <CompactMetric label="Resolved" value={actionKpis.resolved} />
+          </div>
 
-          <CompactMetric
-            label="Critical Aging"
-            value={workflowKpis.criticalAging}
-          />
-
-          <CompactMetric
-            label="Escalations"
-            value={workflowKpis.escalations}
-          />
-
-          <CompactMetric label="Stale" value={workflowKpis.stale} />
+          <ExecutiveActionQueue actions={actionRows} />
         </div>
-
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
-          <CompactMetric label="Total Actions" value={actionKpis.total} />
-          <CompactMetric label="Open" value={actionKpis.open} />
-          <CompactMetric label="In Progress" value={actionKpis.inProgress} />
-          <CompactMetric label="Waiting" value={actionKpis.waiting} />
-          <CompactMetric label="Critical" value={actionKpis.critical} />
-          <CompactMetric label="Resolved" value={actionKpis.resolved} />
-        </div>
-
-        <ExecutiveActionQueue actions={actionRows} />
-      </section>
+      </AnalyticsSection>
 
       <details className="rounded-2xl border bg-white shadow-sm">
         <summary className="cursor-pointer list-none px-5 py-4">
@@ -787,21 +735,15 @@ export default async function ExecutivePage({
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Critical</p>
-                <p className="text-lg font-semibold">
-                  {intelligenceKpis.critical}
-                </p>
+                <p className="text-lg font-semibold">{intelligenceKpis.critical}</p>
               </div>
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Warning</p>
-                <p className="text-lg font-semibold">
-                  {intelligenceKpis.warning}
-                </p>
+                <p className="text-lg font-semibold">{intelligenceKpis.warning}</p>
               </div>
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Monitor</p>
-                <p className="text-lg font-semibold">
-                  {intelligenceKpis.monitor}
-                </p>
+                <p className="text-lg font-semibold">{intelligenceKpis.monitor}</p>
               </div>
             </div>
           </div>
@@ -858,21 +800,15 @@ export default async function ExecutivePage({
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Critical</p>
-                <p className="text-lg font-semibold">
-                  {crossModuleKpis.critical}
-                </p>
+                <p className="text-lg font-semibold">{crossModuleKpis.critical}</p>
               </div>
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Warning</p>
-                <p className="text-lg font-semibold">
-                  {crossModuleKpis.warning}
-                </p>
+                <p className="text-lg font-semibold">{crossModuleKpis.warning}</p>
               </div>
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Monitor</p>
-                <p className="text-lg font-semibold">
-                  {crossModuleKpis.monitor}
-                </p>
+                <p className="text-lg font-semibold">{crossModuleKpis.monitor}</p>
               </div>
             </div>
           </div>
@@ -880,9 +816,10 @@ export default async function ExecutivePage({
 
         <div className="space-y-3 border-t p-5">
           {sortedCrossModuleRows.length === 0 ? (
-            <div className="rounded-xl border p-6 text-sm text-muted-foreground">
-              No hay riesgo transversal para el filtro actual.
-            </div>
+            <AnalyticsEmptyState
+            title="Sin riesgo transversal"
+            description="No hay señales cross-module relevantes para el filtro actual."
+          />
           ) : (
             sortedCrossModuleRows.slice(0, 8).map((row) => (
               <div key={row.customer} className="rounded-xl border p-4">
@@ -890,9 +827,7 @@ export default async function ExecutivePage({
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold">{row.customer}</p>
-                      <CrossModuleRiskBadge
-                        level={row.cross_module_risk_level}
-                      />
+                      <CrossModuleRiskBadge level={row.cross_module_risk_level} />
                       <CrossModuleDriverBadge driver={row.primary_driver} />
                     </div>
 
@@ -902,9 +837,7 @@ export default async function ExecutivePage({
                   </div>
 
                   <Link
-                    href={`/analytics/clientes/${encodeURIComponent(
-                      row.customer
-                    )}`}
+                    href={`/analytics/clientes/${encodeURIComponent(row.customer)}`}
                     className="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted"
                   >
                     Ver cliente
@@ -934,21 +867,15 @@ export default async function ExecutivePage({
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Critical</p>
-                <p className="text-lg font-semibold">
-                  {correlationKpis.critical}
-                </p>
+                <p className="text-lg font-semibold">{correlationKpis.critical}</p>
               </div>
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Warning</p>
-                <p className="text-lg font-semibold">
-                  {correlationKpis.warning}
-                </p>
+                <p className="text-lg font-semibold">{correlationKpis.warning}</p>
               </div>
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Monitor</p>
-                <p className="text-lg font-semibold">
-                  {correlationKpis.monitor}
-                </p>
+                <p className="text-lg font-semibold">{correlationKpis.monitor}</p>
               </div>
             </div>
           </div>

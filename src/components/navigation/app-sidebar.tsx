@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
   Building2,
+  ChevronLeft,
+  ChevronRight,
   Factory,
   GitBranch,
   Home,
@@ -16,13 +18,18 @@ import {
   Zap,
 } from "lucide-react";
 
-type NavItem = { label: string; href: string };
+type NavItem = {
+  label: string;
+  href: string;
+};
 
 type NavSection = {
   title: string;
   icon: React.ReactNode;
   items: NavItem[];
 };
+
+const SIDEBAR_STORAGE_KEY = "production-tracker-sidebar-collapsed";
 
 const sections: NavSection[] = [
   {
@@ -80,7 +87,17 @@ const sections: NavSection[] = [
 
 export function AppSidebar() {
   const pathname = usePathname() ?? "";
-  const [open, setOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const storedValue = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    setCollapsed(storedValue === "true");
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
+  }, [collapsed]);
 
   return (
     <>
@@ -96,29 +113,35 @@ export function AppSidebar() {
 
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => setMobileOpen(true)}
           className="rounded-lg border p-2 text-slate-700"
+          aria-label="Abrir menú"
         >
           <Menu className="h-4 w-4" />
         </button>
       </div>
 
-      {open && (
+      {mobileOpen && (
         <div className="fixed inset-0 z-50 xl:hidden">
           <button
             type="button"
             aria-label="Cerrar menú"
-            onClick={() => setOpen(false)}
+            onClick={() => setMobileOpen(false)}
             className="absolute inset-0 bg-black/30"
           />
 
           <aside className="relative h-full w-72 bg-white shadow-xl">
-            <SidebarContent pathname={pathname} onNavigate={() => setOpen(false)} />
+            <SidebarContent
+              pathname={pathname}
+              collapsed={false}
+              onNavigate={() => setMobileOpen(false)}
+            />
 
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={() => setMobileOpen(false)}
               className="absolute right-3 top-3 rounded-lg border p-2 text-slate-700"
+              aria-label="Cerrar menú"
             >
               <X className="h-4 w-4" />
             </button>
@@ -126,8 +149,61 @@ export function AppSidebar() {
         </div>
       )}
 
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r bg-white shadow-sm xl:flex xl:flex-col">
-        <SidebarContent pathname={pathname} />
+      <aside
+        className={`sticky top-0 hidden h-screen shrink-0 border-r bg-white shadow-sm transition-all duration-200 xl:flex xl:flex-col ${
+          collapsed ? "w-16" : "w-60"
+        }`}
+      >
+        <div className="border-b px-3 py-3">
+          <div
+            className={`flex items-center ${
+              collapsed ? "justify-center" : "justify-between gap-2"
+            }`}
+          >
+            <div
+              className={`flex items-center ${
+                collapsed ? "justify-center" : "gap-2"
+              }`}
+            >
+              <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+
+              {!collapsed && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    Production Tracker
+                  </p>
+                  <h2 className="text-sm font-semibold leading-tight text-slate-900">
+                    Command Center
+                  </h2>
+                </div>
+              )}
+            </div>
+
+            {!collapsed && (
+              <button
+                type="button"
+                onClick={() => setCollapsed(true)}
+                className="rounded-md border p-1.5 text-slate-600 hover:bg-slate-50"
+                aria-label="Colapsar sidebar"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {collapsed && (
+            <button
+              type="button"
+              onClick={() => setCollapsed(false)}
+              className="mx-auto mt-3 flex rounded-md border p-1.5 text-slate-600 hover:bg-slate-50"
+              aria-label="Expandir sidebar"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        <SidebarContent pathname={pathname} collapsed={collapsed} />
       </aside>
     </>
   );
@@ -135,63 +211,57 @@ export function AppSidebar() {
 
 function SidebarContent({
   pathname,
+  collapsed,
   onNavigate,
 }: {
   pathname: string;
+  collapsed: boolean;
   onNavigate?: () => void;
 }) {
   return (
-    <>
-      <div className="border-b px-4 py-3">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-red-600" />
-
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Production Tracker
-            </p>
-            <h2 className="text-sm font-semibold leading-tight text-slate-900">
-              Command Center
-            </h2>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-2 py-3">
-        <nav className="space-y-4">
-          {sections.map((section) => (
-            <div key={section.title}>
-              <div className="mb-2 mt-4 flex items-center gap-2 border-t px-2 pt-3 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-700">
-                {section.icon}
-                {section.title}
-              </div>
-
-              <div className="space-y-0.5">
-                {section.items.map((item) => {
-                  const active =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
-
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={onNavigate}
-                      className={`flex items-center rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
-                        active
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-700 hover:bg-slate-100"
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
+    <div className="flex-1 overflow-y-auto px-2 py-3">
+      <nav className="space-y-4">
+        {sections.map((section) => (
+          <div key={section.title}>
+            <div
+              className={`mb-2 mt-4 flex items-center gap-2 border-t px-2 pt-3 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-700 ${
+                collapsed ? "justify-center px-0" : ""
+              }`}
+              title={collapsed ? section.title : undefined}
+            >
+              {section.icon}
+              {!collapsed && section.title}
             </div>
-          ))}
-        </nav>
-      </div>
-    </>
+
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                const active =
+                  pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNavigate}
+                    title={collapsed ? item.label : undefined}
+                    className={`flex items-center rounded-md text-sm font-medium transition-colors ${
+                      collapsed
+                        ? "justify-center px-2 py-2"
+                        : "px-2.5 py-1.5"
+                    } ${
+                      active
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    {collapsed ? item.label.slice(0, 1) : item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
+    </div>
   );
 }

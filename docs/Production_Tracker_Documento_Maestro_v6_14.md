@@ -1,4 +1,4 @@
-# Production Tracker — Documento Maestro v6.13
+# Production Tracker — Documento Maestro v6.14
 
 Versión consolidada tras:
 
@@ -2561,3 +2561,286 @@ Estado:
 - Correlaciones automáticas activas.
 - BI Layer centraliza interpretación ejecutiva.
 - Frontend actúa únicamente como capa de representación.
+54. Command Center & Operating Shell Consolidation
+54.1 Nueva etapa del sistema
+
+Production Tracker deja de funcionar únicamente como una colección de dashboards analíticos y pasa a consolidarse como un sistema operativo interno de gestión diaria.
+
+La prioridad del proyecto cambia desde:
+
+expansión de BI
+incorporación de nuevos rankings
+generación de nuevas métricas
+
+hacia:
+
+productividad operativa
+navegación transversal
+estabilidad UX
+consolidación del shell global
+reducción de fricción diaria
+54.2 Filosofía operacional consolidada
+
+Production Tracker NO debe evolucionar hacia un dashboard gigante.
+
+El sistema debe responder principalmente:
+
+“¿Qué tengo que mirar hoy?”
+
+La experiencia se basa en:
+
+foco operativo
+priorización visual
+navegación rápida
+lectura ejecutiva compacta
+continuidad contextual
+55. Production Tracker Command Center
+
+Nueva ruta principal:
+
+/
+
+Objetivo:
+
+Convertirse en el punto de entrada diario del sistema.
+
+55.1 Principios UX
+
+El Command Center:
+
+❌ No replica dashboards completos
+❌ No intenta mostrar toda la BI del sistema
+❌ No reemplaza Executive ni Operaciones
+
+✅ Prioriza acciones
+✅ Resume riesgos reales
+✅ Centraliza navegación rápida
+✅ Reduce tiempo de decisión
+✅ Minimiza ruido visual
+
+55.2 Bloques funcionales consolidados
+
+Bloques implementados:
+
+Executive Today
+Production Today
+QC Today
+Development Today
+Priority Actions
+Quick Navigation
+Operativa diaria
+
+Objetivo:
+
+Convertir el Home en un centro operativo real y no en un menú visual.
+
+55.3 Fuente de datos
+
+El Command Center reutiliza exclusivamente:
+
+Executive Layer
+Cross-Module Risk
+Executive Action Queue
+Executive Daily Brief
+
+Regla crítica:
+
+❌ El Home nunca recalcula BI
+❌ El Home nunca genera lógica nueva
+✅ El Home consume inteligencia ya calculada
+
+56. Analytics Operating Shell
+
+Nueva arquitectura UX consolidada.
+
+56.1 Objetivo
+
+Unificar toda la experiencia Analytics bajo un shell persistente y contextual.
+
+Componentes consolidados:
+
+Sidebar global
+Breadcrumbs
+Navegación contextual
+Back navigation
+Home navigation
+Layout persistente
+Responsive shell
+56.2 Sidebar global
+
+Archivo principal:
+
+src/components/navigation/app-sidebar.tsx
+
+Características:
+
+persistente en desktop
+responsive en móvil/tablet
+navegación modular consolidada
+jerarquía visual por áreas
+módulo activo destacado
+estructura compacta tipo ERP
+
+Módulos visibles:
+
+Command Center
+Executive
+Operaciones
+Quality
+Desarrollo
+Clientes
+Sistema
+56.3 Responsive navigation
+
+El shell soporta:
+
+mobile topbar
+overlay navigation
+responsive sidebar
+navegación táctil
+
+Objetivo:
+
+mantener continuidad operativa fuera de escritorio.
+
+56.4 Layout global Analytics
+
+Archivo:
+
+src/app/analytics/layout.tsx
+
+Objetivo:
+
+Centralizar:
+
+sidebar
+spacing global
+persistencia visual
+shell compartido
+
+Regla:
+
+Todas las rutas /analytics/* deben renderizar dentro del shell global.
+
+57. Navegación contextual consolidada
+57.1 Componentes base
+
+Archivo:
+
+src/components/navigation/analytics-page-header.tsx
+
+Funciones:
+
+botón Volver
+botón Inicio
+breadcrumbs
+contexto visual persistente
+57.2 Reglas UX
+
+La navegación:
+
+❌ nunca debe romper el contexto analítico
+❌ nunca debe perder filtros sin intención explícita
+
+✅ preserva search params
+✅ mantiene continuidad entre módulos
+✅ prioriza velocidad operacional
+
+57.3 Search Params como fuente de verdad
+
+Regla consolidada del sistema:
+
+filtros viven en URL
+navegación preserva contexto
+no existe estado global de filtros
+no se usan stores para BI contextual
+58. Reglas UX consolidadas del Operating Shell
+58.1 Reglas visuales
+
+❌ No dashboards gigantes
+❌ No saturar Executive
+❌ No duplicar KPIs entre pantallas
+❌ No añadir navegación decorativa
+❌ No introducir ruido visual innecesario
+
+✅ Compactación visual
+✅ Prioridad a CRITICAL y WARNING
+✅ Jerarquía clara por módulos
+✅ Navegación rápida
+✅ Layout estable
+✅ Lectura rápida tipo ERP operativo
+
+58.2 Reglas arquitectónicas
+
+❌ Frontend no recalcula BI
+❌ React no interpreta correlaciones
+❌ UI no genera scores ejecutivos
+❌ Sidebar no contiene lógica de negocio
+
+✅ SQL interpreta
+✅ Views centralizan inteligencia
+✅ Helpers agregan acceso
+✅ Frontend representa
+
+Regla consolidada definitiva:
+
+Frontend representa.
+SQL interpreta.
+Helpers agregan.
+UI nunca recalcula BI.
+59. Estado consolidado actual
+
+Módulo Estado
+
+Command Center ✔ Implementado
+Analytics Operating Shell ✔ Implementado
+Sidebar Global ✔ Implementado
+Responsive Navigation ✔ Implementado
+Breadcrumb Navigation ✔ Implementado
+Back/Home Navigation ✔ Implementado
+Executive Intelligence ✔ Consolidado
+Cross-Module Risk ✔ Consolidado
+Executive Actions ✔ Consolidado
+Workflow Lifecycle ✔ Consolidado
+Executive Morning Brief ✔ Consolidado
+
+60. Nuevo foco del proyecto
+
+El proyecto entra oficialmente en fase de:
+
+HARDENING & OPERATIONAL PRODUCTIVITY
+
+Prioridades reales:
+
+estabilidad
+navegación
+productividad diaria
+performance
+reducción de fricción UX
+simplificación visual
+consistencia transversal
+
+No es prioritario:
+
+crear más BI compleja
+añadir dashboards masivos
+multiplicar métricas sin acción operativa
+
+El foco pasa a ser:
+
+convertir Production Tracker en una plataforma operacional diaria estable, rápida y accionable.
+
+61. Punto de corte actualizado
+
+Documento Maestro v6.14
+
+Estado consolidado:
+
+Executive ya funciona como sistema transversal de priorización.
+El Home opera como Command Center diario.
+Analytics funciona bajo un shell persistente.
+La navegación contextual está consolidada.
+La UX ejecutiva se simplifica y compacta.
+El frontend queda consolidado como capa de representación.
+La BI Layer mantiene toda la interpretación de negocio.
+El sistema entra en fase de hardening y productividad operacional.

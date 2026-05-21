@@ -1,43 +1,23 @@
 import Link from "next/link";
 import type { ExecutiveActionQueueRow } from "@/lib/analytics/executive-actions";
+import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
 
 type Props = {
   actions: ExecutiveActionQueueRow[];
 };
 
 function priorityClass(priority: string) {
-  if (priority === "CRITICAL") {
-    return "bg-red-100 text-red-700";
-  }
-
-  if (priority === "HIGH") {
-    return "bg-orange-100 text-orange-700";
-  }
-
-  if (priority === "MEDIUM") {
-    return "bg-yellow-100 text-yellow-700";
-  }
-
+  if (priority === "CRITICAL") return "bg-red-100 text-red-700";
+  if (priority === "HIGH") return "bg-orange-100 text-orange-700";
+  if (priority === "MEDIUM") return "bg-yellow-100 text-yellow-700";
   return "bg-slate-100 text-slate-700";
 }
 
 function statusClass(status: string) {
-  if (status === "OPEN") {
-    return "bg-blue-100 text-blue-700";
-  }
-
-  if (status === "IN_PROGRESS") {
-    return "bg-purple-100 text-purple-700";
-  }
-
-  if (status === "WAITING") {
-    return "bg-amber-100 text-amber-700";
-  }
-
-  if (status === "RESOLVED") {
-    return "bg-emerald-100 text-emerald-700";
-  }
-
+  if (status === "OPEN") return "bg-blue-100 text-blue-700";
+  if (status === "IN_PROGRESS") return "bg-purple-100 text-purple-700";
+  if (status === "WAITING") return "bg-amber-100 text-amber-700";
+  if (status === "RESOLVED") return "bg-emerald-100 text-emerald-700";
   return "bg-slate-100 text-slate-600";
 }
 
@@ -65,21 +45,26 @@ export function ExecutiveActionQueue({ actions }: Props) {
       </div>
 
       {visibleActions.length === 0 ? (
-        <div className="p-5 text-sm text-slate-500">
-          No hay acciones ejecutivas abiertas.
+        <div className="p-5">
+          <AnalyticsEmptyState
+            title="Sin acciones ejecutivas"
+            description="No hay acciones abiertas para revisar en este momento."
+          />
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="max-h-[520px] overflow-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs text-slate-500">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500 shadow-sm">
               <tr>
-                <th className="px-4 py-2 font-medium">Priority</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Customer</th>
-                <th className="px-4 py-2 font-medium">Action</th>
-                <th className="px-4 py-2 font-medium">Owner</th>
-                <th className="px-4 py-2 text-right font-medium">Notes</th>
-                <th className="px-4 py-2 text-right font-medium"></th>
+                <th className="bg-slate-50 px-4 py-2 font-medium">Priority</th>
+                <th className="bg-slate-50 px-4 py-2 font-medium">Status</th>
+                <th className="bg-slate-50 px-4 py-2 font-medium">Customer</th>
+                <th className="bg-slate-50 px-4 py-2 font-medium">Action</th>
+                <th className="bg-slate-50 px-4 py-2 font-medium">Owner</th>
+                <th className="bg-slate-50 px-4 py-2 text-right font-medium">
+                  Notes
+                </th>
+                <th className="bg-slate-50 px-4 py-2 text-right font-medium" />
               </tr>
             </thead>
 
@@ -89,7 +74,7 @@ export function ExecutiveActionQueue({ actions }: Props) {
                   <td className="px-4 py-2">
                     <span
                       className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${priorityClass(
-                        action.priority
+                        action.priority,
                       )}`}
                     >
                       {action.priority}
@@ -99,7 +84,7 @@ export function ExecutiveActionQueue({ actions }: Props) {
                   <td className="px-4 py-2">
                     <span
                       className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusClass(
-                        action.status
+                        action.status,
                       )}`}
                     >
                       {action.status}
@@ -111,9 +96,7 @@ export function ExecutiveActionQueue({ actions }: Props) {
                   </td>
 
                   <td className="max-w-xl px-4 py-2">
-                    <p className="font-medium text-slate-900">
-                      {action.title}
-                    </p>
+                    <p className="font-medium text-slate-900">{action.title}</p>
 
                     {action.recommended_action ? (
                       <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
