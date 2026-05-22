@@ -26,17 +26,74 @@ function statusClass(status: string) {
   return "bg-slate-100 text-slate-600";
 }
 
+function getPriorityCount(
+  actions: ExecutiveActionQueueRow[],
+  priority: string
+) {
+  return actions.filter((action) => action.priority === priority).length;
+}
+
+function getStatusCount(actions: ExecutiveActionQueueRow[], status: string) {
+  return actions.filter((action) => action.status === status).length;
+}
+
 export function ExecutiveActionQueue({ actions }: Props) {
   const visibleActions = actions.slice(0, 10);
 
+  const criticalCount = getPriorityCount(actions, "CRITICAL");
+  const highCount = getPriorityCount(actions, "HIGH");
+  const openCount = getStatusCount(actions, "OPEN");
+  const waitingCount = getStatusCount(actions, "WAITING");
+
+  const hasCritical = criticalCount > 0;
+  const hasHigh = highCount > 0;
+
   return (
     <AnalyticsTableShell
+      variant={hasCritical ? "risk" : "executive"}
       title="Executive Action Queue"
       description="Acciones ejecutivas generadas desde señales BI."
-      actions={
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-          {actions.length} abiertas
-        </span>
+      rowCount={actions.length}
+      density="compact"
+      maxHeightClassName="max-h-[560px]"
+      toolbar={
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full border px-2 py-1 ${
+                hasCritical
+                  ? "border-rose-200 bg-rose-50 text-rose-700"
+                  : "bg-white"
+              }`}
+            >
+              Critical: {criticalCount}
+            </span>
+
+            <span
+              className={`rounded-full border px-2 py-1 ${
+                hasHigh
+                  ? "border-orange-200 bg-orange-50 text-orange-700"
+                  : "bg-white"
+              }`}
+            >
+              High: {highCount}
+            </span>
+
+            <span className="rounded-full border bg-white px-2 py-1">
+              Open: {openCount}
+            </span>
+
+            <span className="rounded-full border bg-white px-2 py-1">
+              Waiting: {waitingCount}
+            </span>
+          </div>
+
+          <div>
+            {visibleActions.length < actions.length
+              ? `Mostrando ${visibleActions.length} de ${actions.length}`
+              : "Todas las acciones visibles"}
+          </div>
+        </div>
       }
     >
       {visibleActions.length === 0 ? (
@@ -74,8 +131,7 @@ export function ExecutiveActionQueue({ actions }: Props) {
                 Notes
               </th>
 
-              <th className="bg-slate-50 px-4 py-2 text-right font-medium">
-              </th>
+              <th className="bg-slate-50 px-4 py-2 text-right font-medium" />
             </tr>
           </thead>
 
@@ -83,7 +139,13 @@ export function ExecutiveActionQueue({ actions }: Props) {
             {visibleActions.map((action) => (
               <tr
                 key={action.id}
-                className="border-t transition hover:bg-slate-50"
+                className={`border-t transition hover:bg-slate-50 ${
+                  action.priority === "CRITICAL"
+                    ? "bg-rose-50/30"
+                    : action.priority === "HIGH"
+                      ? "bg-orange-50/20"
+                      : ""
+                }`}
               >
                 <td className="px-4 py-3">
                   <span

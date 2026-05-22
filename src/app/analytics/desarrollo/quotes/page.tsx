@@ -6,6 +6,7 @@ import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { AnalyticsTableShell } from "@/components/analytics/analytics-table-shell";
 import { AnalyticsPageShell } from "@/components/analytics/layout/AnalyticsPageShell";
 import { AnalyticsPageHeader } from "@/components/navigation/analytics-page-header";
+import { AnalyticsKpiCard } from "@/components/analytics/analytics-kpi-card";
 import {
   getDevelopmentFilterOptions,
   getDevelopmentQuoteVsOrder,
@@ -50,6 +51,7 @@ function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
 
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return value;
 
   return new Intl.DateTimeFormat("es-ES", {
@@ -64,12 +66,15 @@ function statusBadgeClass(status: string | null | undefined): string {
     case "aprobada":
     case "approved":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
+
     case "negociando":
     case "negotiating":
       return "border-amber-200 bg-amber-50 text-amber-700";
+
     case "rechazada":
     case "rejected":
       return "border-rose-200 bg-rose-50 text-rose-700";
+
     default:
       return "border-muted bg-muted text-muted-foreground";
   }
@@ -91,7 +96,10 @@ export default async function DevelopmentQuotesAnalyticsPage({
   ]);
 
   const totalQuotes = rows.length;
-  const matchedOrders = rows.filter((row) => row.po_id || row.po_number).length;
+
+  const matchedOrders = rows.filter(
+    (row) => row.po_id || row.po_number
+  ).length;
 
   const rowsWithDays = rows.filter(
     (row) =>
@@ -110,14 +118,6 @@ export default async function DevelopmentQuotesAnalyticsPage({
   const sharedQuery = {
     ...(filters.customer ? { customer: filters.customer } : {}),
     ...(filters.season ? { season: filters.season } : {}),
-  };
-
-  const quotesQuery = {
-    ...sharedQuery,
-    ...(filters.quoteStatus ? { quoteStatus: filters.quoteStatus } : {}),
-    ...(filters.dateFrom ? { dateFrom: filters.dateFrom } : {}),
-    ...(filters.dateTo ? { dateTo: filters.dateTo } : {}),
-    ...(filters.sort ? { sort: filters.sort } : {}),
   };
 
   const hasRows = rows.length > 0;
@@ -170,7 +170,10 @@ export default async function DevelopmentQuotesAnalyticsPage({
         title="Filtros"
         description="Filtra quotes por customer, season, estado y rango temporal."
       >
-        <form method="GET" className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <form
+          method="GET"
+          className="grid gap-4 md:grid-cols-2 xl:grid-cols-6"
+        >
           <div className="space-y-2">
             <label htmlFor="customer" className="text-sm font-medium">
               Customer
@@ -273,12 +276,29 @@ export default async function DevelopmentQuotesAnalyticsPage({
               defaultValue={filters.sort ?? "quote_date.desc"}
               className="w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-foreground"
             >
-              <option value="quote_date.desc">Latest quote date</option>
-              <option value="quote_date.asc">Oldest quote date</option>
-              <option value="customer.asc">Customer</option>
-              <option value="season.asc">Season</option>
-              <option value="quote_status.asc">Status</option>
-              <option value="days_quote_to_order.desc">Days to order</option>
+              <option value="quote_date.desc">
+                Latest quote date
+              </option>
+
+              <option value="quote_date.asc">
+                Oldest quote date
+              </option>
+
+              <option value="customer.asc">
+                Customer
+              </option>
+
+              <option value="season.asc">
+                Season
+              </option>
+
+              <option value="quote_status.asc">
+                Status
+              </option>
+
+              <option value="days_quote_to_order.desc">
+                Days to order
+              </option>
             </select>
           </div>
 
@@ -301,29 +321,25 @@ export default async function DevelopmentQuotesAnalyticsPage({
       </AnalyticsSection>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border bg-background p-5 shadow-sm">
-          <div className="text-sm text-muted-foreground">Quotes</div>
-          <div className="mt-2 text-2xl font-semibold">
-            {formatNumber(totalQuotes)}
-          </div>
-        </div>
+  <AnalyticsKpiCard
+    title="Quotes"
+    value={formatNumber(totalQuotes)}
+  />
 
-        <div className="rounded-2xl border bg-background p-5 shadow-sm">
-          <div className="text-sm text-muted-foreground">Matched Orders</div>
-          <div className="mt-2 text-2xl font-semibold">
-            {formatNumber(matchedOrders)}
-          </div>
-        </div>
+  <AnalyticsKpiCard
+    title="Matched Orders"
+    value={formatNumber(matchedOrders)}
+  />
 
-        <div className="rounded-2xl border bg-background p-5 shadow-sm">
-          <div className="text-sm text-muted-foreground">Avg Days to Order</div>
-          <div className="mt-2 text-2xl font-semibold">
-            {avgDaysToOrder === null
-              ? "—"
-              : `${formatNumber(avgDaysToOrder, 1)} d`}
-          </div>
-        </div>
-      </section>
+  <AnalyticsKpiCard
+    title="Avg Days to Order"
+    value={
+      avgDaysToOrder === null
+        ? "—"
+        : `${formatNumber(avgDaysToOrder, 1)} d`
+    }
+  />
+</section>
 
       {!hasRows ? (
         <AnalyticsEmptyState
@@ -332,31 +348,58 @@ export default async function DevelopmentQuotesAnalyticsPage({
         />
       ) : (
         <AnalyticsTableShell
+          variant="operational"
           title="Quotes detail"
           description="Detalle operacional quote-to-order con pricing, margen, revisiones y conversión."
           rowCount={rows.length}
           density="compact"
           maxHeightClassName="max-h-[620px]"
+          toolbar={
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border bg-white px-2 py-1">
+                  Compact table
+                </span>
+
+                <span className="rounded-full border bg-white px-2 py-1">
+                  Horizontal scroll enabled
+                </span>
+
+                <span className="rounded-full border bg-white px-2 py-1">
+                  Quote lifecycle analytics
+                </span>
+              </div>
+
+              <div>
+                Sticky columns active
+              </div>
+            </div>
+          }
         >
-          <table className="w-full min-w-[1400px] text-sm">
+          <table className="w-full min-w-[1550px] text-sm">
             <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="sticky left-0 z-20 bg-card px-4 py-3 text-left">
                   Quote Date
                 </th>
-                <th className="sticky left-[140px] z-20 bg-card px-4 py-3 text-left">
+
+                <th className="sticky left-[120px] z-20 bg-card px-4 py-3 text-left">
                   Customer
                 </th>
+
                 <th className="px-4 py-3 text-left">Style</th>
                 <th className="px-4 py-3 text-left">Color</th>
                 <th className="px-4 py-3 text-left">Status</th>
                 <th className="px-4 py-3 text-left">PO</th>
+
                 <th className="px-4 py-3 text-right">Sell</th>
                 <th className="px-4 py-3 text-right">Margin %</th>
                 <th className="px-4 py-3 text-right">Gap %</th>
                 <th className="px-4 py-3 text-right">Days</th>
+
                 <th className="px-4 py-3 text-left">Season</th>
                 <th className="px-4 py-3 text-left">Factory</th>
+
                 <th className="px-4 py-3 text-right">Buy</th>
                 <th className="px-4 py-3 text-right">Margin €</th>
                 <th className="px-4 py-3 text-right">Revisions</th>
@@ -383,7 +426,7 @@ export default async function DevelopmentQuotesAnalyticsPage({
                       {formatDate(row.quote_date)}
                     </td>
 
-                    <td className="sticky left-[140px] bg-card px-4 py-3 font-medium whitespace-nowrap">
+                    <td className="sticky left-[120px] bg-card px-4 py-3 font-medium whitespace-nowrap">
                       {row.customer ?? "—"}
                     </td>
 
@@ -426,7 +469,10 @@ export default async function DevelopmentQuotesAnalyticsPage({
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {row.days_quote_to_order === null
                         ? "—"
-                        : `${formatNumber(row.days_quote_to_order, 1)} d`}
+                        : `${formatNumber(
+                            row.days_quote_to_order,
+                            1
+                          )} d`}
                     </td>
 
                     <td className="px-4 py-3 whitespace-nowrap">
@@ -446,7 +492,9 @@ export default async function DevelopmentQuotesAnalyticsPage({
                     </td>
 
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      {formatNumber(row.revision_count_inferred)}
+                      {formatNumber(
+                        row.revision_count_inferred
+                      )}
                     </td>
                   </tr>
                 );
