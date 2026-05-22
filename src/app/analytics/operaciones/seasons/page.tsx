@@ -1,6 +1,10 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+
 import { AnalyticsBarChart } from "@/components/analytics/charts/AnalyticsBarChart";
 import { OperacionesSeasonsFiltersBar } from "@/components/analytics/filters/OperacionesSeasonsFiltersBar";
+import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
+import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { AnalyticsPageShell } from "@/components/analytics/layout/AnalyticsPageShell";
 import { AnalyticsRankingTable } from "@/components/analytics/tables/AnalyticsRankingTable";
 import {
@@ -25,10 +29,8 @@ function getSingleParam(
 function parseOperacionesFilters(
   params: Record<string, string | string[] | undefined>
 ): OperacionesFilters {
-  const season = getSingleParam(params.season);
-
   return {
-    season,
+    season: getSingleParam(params.season),
   };
 }
 
@@ -36,7 +38,16 @@ function buildOperacionesOverviewHref(
   params: Record<string, string | string[] | undefined>
 ) {
   const query = new URLSearchParams();
-  const keys = ["season", "customer", "factory", "operativa", "dateType", "dateFrom", "dateTo"];
+
+  const keys = [
+    "season",
+    "customer",
+    "factory",
+    "operativa",
+    "dateType",
+    "dateFrom",
+    "dateTo",
+  ];
 
   for (const key of keys) {
     const value = getSingleParam(params[key]);
@@ -44,7 +55,9 @@ function buildOperacionesOverviewHref(
   }
 
   const queryString = query.toString();
-  return queryString ? `/analytics/operaciones?${queryString}` : "/analytics/operaciones";
+  return queryString
+    ? `/analytics/operaciones?${queryString}`
+    : "/analytics/operaciones";
 }
 
 const SEASON_PERFORMANCE_CONFIG: OperacionesRankingConfig = {
@@ -96,53 +109,79 @@ export default async function OperacionesSeasonsPage({
     getOperacionesFilterOptions(),
   ]);
 
+  const hasRows = rows.length > 0;
+
   return (
     <AnalyticsPageShell
       title="Operaciones · Seasons"
-      description="Análisis comparativo por season: performance y comportamiento operativo."
+      description="Análisis comparativo por season: performance económica y comportamiento operativo."
     >
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           href={overviewHref}
-          className="rounded-xl border px-3 py-2 text-sm transition-colors hover:bg-muted"
+          className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
-          Volver atrás
+          <ArrowLeft className="h-4 w-4" />
+          Volver a Operaciones
         </Link>
+
+        <div className="rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+          {hasRows ? `${rows.length} seasons analizadas` : "Sin resultados"}
+        </div>
       </div>
 
-      <OperacionesSeasonsFiltersBar
-        seasons={filterOptions.seasons}
-      />
+      <OperacionesSeasonsFiltersBar seasons={filterOptions.seasons} />
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <AnalyticsRankingTable
-          title={SEASON_PERFORMANCE_CONFIG.title}
-          rows={rows}
-          preferredColumns={SEASON_PERFORMANCE_CONFIG.preferredTableColumns}
+      {!hasRows ? (
+        <AnalyticsEmptyState
+          title="No hay datos de seasons para estos filtros"
+          description="Prueba con otra season o vuelve al overview de Operaciones manteniendo los filtros globales."
         />
-        <AnalyticsBarChart
-          title={SEASON_PERFORMANCE_CONFIG.title}
-          rows={rows}
-          labelKeys={SEASON_PERFORMANCE_CONFIG.labelKeys}
-          valueKeys={SEASON_PERFORMANCE_CONFIG.valueKeys}
-          maxItems={10}
-        />
-      </div>
+      ) : (
+        <div className="space-y-6">
+          <AnalyticsSection
+            title="Performance por season"
+            description="Ranking comparativo por contribución, venta, margen y volumen operativo."
+          >
+            <div className="grid gap-6 xl:grid-cols-2">
+              <AnalyticsRankingTable
+                title={SEASON_PERFORMANCE_CONFIG.title}
+                rows={rows}
+                preferredColumns={SEASON_PERFORMANCE_CONFIG.preferredTableColumns}
+              />
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <AnalyticsRankingTable
-          title={SEASON_OPERATIONAL_CONFIG.title}
-          rows={rows}
-          preferredColumns={SEASON_OPERATIONAL_CONFIG.preferredTableColumns}
-        />
-        <AnalyticsBarChart
-          title={SEASON_OPERATIONAL_CONFIG.title}
-          rows={rows}
-          labelKeys={SEASON_OPERATIONAL_CONFIG.labelKeys}
-          valueKeys={SEASON_OPERATIONAL_CONFIG.valueKeys}
-          maxItems={10}
-        />
-      </div>
+              <AnalyticsBarChart
+                title={SEASON_PERFORMANCE_CONFIG.title}
+                rows={rows}
+                labelKeys={SEASON_PERFORMANCE_CONFIG.labelKeys}
+                valueKeys={SEASON_PERFORMANCE_CONFIG.valueKeys}
+                maxItems={10}
+              />
+            </div>
+          </AnalyticsSection>
+
+          <AnalyticsSection
+            title="Riesgo operativo por season"
+            description="Ranking de seasons con mayor late rate, booking delay y retraso medio de producción."
+          >
+            <div className="grid gap-6 xl:grid-cols-2">
+              <AnalyticsRankingTable
+                title={SEASON_OPERATIONAL_CONFIG.title}
+                rows={rows}
+                preferredColumns={SEASON_OPERATIONAL_CONFIG.preferredTableColumns}
+              />
+
+              <AnalyticsBarChart
+                title={SEASON_OPERATIONAL_CONFIG.title}
+                rows={rows}
+                labelKeys={SEASON_OPERATIONAL_CONFIG.labelKeys}
+                valueKeys={SEASON_OPERATIONAL_CONFIG.valueKeys}
+                maxItems={10}
+              />
+            </div>
+          </AnalyticsSection>
+        </div>
+      )}
     </AnalyticsPageShell>
   );
 }

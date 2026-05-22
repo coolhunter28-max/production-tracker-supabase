@@ -2844,3 +2844,114 @@ La UX ejecutiva se simplifica y compacta.
 El frontend queda consolidado como capa de representación.
 La BI Layer mantiene toda la interpretación de negocio.
 El sistema entra en fase de hardening y productividad operacional.
+
+## 62. Analytics UX Hardening — Operating Shell Refinement
+
+### 62.1 Estado consolidado
+
+Tras la consolidación del Command Center y del Analytics Operating Shell, se inicia una fase de hardening UX centrada en productividad diaria, consistencia visual y reducción de fricción operacional.
+
+El objetivo no es añadir nueva BI, sino estabilizar y profesionalizar el uso diario del sistema.
+
+### 62.2 Mejoras consolidadas
+
+Se implementan y consolidan:
+
+- Sidebar persistente en Analytics
+- Sidebar colapsable en desktop
+- Sidebar responsive en móvil/tablet
+- Command Palette con `Ctrl/Cmd + K`
+- Breadcrumbs automáticos
+- Sticky Context Header
+- Sticky Filters en Executive y pantallas críticas
+- Loading skeletons con `loading.tsx`
+- Toast system global con Sonner
+- Empty states reutilizables
+- Section wrappers reutilizables
+- Table shell reutilizable
+- Sticky table headers en tablas operativas críticas
+
+### 62.3 Nuevos componentes base
+
+Componentes creados o consolidados:
+
+```text
+src/components/navigation/app-sidebar.tsx
+src/components/navigation/command-palette.tsx
+src/components/navigation/analytics-page-header.tsx
+src/components/analytics/analytics-empty-state.tsx
+src/components/analytics/analytics-loading-state.tsx
+src/components/analytics/analytics-section.tsx
+src/components/analytics/analytics-table-shell.tsx
+Helper de navegación:
+
+src/lib/navigation/breadcrumbs.ts
+
+Layouts consolidados:
+
+src/app/layout.tsx
+src/app/analytics/layout.tsx
+
+Loading states:
+
+src/app/analytics/loading.tsx
+src/app/analytics/executive/loading.tsx
+src/app/analytics/clientes/loading.tsx
+62.4 Reglas de hardening UX
+
+Reglas consolidadas:
+
+No hacer refactors masivos de spacing.
+Migrar pantallas de forma selectiva.
+Priorizar tablas críticas.
+Usar wrappers visuales reutilizables.
+No crear mega-componentes rígidos.
+No tocar BI durante hardening UX.
+Mantener SQL como fuente de interpretación.
+Mantener React como capa de representación.
+Preservar search params como fuente de contexto.
+62.5 Tabla visual estándar
+
+Se introduce AnalyticsTableShell como patrón visual progresivo para tablas Analytics.
+
+Objetivo:
+
+overflow consistente
+sticky table headers
+border y shadow homogéneos
+empty states coherentes
+densidad operacional
+menor deuda visual
+
+Pantallas migradas inicialmente:
+
+src/components/analytics/executive/ExecutiveActionQueue.tsx
+src/app/analytics/operaciones/customers/page.tsx
+src/app/analytics/operaciones/factories/page.tsx
+62.6 Estado actual del foco UX
+
+Estado:
+
+Command Center ✔
+Analytics Shell ✔
+Sidebar responsive/collapsible ✔
+Command Palette ✔
+Sticky Context Header ✔
+Skeleton loading ✔
+Toast system ✔
+Empty states base ✔
+Table shell base ✔
+Migración selectiva de tablas críticas ✔ iniciada
+62.7 Próximo bloque recomendado
+
+Continuar hardening selectivo:
+
+Operaciones Logistics
+Operaciones Seasons
+Quality Customers / Factories / Models
+Desarrollo Quotes
+Clientes detail tables
+Revisión responsive final
+Consolidación de empty states restantes
+Performance profiling
+Preparación futura para Auth/RLS multiusuario

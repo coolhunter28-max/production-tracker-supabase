@@ -59,6 +59,7 @@ const sections: NavSection[] = [
       { label: "Overview", href: "/analytics/quality" },
       { label: "Customers", href: "/analytics/quality/customers" },
       { label: "Factories", href: "/analytics/quality/factories" },
+      { label: "Styles", href: "/analytics/quality/models" },
     ],
   },
   {
