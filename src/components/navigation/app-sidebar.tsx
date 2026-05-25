@@ -43,6 +43,11 @@ const sections: NavSection[] = [
     items: [{ label: "Overview", href: "/analytics/executive" }],
   },
   {
+    title: "Visual Analytics",
+    icon: <Activity className="h-4 w-4" />,
+    items: [{ label: "Situation", href: "/analytics/situation" }],
+  },
+  {
     title: "Operaciones",
     icon: <Factory className="h-4 w-4" />,
     items: [
