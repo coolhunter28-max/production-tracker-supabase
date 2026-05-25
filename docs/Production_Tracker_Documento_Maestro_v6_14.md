@@ -2955,3 +2955,47 @@ Revisión responsive final
 Consolidación de empty states restantes
 Performance profiling
 Preparación futura para Auth/RLS multiusuario
+
+## 63. Situation Analytics (futuro bloque recomendado)
+
+Objetivo:
+
+Crear una capa visual ejecutiva basada en gráficos y narrativa temporal.
+
+Nueva ruta prevista:
+
+/analytics/situation
+
+Principios:
+
+- reutilizar views existentes
+- no recalcular BI en frontend
+- priorizar storytelling ejecutivo
+- análisis visual por:
+  - season
+  - customer
+  - factory
+  - operativa
+  - timeline
+  - métricas
+
+Visualizaciones previstas:
+
+- evolución temporal
+- comparativas
+- mix operativas
+- correlaciones visuales
+- contribution trends
+- delay evolution
+- QC evolution
+
+Reglas:
+
+❌ no crear dashboards decorativos
+❌ no duplicar Executive
+❌ no introducir lógica BI en charts
+
+✅ charts como lectura ejecutiva
+✅ filtros vía search params
+✅ reutilización de cubos existentes
+✅ narrativa visual compacta

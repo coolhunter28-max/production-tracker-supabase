@@ -1,4 +1,5 @@
 import Link from "next/link";
+
 import {
   getExecutiveDashboardData,
   getExecutiveFilterOptions,
@@ -23,16 +24,19 @@ import {
   getExecutiveActionLifecycle,
   getExecutiveActionQueue,
 } from "@/lib/analytics/executive-actions";
+
+import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
+import { AnalyticsSection } from "@/components/analytics/analytics-section";
+import { ExecutiveActionQueue } from "@/components/analytics/executive/ExecutiveActionQueue";
+import { ExecutiveCorrelationBoard } from "@/components/analytics/executive/ExecutiveCorrelationBoard";
 import { ExecutiveIntelligenceBoard } from "@/components/analytics/executive/ExecutiveIntelligenceBoard";
 import { ExecutiveNarrativePanel } from "@/components/analytics/executive/ExecutiveNarrativePanel";
-import { ExecutiveCorrelationBoard } from "@/components/analytics/executive/ExecutiveCorrelationBoard";
-import { ExecutiveActionQueue } from "@/components/analytics/executive/ExecutiveActionQueue";
 import { AnalyticsPageHeader } from "@/components/navigation/analytics-page-header";
-import { AnalyticsSection } from "@/components/analytics/analytics-section";
+
 import { createClient } from "@/lib/supabase";
+
 import type { ExecutiveFilters } from "@/lib/analytics/types/executive";
 import type { CustomerCommercialAlert } from "@/types/clientes";
-import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
 
 type ExecutivePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -41,7 +45,7 @@ type ExecutivePageProps = {
 type GenericRow = Record<string, unknown>;
 
 function getSingleParam(
-  value: string | string[] | undefined,
+  value: string | string[] | undefined
 ): string | undefined {
   const rawValue = Array.isArray(value) ? value[0] : value;
   const cleanValue = rawValue?.trim();
@@ -50,7 +54,7 @@ function getSingleParam(
 }
 
 function parseExecutiveFilters(
-  params: Record<string, string | string[] | undefined>,
+  params: Record<string, string | string[] | undefined>
 ): ExecutiveFilters {
   const dateType = getSingleParam(params.dateType);
 
@@ -70,7 +74,9 @@ function parseExecutiveFilters(
   };
 }
 
-function buildQueryString(params: Record<string, string | string[] | undefined>) {
+function buildQueryString(
+  params: Record<string, string | string[] | undefined>
+) {
   const query = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -207,7 +213,9 @@ function ExecutiveHeroCard({
     );
   }
 
-  return <div className="rounded-2xl border bg-white p-5 shadow-sm">{content}</div>;
+  return (
+    <div className="rounded-2xl border bg-white p-5 shadow-sm">{content}</div>
+  );
 }
 
 function KpiGrid({ rows }: { rows: GenericRow[] }) {
@@ -257,8 +265,16 @@ function KpiGrid({ rows }: { rows: GenericRow[] }) {
           description="Peso de cada operativa sobre ventas."
         >
           <div className="grid grid-cols-2 gap-3">
-            <CompactMetric label="Mix Xiamen" value={kpi.xiamen_sales_mix_pct} isPct />
-            <CompactMetric label="Mix BSG" value={kpi.bsg_sales_mix_pct} isPct />
+            <CompactMetric
+              label="Mix Xiamen"
+              value={kpi.xiamen_sales_mix_pct}
+              isPct
+            />
+            <CompactMetric
+              label="Mix BSG"
+              value={kpi.bsg_sales_mix_pct}
+              isPct
+            />
           </div>
         </AnalyticsSection>
 
@@ -267,8 +283,16 @@ function KpiGrid({ rows }: { rows: GenericRow[] }) {
           description="Rentabilidad real de cada modelo."
         >
           <div className="grid grid-cols-2 gap-3">
-            <CompactMetric label="Margen Xiamen" value={kpi.xiamen_margin_pct} isPct />
-            <CompactMetric label="Margen BSG" value={kpi.bsg_margin_pct} isPct />
+            <CompactMetric
+              label="Margen Xiamen"
+              value={kpi.xiamen_margin_pct}
+              isPct
+            />
+            <CompactMetric
+              label="Margen BSG"
+              value={kpi.bsg_margin_pct}
+              isPct
+            />
           </div>
         </AnalyticsSection>
       </div>
@@ -358,7 +382,10 @@ function CrossModuleDriverBadge({ driver }: { driver: string }) {
   );
 }
 
-function buildOperacionesCustomerHref(customer: string, filters: ExecutiveFilters) {
+function buildOperacionesCustomerHref(
+  customer: string,
+  filters: ExecutiveFilters
+) {
   const query = new URLSearchParams();
   query.set("customer", customer);
 
@@ -381,16 +408,16 @@ function CommercialPriorityStrip({
 
   const visibleAlerts = selectedCustomer
     ? alerts.filter(
-        (alert) => alert.customer.trim().toLowerCase() === selectedCustomer,
+        (alert) => alert.customer.trim().toLowerCase() === selectedCustomer
       )
     : alerts;
 
   const criticalAlerts = visibleAlerts.filter(
-    (alert) => alert.alert_level === "CRITICAL",
+    (alert) => alert.alert_level === "CRITICAL"
   );
 
   const warningAlerts = visibleAlerts.filter(
-    (alert) => alert.alert_level === "WARNING",
+    (alert) => alert.alert_level === "WARNING"
   );
 
   const priorityAlerts = [...criticalAlerts, ...warningAlerts].slice(0, 5);
@@ -437,9 +464,9 @@ function CommercialPriorityStrip({
 
         {priorityAlerts.length === 0 ? (
           <AnalyticsEmptyState
-          title="Sin prioridades comerciales"
-          description="No hay clientes CRITICAL o WARNING para el filtro actual."
-        />
+            title="Sin prioridades comerciales"
+            description="No hay clientes CRITICAL o WARNING para el filtro actual."
+          />
         ) : (
           <div className="space-y-3">
             {priorityAlerts.map((alert) => (
@@ -463,7 +490,7 @@ function CommercialPriorityStrip({
                   <div className="flex flex-wrap gap-2">
                     <Link
                       href={`/analytics/clientes/${encodeURIComponent(
-                        alert.customer,
+                        alert.customer
                       )}`}
                       className="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted"
                     >
@@ -574,12 +601,14 @@ export default async function ExecutivePage({
             >
               Clientes
             </Link>
+
             <Link
               href="/analytics/operaciones/customers"
               className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
             >
               Operaciones
             </Link>
+
             <Link
               href="/analytics/desarrollo/customers"
               className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted"
@@ -590,7 +619,7 @@ export default async function ExecutivePage({
         }
       />
 
-<section className="sticky top-[168px] z-20 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm backdrop-blur">
+      <section className="rounded-2xl border bg-white p-5 shadow-sm">
         <form method="get" className="grid gap-4 lg:grid-cols-4">
           <div className="space-y-1">
             <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -689,17 +718,24 @@ export default async function ExecutivePage({
 
       <KpiGrid rows={(data.kpis ?? []) as GenericRow[]} />
 
-      <ExecutiveNarrativePanel rows={narrativeRows} queryString={queryString} />
-
       <AnalyticsSection
         title="Action Queue"
         description="Seguimiento operativo consolidado de acciones ejecutivas activas."
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            <CompactMetric label="Workflow Health" value={workflowKpis.workflowHealth} />
-            <CompactMetric label="Without Owner" value={workflowKpis.withoutOwner} />
-            <CompactMetric label="Critical Aging" value={workflowKpis.criticalAging} />
+            <CompactMetric
+              label="Workflow Health"
+              value={workflowKpis.workflowHealth}
+            />
+            <CompactMetric
+              label="Without Owner"
+              value={workflowKpis.withoutOwner}
+            />
+            <CompactMetric
+              label="Critical Aging"
+              value={workflowKpis.criticalAging}
+            />
             <CompactMetric label="Escalations" value={workflowKpis.escalations} />
             <CompactMetric label="Stale" value={workflowKpis.stale} />
           </div>
@@ -717,6 +753,8 @@ export default async function ExecutivePage({
         </div>
       </AnalyticsSection>
 
+      <ExecutiveNarrativePanel rows={narrativeRows} queryString={queryString} />
+
       <details className="rounded-2xl border bg-white shadow-sm">
         <summary className="cursor-pointer list-none px-5 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -728,22 +766,31 @@ export default async function ExecutivePage({
                 Señales ejecutivas detectadas
               </h2>
               <p className="text-sm text-muted-foreground">
-                Desplegar solo cuando haga falta explicar el origen de las acciones.
+                Desplegar solo cuando haga falta explicar el origen de las
+                acciones.
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Critical</p>
-                <p className="text-lg font-semibold">{intelligenceKpis.critical}</p>
+                <p className="text-lg font-semibold">
+                  {intelligenceKpis.critical}
+                </p>
               </div>
+
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Warning</p>
-                <p className="text-lg font-semibold">{intelligenceKpis.warning}</p>
+                <p className="text-lg font-semibold">
+                  {intelligenceKpis.warning}
+                </p>
               </div>
+
               <div className="rounded-xl border px-3 py-2">
                 <p className="text-xs text-muted-foreground">Monitor</p>
-                <p className="text-lg font-semibold">{intelligenceKpis.monitor}</p>
+                <p className="text-lg font-semibold">
+                  {intelligenceKpis.monitor}
+                </p>
               </div>
             </div>
           </div>
@@ -755,6 +802,131 @@ export default async function ExecutivePage({
             rows={intelligenceRows}
             queryString={queryString}
           />
+        </div>
+      </details>
+
+      <details className="rounded-2xl border bg-white shadow-sm">
+        <summary className="cursor-pointer list-none px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Cross-module Risk
+              </p>
+              <h2 className="text-lg font-semibold">
+                Riesgo transversal por cliente
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Desplegar para revisar drivers y explicación BI.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Critical</p>
+                <p className="text-lg font-semibold">
+                  {crossModuleKpis.critical}
+                </p>
+              </div>
+
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Warning</p>
+                <p className="text-lg font-semibold">
+                  {crossModuleKpis.warning}
+                </p>
+              </div>
+
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Monitor</p>
+                <p className="text-lg font-semibold">
+                  {crossModuleKpis.monitor}
+                </p>
+              </div>
+            </div>
+          </div>
+        </summary>
+
+        <div className="space-y-3 border-t p-5">
+          {sortedCrossModuleRows.length === 0 ? (
+            <AnalyticsEmptyState
+              title="Sin riesgo transversal"
+              description="No hay señales cross-module relevantes para el filtro actual."
+            />
+          ) : (
+            sortedCrossModuleRows.slice(0, 8).map((row) => (
+              <div key={row.customer} className="rounded-xl border p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold">{row.customer}</p>
+                      <CrossModuleRiskBadge
+                        level={row.cross_module_risk_level}
+                      />
+                      <CrossModuleDriverBadge driver={row.primary_driver} />
+                    </div>
+
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {row.executive_summary}
+                    </p>
+                  </div>
+
+                  <Link
+                    href={`/analytics/clientes/${encodeURIComponent(
+                      row.customer
+                    )}`}
+                    className="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted"
+                  >
+                    Ver cliente
+                  </Link>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </details>
+
+      <details className="rounded-2xl border bg-white shadow-sm">
+        <summary className="cursor-pointer list-none px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Executive Correlations
+              </p>
+              <h2 className="text-lg font-semibold">
+                Correlaciones entre módulos
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Patrones BI explicativos entre comercial, operaciones,
+                desarrollo y QC.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Critical</p>
+                <p className="text-lg font-semibold">
+                  {correlationKpis.critical}
+                </p>
+              </div>
+
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Warning</p>
+                <p className="text-lg font-semibold">
+                  {correlationKpis.warning}
+                </p>
+              </div>
+
+              <div className="rounded-xl border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Monitor</p>
+                <p className="text-lg font-semibold">
+                  {correlationKpis.monitor}
+                </p>
+              </div>
+            </div>
+          </div>
+        </summary>
+
+        <div className="border-t p-5">
+          <ExecutiveCorrelationBoard rows={correlationRows} />
         </div>
       </details>
 
@@ -779,110 +951,6 @@ export default async function ExecutivePage({
 
         <div className="border-t p-5">
           <CommercialPriorityStrip alerts={alerts} filters={filters} />
-        </div>
-      </details>
-
-      <details className="rounded-2xl border bg-white shadow-sm">
-        <summary className="cursor-pointer list-none px-5 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Cross-module Risk
-              </p>
-              <h2 className="text-lg font-semibold">
-                Riesgo transversal por cliente
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Desplegar para revisar drivers y explicación BI.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-xl border px-3 py-2">
-                <p className="text-xs text-muted-foreground">Critical</p>
-                <p className="text-lg font-semibold">{crossModuleKpis.critical}</p>
-              </div>
-              <div className="rounded-xl border px-3 py-2">
-                <p className="text-xs text-muted-foreground">Warning</p>
-                <p className="text-lg font-semibold">{crossModuleKpis.warning}</p>
-              </div>
-              <div className="rounded-xl border px-3 py-2">
-                <p className="text-xs text-muted-foreground">Monitor</p>
-                <p className="text-lg font-semibold">{crossModuleKpis.monitor}</p>
-              </div>
-            </div>
-          </div>
-        </summary>
-
-        <div className="space-y-3 border-t p-5">
-          {sortedCrossModuleRows.length === 0 ? (
-            <AnalyticsEmptyState
-            title="Sin riesgo transversal"
-            description="No hay señales cross-module relevantes para el filtro actual."
-          />
-          ) : (
-            sortedCrossModuleRows.slice(0, 8).map((row) => (
-              <div key={row.customer} className="rounded-xl border p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold">{row.customer}</p>
-                      <CrossModuleRiskBadge level={row.cross_module_risk_level} />
-                      <CrossModuleDriverBadge driver={row.primary_driver} />
-                    </div>
-
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {row.executive_summary}
-                    </p>
-                  </div>
-
-                  <Link
-                    href={`/analytics/clientes/${encodeURIComponent(row.customer)}`}
-                    className="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted"
-                  >
-                    Ver cliente
-                  </Link>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </details>
-
-      <details className="rounded-2xl border bg-white shadow-sm">
-        <summary className="cursor-pointer list-none px-5 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Executive Correlations
-              </p>
-              <h2 className="text-lg font-semibold">
-                Correlaciones entre módulos
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Patrones BI explicativos entre comercial, operaciones, desarrollo y QC.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-xl border px-3 py-2">
-                <p className="text-xs text-muted-foreground">Critical</p>
-                <p className="text-lg font-semibold">{correlationKpis.critical}</p>
-              </div>
-              <div className="rounded-xl border px-3 py-2">
-                <p className="text-xs text-muted-foreground">Warning</p>
-                <p className="text-lg font-semibold">{correlationKpis.warning}</p>
-              </div>
-              <div className="rounded-xl border px-3 py-2">
-                <p className="text-xs text-muted-foreground">Monitor</p>
-                <p className="text-lg font-semibold">{correlationKpis.monitor}</p>
-              </div>
-            </div>
-          </div>
-        </summary>
-
-        <div className="border-t p-5">
-          <ExecutiveCorrelationBoard rows={correlationRows} />
         </div>
       </details>
     </div>
