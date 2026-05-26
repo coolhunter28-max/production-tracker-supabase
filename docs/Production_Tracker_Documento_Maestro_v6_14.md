@@ -2999,3 +2999,284 @@ Reglas:
 ✅ filtros vía search params
 ✅ reutilización de cubos existentes
 ✅ narrativa visual compacta
+
+64. Situation Analytics — Visual Pivot Explorer
+64.1 Objetivo funcional
+
+Situation Analytics introduce una nueva capa de exploración visual ejecutiva sobre la BI existente del sistema.
+
+Nueva ruta consolidada:
+
+/analytics/situation
+
+El objetivo NO es crear otro dashboard masivo.
+
+Situation Analytics responde:
+
+“¿Cómo se está comportando visualmente el negocio?”
+
+Mientras que Executive responde:
+
+“¿Qué requiere atención inmediata?”
+
+La separación entre ambos módulos es una regla arquitectónica oficial.
+
+64.2 Filosofía del módulo
+
+Situation Analytics funciona como:
+
+Visual Pivot Explorer
+
+No como un dashboard fijo.
+
+El usuario puede:
+
+cambiar dimensiones
+cambiar métricas
+cambiar visualizaciones
+explorar tendencias
+comparar operativas
+detectar patrones visuales
+
+sin introducir nueva lógica BI en frontend.
+
+64.3 Reglas arquitectónicas consolidadas
+
+❌ Frontend no recalcula BI
+❌ Charts no generan métricas derivadas
+❌ No duplicar lógica Executive
+❌ No crear storytelling decorativo
+❌ No crear dashboards gigantes
+
+✅ SQL agrega dinámicamente
+✅ Charts representan datos existentes
+✅ Search params como fuente de verdad
+✅ Multi-select soportado
+✅ Reutilización de Fact Layer existente
+✅ Visualización compacta y operacional
+
+Regla consolidada:
+
+Situation visualiza.
+Executive prioriza.
+SQL interpreta.
+React representa.
+64.4 Fuente principal de datos
+
+Fact Layer reutilizado:
+
+mv_fact_operacion_linea
+
+Objetivo:
+
+Evitar duplicación de cubos y reutilizar la capa analítica consolidada.
+
+64.5 Nueva RPC consolidada
+
+Nueva función SQL prevista:
+
+get_situation_pivot_v2(
+  p_metric,
+  p_dimension,
+  p_chart,
+  p_season,
+  p_customer,
+  p_factory,
+  p_operativa
+)
+
+Objetivos:
+
+agregación dinámica
+pivots reutilizables
+soporte multi-chart
+filtros reales
+evitar lógica condicional en React
+64.6 Métricas consolidadas
+
+Métricas soportadas inicialmente:
+
+Sales $
+Contribution $
+Quantity
+
+Regla:
+
+Las métricas se calculan exclusivamente en SQL.
+
+64.7 Dimensiones soportadas
+
+Dimensiones iniciales:
+
+Customer
+Factory
+Season
+Operativa
+
+Regla UX:
+
+Las dimensiones disponibles dependen de la compatibilidad real con la agregación SQL.
+
+64.8 Tipos de visualización consolidados
+
+Charts soportados:
+
+Bar Chart
+
+Uso recomendado:
+
+rankings
+comparativas
+contribution por dimensión
+Donut Chart
+
+Uso recomendado:
+
+mix operativas
+distribución customer/factory
+participación porcentual
+Line Chart
+
+Uso exclusivo:
+
+timeline
+evolución temporal
+comparativas seasonales
+
+Regla consolidada:
+
+Line charts solo para dimensiones temporales.
+64.9 Arquitectura técnica prevista
+
+Archivos consolidados:
+
+src/app/analytics/situation/page.tsx
+src/lib/analytics/situation.ts
+src/types/situation.ts
+src/components/analytics/situation/SituationChart.tsx
+
+Responsabilidades:
+
+situation.ts
+parse search params
+ejecutar RPC
+normalizar datasets
+SituationChart.tsx
+render dinámico
+selección de chart
+representación visual únicamente
+types/situation.ts
+tipos compartidos
+chart configs
+pivot rows
+64.10 Reglas UX consolidadas
+
+❌ No saturar pantalla
+❌ No mostrar todos los gráficos simultáneamente
+❌ No introducir filtros falsos
+❌ No ocultar contexto analítico
+
+✅ Compactación visual
+✅ Navegación rápida
+✅ Cambio instantáneo de pivots
+✅ Persistencia vía URL
+✅ Exploración visual operacional
+
+Objetivo:
+
+convertir Situation Analytics en una herramienta diaria de exploración rápida y no en un dashboard estático.
+
+64.11 Relación oficial con Executive
+
+Executive:
+
+priorización
+alertas
+acciones
+riesgo
+foco diario
+
+Situation:
+
+exploración visual
+comparativas
+mix
+evolución
+comportamiento agregado
+
+Regla consolidada:
+
+Situation NO reemplaza Executive.
+Executive NO reemplaza Situation.
+
+Ambos módulos son complementarios.
+
+64.12 Estado consolidado actual
+
+Módulo Estado
+
+Situation Analytics ✔ Consolidado conceptualmente
+Visual Pivot Explorer ✔ Definido
+Arquitectura SQL ✔ Definida
+Arquitectura React ✔ Definida
+Search Params Strategy ✔ Consolidada
+Chart Strategy ✔ Consolidada
+BI Reuse Strategy ✔ Consolidada
+
+64.13 Estado funcional implementado
+Ruta consolidada:
+
+/analytics/situation
+
+Implementado:
+
+Visual Pivot Explorer operativo
+Selección dinámica de métricas
+Selección dinámica de dimensiones
+Charts dinámicos:
+Bar
+Donut
+Line
+Multi-select filters:
+customers
+factories
+seasons
+operativas
+Persistencia vía search params
+Responsive layout integrado en Analytics Shell
+Integración completa en Sidebar global
+Reutilización de mv_fact_operacion_linea
+Reutilización de Analytics Operating Shell
+React como capa de representación exclusivamente
+SQL como capa de agregación
+
+Reglas consolidadas:
+
+Frontend no recalcula BI
+Charts no generan lógica analítica
+Donut para distribución/mix
+Line charts limitados a timeline/season
+Bar charts para comparativas/rankings
+Multi-select como exploración pivot
+URL como estado único del análisis
+
+Estado:
+
+✔ Implementado
+✔ Integrado
+✔ Estabilizado
+
+
+Y el “Próximo bloque recomendado” debería pasar a algo mucho más ligero tipo:
+
+# 64.14 Evoluciones futuras opcionales
+
+- saved views
+- compare mode
+- export PNG/PDF
+- stacked charts
+- YOY trends
+- drill-through contextual
+- benchmark overlays
+
+Porque el módulo base ya está cerrado.

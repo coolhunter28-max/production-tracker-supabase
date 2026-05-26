@@ -68,7 +68,17 @@ const sections: NavSection[] = [
     ],
   },
   {
-    title: "Desarrollo",
+    title: "Desarrollo Producto",
+    icon: <GitBranch className="h-4 w-4" />,
+    items: [
+      { label: "Modelos", href: "/desarrollo/modelos" },
+      { label: "Cotizaciones", href: "/desarrollo/cotizaciones" },
+      { label: "Oferta Cliente", href: "/desarrollo/cotizaciones/oferta" },
+      { label: "Calculadora", href: "/desarrollo/calculadora" },
+    ],
+  },
+  {
+    title: "Analytics Desarrollo ",
     icon: <GitBranch className="h-4 w-4" />,
     items: [
       { label: "Overview", href: "/analytics/desarrollo" },
@@ -86,6 +96,7 @@ const sections: NavSection[] = [
     icon: <Activity className="h-4 w-4" />,
     items: [
       { label: "Import", href: "/import" },
+      { label: "Master Sync", href: "/sistema/master-sync" },
       { label: "Alertas", href: "/alertas" },
     ],
   },
