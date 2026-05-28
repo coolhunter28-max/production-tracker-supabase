@@ -32,10 +32,23 @@ export async function POST(request: Request) {
       );
     }
 
+    // Refresh Executive fast materialized views
+    const { error: refreshError } = await supabase.rpc(
+      "refresh_analytics_materialized_views"
+    );
+
+    if (refreshError) {
+      console.error(
+        "[master-sync] refresh_analytics_materialized_views error",
+        refreshError
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       mode,
       result: data,
+      analytics_refresh: refreshError ? "failed" : "ok",
     });
   } catch (error) {
     console.error("[master-sync] unexpected error", error);
@@ -45,7 +58,7 @@ export async function POST(request: Request) {
         ok: false,
         message: "Unexpected Master Sync error",
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
-}   
+}
