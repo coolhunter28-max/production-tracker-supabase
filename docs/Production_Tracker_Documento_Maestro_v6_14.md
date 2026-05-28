@@ -3269,14 +3269,162 @@ Estado:
 
 Y el “Próximo bloque recomendado” debería pasar a algo mucho más ligero tipo:
 
-# 64.14 Evoluciones futuras opcionales
+# 64.14 — Master Sync Pipeline + Situation Analytics Stabilization
 
-- saved views
-- compare mode
-- export PNG/PDF
-- stacked charts
-- YOY trends
-- drill-through contextual
-- benchmark overlays
+## Estado
 
-Porque el módulo base ya está cerrado.
+Se estabiliza el pipeline de sincronización Master para importaciones España y se introduce el módulo visual Situation Analytics.
+
+---
+
+## Situation Analytics
+
+Nueva página:
+
+/analytics/situation
+
+Objetivo:
+Exploración visual dinámica sobre Fact Layer usando agrupación flexible y gráficos interactivos.
+
+Características:
+
+- Métricas:
+  - Sales $
+  - Contribution $
+  - Qty
+
+- Agrupaciones:
+  - Customer
+  - Factory
+  - Season
+  - Supplier
+
+- Tipos de gráfico:
+  - Bar
+  - Donut
+  - Line
+
+- Filtros múltiples:
+  - Customers
+  - Factories
+  - Seasons
+  - Operativas
+
+Principios UX:
+
+- Search params como source of truth
+- Filtros persistentes
+- Componente desacoplado del resto de analytics
+- Compatible con arquitectura Analytics Layer
+
+Notas:
+
+- Donut se utiliza para distribución.
+- Line se utiliza para tendencia temporal.
+- Bar se utiliza para ranking/comparativa.
+
+---
+
+## Master Sync Pipeline
+
+Nueva pantalla:
+
+/sistema/master-sync
+
+Objetivo:
+Sincronizar entidades Master tras importaciones España.
+
+Reglas operativas:
+
+- SOLO ejecutar tras importaciones España.
+- NO ejecutar tras importaciones China.
+- China únicamente actualiza fechas operativas.
+
+Pipeline:
+
+1. Creación automática de modelos
+2. Creación automática de variantes
+3. Upsert de precios master
+4. Backfill modelo_id
+5. Backfill variante_id
+6. Aplicación snapshot histórico
+7. Verificación final
+
+RPC principal:
+
+run_master_sync_pipeline(mode text)
+
+Modos:
+
+- development
+- production
+
+---
+
+## Snapshot Integrity
+
+Regla crítica:
+
+lineas_pedido snapshots son INMUTABLES.
+
+Nunca recalcular snapshots históricos existentes.
+
+Solo aplicar snapshot cuando:
+- master_price_id_used IS NULL
+
+---
+
+## Gestión de incidencias snapshot
+
+Nueva página:
+
+/desarrollo/snapshot-pendiente
+
+Permite detectar:
+
+- líneas sin modelo
+- líneas sin variante
+- líneas sin snapshot
+
+Causa principal detectada:
+referencias vacías o inconsistentes durante importación.
+
+Solución:
+editar manualmente referencia en PO y re-ejecutar Master Sync.
+
+---
+
+## Edición manual de POs
+
+Se restaura funcionalidad completa:
+
+- edición PO
+- edición líneas
+- edición muestras
+- eliminación de PO
+
+Ruta:
+
+/po/[id]/editar
+
+Importante:
+
+La edición manual NO recalcula snapshots históricos automáticamente.
+
+Después de corregir referencias:
+- ejecutar Master Sync
+
+---
+
+## Estado actual Executive Analytics
+
+Situation Analytics actualizado correctamente.
+
+Executive Analytics parcialmente inconsistente debido a:
+- RPCs legacy
+- vistas antiguas
+- tipos TS desalineados
+- dependencias entre get_exec_summary_v2 y get_exec_summary_with_delta_v2
+
+Pendiente:
+refactor limpio y estabilización completa del módulo Executive.

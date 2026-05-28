@@ -91,38 +91,38 @@ export default async function HomePage() {
         </header>
 
         <section className="grid gap-4 md:grid-cols-4">
-          <CommandCard
-            title="Executive Today"
-            icon={<Zap className="h-5 w-5" />}
-            href="/analytics/executive"
-            value={dailyBrief?.critical_count ?? 0}
-            label="críticos"
-            critical
-          />
+        <CommandCard
+  title="Executive Today"
+  icon={<Zap className="h-5 w-5" />}
+  href="/analytics/executive"
+  value={dailyBrief?.critical_open ?? 0}
+  label="acciones críticas"
+  critical
+/>
 
-          <CommandCard
-            title="Production Today"
-            icon={<Factory className="h-5 w-5" />}
-            href="/analytics/operaciones"
-            value={dailyBrief?.production_risk_count ?? 0}
-            label="riesgos producción"
-          />
+<CommandCard
+  title="Production Today"
+  icon={<Factory className="h-5 w-5" />}
+  href="/analytics/operaciones"
+  value={dailyBrief?.critical_customers ?? 0}
+  label="clientes críticos"
+/>
 
-          <CommandCard
-            title="QC Today"
-            icon={<ShieldCheck className="h-5 w-5" />}
-            href="/analytics/quality"
-            value={dailyBrief?.quality_risk_count ?? 0}
-            label="riesgos calidad"
-          />
+<CommandCard
+  title="QC Today"
+  icon={<ShieldCheck className="h-5 w-5" />}
+  href="/analytics/quality"
+  value={dailyBrief?.warning_customers ?? 0}
+  label="clientes warning"
+/>
 
-          <CommandCard
-            title="Development Today"
-            icon={<GitBranch className="h-5 w-5" />}
-            href="/analytics/desarrollo"
-            value={dailyBrief?.development_risk_count ?? 0}
-            label="riesgos desarrollo"
-          />
+<CommandCard
+  title="Development Today"
+  icon={<GitBranch className="h-5 w-5" />}
+  href="/analytics/desarrollo"
+  value={dailyBrief?.total_actions ?? 0}
+  label="acciones abiertas"
+/>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
@@ -192,6 +192,7 @@ export default async function HomePage() {
               <QuickLink href="/qc" label="QC inspecciones" />
               <QuickLink href="/qc/upload" label="Subir QC" />
               <QuickLink href="/alertas" label="Alertas" />
+              <QuickLink href="/analytics/situation" label="Situation / Visual Analytics" />
             </Panel>
           </div>
         </section>

@@ -1,3 +1,4 @@
+import "server-only";
 export type ExecutiveCorrelationSignal = {
     customer: string;
     correlation_type: string;
@@ -12,7 +13,7 @@ export type ExecutiveCorrelationSignal = {
     const supabase = await createClient();
   
     const { data, error } = await supabase
-      .from("vw_exec_cross_module_correlations_v1")
+    .from("mv_exec_cross_module_correlations_fast")
       .select("*")
       .order("correlation_score", { ascending: false });
   

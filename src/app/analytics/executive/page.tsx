@@ -1,10 +1,12 @@
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import {
   getExecutiveDashboardData,
   getExecutiveFilterOptions,
 } from "@/lib/analytics/queries/executive";
-import { getCustomerCommercialAlerts } from "@/lib/analytics/clientes";
 import {
   buildExecutiveIntelligenceKPIs,
   type ExecutiveIntelligenceSignal,
@@ -13,16 +15,19 @@ import { getExecutiveNarrative } from "@/lib/analytics/executive-narrative";
 import {
   buildExecutiveCrossModuleKPIs,
   getExecutiveCrossModuleRisk,
+  type ExecutiveCrossModuleRiskRow,
 } from "@/lib/analytics/executive-cross-module";
 import {
   buildExecutiveCorrelationKPIs,
   getExecutiveCorrelationSignals,
+  type ExecutiveCorrelationSignal,
 } from "@/lib/analytics/executive-correlations";
 import {
   buildExecutiveActionKPIs,
   buildExecutiveWorkflowKPIs,
   getExecutiveActionLifecycle,
   getExecutiveActionQueue,
+  type ExecutiveActionQueueRow,
 } from "@/lib/analytics/executive-actions";
 
 import { AnalyticsEmptyState } from "@/components/analytics/analytics-empty-state";
@@ -33,7 +38,6 @@ import { ExecutiveIntelligenceBoard } from "@/components/analytics/executive/Exe
 import { ExecutiveNarrativePanel } from "@/components/analytics/executive/ExecutiveNarrativePanel";
 import { AnalyticsPageHeader } from "@/components/navigation/analytics-page-header";
 
-import { createClient } from "@/lib/supabase";
 
 import type { ExecutiveFilters } from "@/lib/analytics/types/executive";
 import type { CustomerCommercialAlert } from "@/types/clientes";
@@ -522,19 +526,105 @@ function CommercialPriorityStrip({
   );
 }
 
+
+function actionPriorityToAlertLevel(
+  priority: ExecutiveActionQueueRow["priority"]
+): ExecutiveIntelligenceSignal["alert_level"] {
+  if (priority === "CRITICAL") return "CRITICAL";
+  if (priority === "HIGH") return "WARNING";
+  return "MONITOR";
+}
+
+function buildIntelligenceRowsFromActions(
+  actionRows: ExecutiveActionQueueRow[]
+): ExecutiveIntelligenceSignal[] {
+  return actionRows
+    .filter((action) => Boolean(action.customer))
+    .map((action) => ({
+      customer: action.customer ?? "UNKNOWN",
+      alert_level: actionPriorityToAlertLevel(action.priority),
+      alert_type: action.source_type || action.source_view || "EXECUTIVE_ACTION",
+      alert_reason: action.description ?? action.title ?? null,
+      recommended_action: action.recommended_action ?? null,
+      alert_priority: action.priority_rank ?? null,
+      contextual_business_profile:
+        typeof action.metadata?.contextual_business_profile === "string"
+          ? action.metadata.contextual_business_profile
+          : null,
+      contextual_business_score:
+        typeof action.metadata?.contextual_business_score === "number"
+          ? action.metadata.contextual_business_score
+          : null,
+      customer_friction_score:
+        typeof action.metadata?.customer_friction_score === "number"
+          ? action.metadata.customer_friction_score
+          : null,
+      health_signal:
+        typeof action.metadata?.health_signal === "string"
+          ? action.metadata.health_signal
+          : null,
+      health_reason:
+        typeof action.metadata?.health_reason === "string"
+          ? action.metadata.health_reason
+          : null,
+      volume_signal:
+        typeof action.metadata?.volume_signal === "string"
+          ? action.metadata.volume_signal
+          : null,
+      qty_growth_pct:
+        typeof action.metadata?.qty_growth_pct === "number"
+          ? action.metadata.qty_growth_pct
+          : null,
+      sell_growth_pct:
+        typeof action.metadata?.sell_growth_pct === "number"
+          ? action.metadata.sell_growth_pct
+          : null,
+      xiamen_context_flag:
+        typeof action.metadata?.xiamen_context_flag === "boolean"
+          ? action.metadata.xiamen_context_flag
+          : null,
+      customer_size_band:
+        typeof action.metadata?.customer_size_band === "string"
+          ? action.metadata.customer_size_band
+          : null,
+      profitability_band:
+        typeof action.metadata?.profitability_band === "string"
+          ? action.metadata.profitability_band
+          : null,
+      contribution_pct:
+        typeof action.metadata?.contribution_pct === "number"
+          ? action.metadata.contribution_pct
+          : null,
+      xiamen_sales_mix_pct:
+        typeof action.metadata?.xiamen_sales_mix_pct === "number"
+          ? action.metadata.xiamen_sales_mix_pct
+          : null,
+      bsg_sales_mix_pct:
+        typeof action.metadata?.bsg_sales_mix_pct === "number"
+          ? action.metadata.bsg_sales_mix_pct
+          : null,
+      score_model:
+        typeof action.metadata?.score_model === "string"
+          ? action.metadata.score_model
+          : null,
+      health_priority:
+        typeof action.metadata?.health_priority === "number"
+          ? action.metadata.health_priority
+          : null,
+      source_module: "COMMERCIAL",
+    }));
+}
+
 export default async function ExecutivePage({
   searchParams,
 }: ExecutivePageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const filters = parseExecutiveFilters(resolvedSearchParams);
   const queryString = buildQueryString(resolvedSearchParams);
-  const supabase = await createClient();
 
   const [
     data,
     filterOptions,
-    alerts,
-    intelligenceResponse,
     narrativeRows,
     crossModuleRows,
     correlationRows,
@@ -543,14 +633,6 @@ export default async function ExecutivePage({
   ] = await Promise.all([
     getExecutiveDashboardData(filters),
     getExecutiveFilterOptions(),
-    getCustomerCommercialAlerts(supabase),
-    supabase.rpc("get_exec_intelligence_focus_season_v1", {
-      p_season: filters.season ?? null,
-      p_customer: filters.customer ?? null,
-      p_factory: filters.factory ?? null,
-      p_alert_level: null,
-      p_source_module: null,
-    }),
     getExecutiveNarrative({
       season: filters.season ?? null,
       customer: filters.customer ?? null,
@@ -562,8 +644,15 @@ export default async function ExecutivePage({
     getExecutiveActionLifecycle(),
   ]);
 
-  const intelligenceRows =
-    (intelligenceResponse.data ?? []) as ExecutiveIntelligenceSignal[];
+  // Temporal hardening:
+  // La inteligencia ejecutiva se alimenta desde Action Queue para evitar
+  // bloquear Executive con RPCs lentas durante esta fase.
+  // Cross-module y Correlations ya leen de materialized views rápidas.
+  const intelligenceRows = buildIntelligenceRowsFromActions(actionRows);
+
+  const alerts = intelligenceRows.filter((row: ExecutiveIntelligenceSignal) =>
+    ["CRITICAL", "WARNING"].includes(String(row.alert_level))
+  ) as unknown as CustomerCommercialAlert[];
 
   const intelligenceKpis = buildExecutiveIntelligenceKPIs(intelligenceRows);
   const crossModuleKpis = buildExecutiveCrossModuleKPIs(crossModuleRows);

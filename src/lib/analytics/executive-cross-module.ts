@@ -1,3 +1,4 @@
+import "server-only";
 import { createClient } from "@/lib/supabase";
 
 export type CrossModuleRiskLevel =
@@ -67,7 +68,7 @@ export async function getExecutiveCrossModuleRisk(): Promise<
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("vw_exec_cross_module_risk_v3")
+  .from("mv_exec_cross_module_risk_fast")
     .select("*")
     .in("cross_module_risk_level", ["CRITICAL", "WARNING", "MONITOR"])
     .order("cross_module_risk_score", { ascending: false });

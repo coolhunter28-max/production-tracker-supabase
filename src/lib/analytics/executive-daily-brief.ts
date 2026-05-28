@@ -8,7 +8,13 @@ export type ExecutiveDailyBrief = {
   development_risk_count: number;
   open_actions_count: number;
   resolved_today_count: number;
-};
+      critical_open: number | null;
+    critical_customers: number | null;
+    warning_customers: number | null;
+    total_actions: number | null;
+    executive_headline: string | null;
+    executive_focus: string | null;
+  };
 
 export async function getExecutiveDailyBrief(): Promise<ExecutiveDailyBrief | null> {
   const supabase = createClient();

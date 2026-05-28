@@ -36,6 +36,9 @@ export interface CustomerHealthSignal {
   qty_growth_pct?: number | null;
   sell_growth_pct?: number | null;
   xiamen_context_flag: boolean | null;
+  xiamen_latest_season?: string | null;
+xiamen_previous_season?: string | null;
+po_count_growth_pct?: number | null;
 }
 
 function readParam(

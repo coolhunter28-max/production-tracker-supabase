@@ -5,11 +5,12 @@ export type CustomerBusinessProfile =
   | "RISKY"
   | "LOW_VALUE";
 
-export type CustomerBusinessMatrixSort =
-  | "business_score.desc"
+  export type CustomerBusinessMatrixSort =
+  | "priority.desc"
   | "business_score.asc"
-  | "friction_score.desc"
+  | "business_score.desc"
   | "friction_score.asc"
+  | "friction_score.desc"
   | "customer.asc"
   | "customer.desc";
 

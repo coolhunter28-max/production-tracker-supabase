@@ -44,17 +44,11 @@ export async function getExecutiveKPIs(
   const customer = emptyToNull(filters.customer);
   const factory = emptyToNull(filters.factory);
 
-  const { data, error } = season
-    ? await supabase.rpc("get_exec_summary_with_delta_v2", {
-        p_season: season,
-        p_customer: customer,
-        p_factory: factory,
-      })
-    : await supabase.rpc("get_exec_summary_v2", {
-        p_season: null,
-        p_customer: customer,
-        p_factory: factory,
-      });
+  const { data, error } = await supabase.rpc("get_exec_summary_v2", {
+    p_season: season,
+    p_customer: customer,
+    p_factory: factory,
+  });
 
   if (error) {
     throw new Error(`Error loading Executive KPIs: ${error.message}`);
