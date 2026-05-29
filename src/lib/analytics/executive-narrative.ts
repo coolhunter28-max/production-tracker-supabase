@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createClient } from "@/lib/supabase";
 
 export type ExecutiveNarrativeFilters = {
@@ -31,14 +33,19 @@ type MorningBriefRow = {
   critical_open: number | null;
   no_followup_actions: number | null;
   workflow_resolution_score: number | null;
-  workflow_resolution_health: "CRITICAL" | "WARNING" | "ACTIVE" | "HEALTHY" | null;
+  workflow_resolution_health:
+    | "CRITICAL"
+    | "WARNING"
+    | "ACTIVE"
+    | "HEALTHY"
+    | null;
 
   top_customer: string | null;
   top_customer_risk_level: string | null;
   top_customer_risk_score: number | null;
   top_customer_summary: string | null;
 
-  executive_health: "CRITICAL" | "WARNING" | "HEALTHY";
+  executive_health: "CRITICAL" | "WARNING" | "HEALTHY" | null;
   executive_headline: string | null;
   executive_focus: string | null;
   resolution_summary: string | null;
@@ -51,7 +58,7 @@ function buildCustomerHref(customer: string | null) {
 function toSeverity(value: string | null): ExecutiveNarrativeSeverity {
   if (value === "CRITICAL") return "CRITICAL";
   if (value === "WARNING") return "WARNING";
-  if (value === "HEALTHY") return "HEALTHY";
+  if (value === "HEALTHY" || value === "ACTIVE") return "HEALTHY";
   return "INFO";
 }
 
@@ -61,11 +68,18 @@ export async function getExecutiveNarrative(
   const supabase = createClient();
 
   const { data, error } = await supabase
-    .from("vw_exec_morning_brief_v1")
+  .from("mv_exec_morning_brief_fast")
     .select("*")
-    .single();
+    .order("generated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (error || !data) {
+  if (error) {
+    console.error("[getExecutiveNarrative] vw_exec_morning_brief_v1 error:", error);
+    throw new Error(`Error loading Executive Narrative: ${error.message}`);
+  }
+
+  if (!data) {
     return [];
   }
 

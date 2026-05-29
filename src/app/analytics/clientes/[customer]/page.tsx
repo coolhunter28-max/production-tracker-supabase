@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@/lib/supabase";
 import {
   getCustomerDetailBundle,
   getCustomerHealthSignal,
 } from "@/lib/analytics/clientes";
 import type { CustomerBusinessProfile } from "@/types/clientes";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type HealthSignal =
   | "HEALTHY"
@@ -277,6 +280,8 @@ export default async function AnalyticsClienteDetailPage({
 }: {
   params: { customer: string };
 }) {
+  noStore();
+
   const decodedCustomer = decodeURIComponent(params.customer);
 
   const supabase = await createClient();
