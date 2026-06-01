@@ -191,14 +191,20 @@ export default function AlertasDashboard() {
             </tr>
           </thead>
           <tbody>
-            {filtradas.map((a) => {
-              const dd = daysDiffToToday(a.fecha);
-              const msg =
-                dd < 0
-                  ? `Con ${Math.abs(dd)} día(s) de retraso`
-                  : dd === 0
-                  ? "Es hoy"
-                  : `Faltan ${dd} día(s)`;
+          {filtradas.map((a) => {
+  const po = Array.isArray(a.po) ? a.po[0] : a.po;
+  const linea = Array.isArray(a.linea_pedido)
+    ? a.linea_pedido[0]
+    : a.linea_pedido;
+  const muestra = Array.isArray(a.muestra) ? a.muestra[0] : a.muestra;
+
+  const dd = daysDiffToToday(a.fecha);
+  const msg =
+    dd < 0
+      ? `Con ${Math.abs(dd)} día(s) de retraso`
+      : dd === 0
+      ? "Es hoy"
+      : `Faltan ${dd} día(s)`;
 
               return (
                 <tr key={a.id} className="border-b hover:bg-gray-50">
