@@ -8,10 +8,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-/* -------------------------------------------------
- * DEFECT SORTING HELPERS
- * ------------------------------------------------- */
-
 const TYPE_ORDER: Record<string, number> = {
   critical: 1,
   major: 2,
@@ -24,6 +20,16 @@ const STATUS_ORDER: Record<string, number> = {
   open: 3,
   closed: 4,
 };
+
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
 
 function getEffectiveStatus(defect: any) {
   const { action_status, action_due_date } = defect;
@@ -41,37 +47,25 @@ function getEffectiveStatus(defect: any) {
 
 function sortDefects(defects: any[]) {
   return [...defects].sort((a, b) => {
-    // 1️⃣ Tipo
-    const typeA =
-      TYPE_ORDER[a.defect_type?.toLowerCase()] ?? 99;
-    const typeB =
-      TYPE_ORDER[b.defect_type?.toLowerCase()] ?? 99;
+    const typeA = TYPE_ORDER[a.defect_type?.toLowerCase()] ?? 99;
+    const typeB = TYPE_ORDER[b.defect_type?.toLowerCase()] ?? 99;
 
     if (typeA !== typeB) return typeA - typeB;
 
-    // 2️⃣ Estado efectivo
-    const statusA =
-      STATUS_ORDER[getEffectiveStatus(a)] ?? 99;
-    const statusB =
-      STATUS_ORDER[getEffectiveStatus(b)] ?? 99;
+    const statusA = STATUS_ORDER[getEffectiveStatus(a)] ?? 99;
+    const statusB = STATUS_ORDER[getEffectiveStatus(b)] ?? 99;
 
     if (statusA !== statusB) return statusA - statusB;
 
-    // 3️⃣ Fallback estable
     return a.id.localeCompare(b.id);
   });
 }
-
-/* -------------------------------------------------
- * PAGE
- * ------------------------------------------------- */
 
 export default async function QCInspectionPage({
   params,
 }: {
   params: { id: string };
 }) {
-  /* 1) INSPECTION + DEFECTS */
   const { data: inspection, error } = await supabase
     .from("qc_inspections")
     .select(`
@@ -89,26 +83,19 @@ export default async function QCInspectionPage({
     return <div className="p-6">Inspection not found</div>;
   }
 
-  /* 2) PPS PHOTOS */
   const { data: ppsPhotos } = await supabase
     .from("qc_pps_photos")
     .select("*")
     .eq("po_id", inspection.po_id)
     .order("photo_order", { ascending: true });
 
-  /* 3) SUMMARY */
+  const defects = inspection.qc_defects ?? [];
   const inspected = inspection.qty_inspected || 0;
 
   const sumByType = (type: string) =>
-    inspection.qc_defects
-      .filter((d: any) =>
-        d.defect_type?.toLowerCase().includes(type)
-      )
-      .reduce(
-        (s: number, d: any) =>
-          s + (d.defect_quantity || 0),
-        0
-      );
+    defects
+      .filter((d: any) => d.defect_type?.toLowerCase().includes(type))
+      .reduce((sum: number, d: any) => sum + (d.defect_quantity || 0), 0);
 
   const critical = sumByType("critical");
   const major = sumByType("major");
@@ -120,47 +107,123 @@ export default async function QCInspectionPage({
 
   return (
     <div className="p-6 space-y-8">
-      {/* NAV */}
       <div className="flex gap-4 text-sm">
         <Link href="/qc" className="text-blue-600 hover:underline">
           ← Back to inspections
         </Link>
+
         <Link href="/" className="text-gray-600 hover:underline">
           Home
         </Link>
-<Link
-  href={`/api/qc/inspections/${params.id}/report`}
-  className="text-blue-600 hover:underline"
->
-  Download PDF →
-</Link>
 
+        <Link
+          href={`/api/qc/inspections/${params.id}/report`}
+          className="text-blue-600 hover:underline"
+        >
+          Download PDF →
+        </Link>
       </div>
 
-      {/* HEADER */}
-      <h1 className="text-2xl font-bold">
-        QC Inspection – {inspection.po_number}
-      </h1>
+      <div>
+        <h1 className="text-2xl font-bold">
+          QC Inspection – {inspection.po_number}
+        </h1>
 
-      {/* SUMMARY */}
-      <div className="border rounded p-4 space-y-2">
+        <p className="mt-1 text-sm text-gray-600">
+          {inspection.inspection_type || "Inspection type not specified"}
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <div className="rounded border p-4">
+          <div className="text-xs text-gray-500">Report</div>
+          <div className="font-semibold">
+            {inspection.report_number || "—"}
+          </div>
+        </div>
+
+        <div className="rounded border p-4">
+          <div className="text-xs text-gray-500">Inspection Type</div>
+          <div className="font-semibold">
+            {inspection.inspection_type || "—"}
+          </div>
+        </div>
+
+        <div className="rounded border p-4">
+          <div className="text-xs text-gray-500">Inspector</div>
+          <div className="font-semibold">
+            {inspection.inspector || "—"}
+          </div>
+        </div>
+
+        <div className="rounded border p-4">
+          <div className="text-xs text-gray-500">Date</div>
+          <div className="font-semibold">
+            {formatDate(inspection.inspection_date)}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-5">
+        <div className="rounded border p-4">
+          <div className="text-xs text-gray-500">Customer</div>
+          <div className="font-semibold">{inspection.customer || "—"}</div>
+        </div>
+
+        <div className="rounded border p-4">
+          <div className="text-xs text-gray-500">Season</div>
+          <div className="font-semibold">{inspection.season || "—"}</div>
+        </div>
+
+        <div className="rounded border p-4">
+          <div className="text-xs text-gray-500">Factory</div>
+          <div className="font-semibold">{inspection.factory || "—"}</div>
+        </div>
+
+        <div className="rounded border p-4">
+          <div className="text-xs text-gray-500">Style</div>
+          <div className="font-semibold">{inspection.style || "—"}</div>
+        </div>
+
+        <div className="rounded border p-4">
+          <div className="text-xs text-gray-500">Color</div>
+          <div className="font-semibold">{inspection.color || "—"}</div>
+        </div>
+      </div>
+
+      <div className="rounded border p-4 space-y-3">
         <div className="font-semibold">Inspection Summary</div>
+
         <div className="text-sm">
           Inspected: <b>{inspected}</b> pairs — Total defects:{" "}
           <b>{totalDefects}</b> ({pct(totalDefects)}%)
         </div>
+
+        <div className="flex flex-wrap gap-3 text-sm">
+          <span className="rounded bg-red-50 px-3 py-1 text-red-700">
+            Critical: <b>{critical}</b>
+          </span>
+
+          <span className="rounded bg-orange-50 px-3 py-1 text-orange-700">
+            Major: <b>{major}</b>
+          </span>
+
+          <span className="rounded bg-yellow-50 px-3 py-1 text-yellow-700">
+            Minor: <b>{minor}</b>
+          </span>
+        </div>
       </div>
 
-      {/* PPS */}
       <div>
         <div className="font-semibold mb-2">PPS / Style View</div>
+
         {ppsPhotos?.length ? (
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             {ppsPhotos.map((p: any) => (
               <Image
                 key={p.id}
                 src={p.photo_url}
-                alt="PPS"
+                alt={p.photo_name || "PPS"}
                 width={120}
                 height={120}
                 className="rounded border object-cover"
@@ -168,24 +231,25 @@ export default async function QCInspectionPage({
             ))}
           </div>
         ) : (
-          <div className="text-sm text-gray-500">
-            No PPS images
-          </div>
+          <div className="text-sm text-gray-500">No PPS images</div>
         )}
       </div>
 
-      {/* DEFECTS */}
       <div className="space-y-6">
         <div className="font-semibold">Defects</div>
 
-        {sortDefects(inspection.qc_defects).map(
-          (defect: any) => (
+        {defects.length > 0 ? (
+          sortDefects(defects).map((defect: any) => (
             <DefectBlock
               key={defect.id}
               defect={defect}
               inspectionId={inspection.id}
             />
-          )
+          ))
+        ) : (
+          <div className="rounded border p-4 text-sm text-gray-500">
+            No defects registered for this inspection.
+          </div>
         )}
       </div>
     </div>

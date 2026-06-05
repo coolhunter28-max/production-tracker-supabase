@@ -1,5 +1,4 @@
-﻿// src/app/qc/page.tsx
-import { createClient } from "@supabase/supabase-js";
+﻿import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 
 const supabase = createClient(
@@ -7,12 +6,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-/* -------------------------------------------------
- * STATUS HELPERS
- * ------------------------------------------------- */
 function computeInspectionStatus(inspection: any) {
   const defects = inspection.qc_defects || [];
-
   let hasOverdue = false;
   let hasOpen = false;
 
@@ -43,26 +38,19 @@ function StatusBadge({ status }: { status: string }) {
   };
 
   return (
-    <span
-      className={`px-2 py-0.5 rounded text-xs font-medium ${
-        styles[status] ?? ""
-      }`}
-    >
+    <span className={`rounded px-2 py-0.5 text-xs font-medium ${styles[status] ?? ""}`}>
       {status.toUpperCase()}
     </span>
   );
 }
 
-/* -------------------------------------------------
- * QUERY HELPERS (KPIs clicables + reset + toggle)
- * ------------------------------------------------- */
 type QCSearchParams = {
   status?: string;
   customer?: string;
   factory?: string;
   overdue?: string;
-  date_from?: string; // YYYY-MM-DD
-  date_to?: string; // YYYY-MM-DD
+  date_from?: string;
+  date_to?: string;
 };
 
 function normalizeParams(current: QCSearchParams) {
@@ -82,21 +70,12 @@ function buildHref(
   patch: Partial<QCSearchParams>
 ) {
   const params = new URLSearchParams();
+  const next = { ...normalizeParams(current), ...patch };
 
-  const next = {
-    ...normalizeParams(current),
-    ...patch,
-  };
-
-  // Guardamos solo los que no sean "all" o no estén vacíos
-  if (next.status && next.status !== "all") params.set("status", next.status);
-  if (next.customer && next.customer !== "all")
-    params.set("customer", next.customer);
-  if (next.factory && next.factory !== "all")
-    params.set("factory", next.factory);
-  if (next.overdue && next.overdue !== "all")
-    params.set("overdue", next.overdue);
-
+  if (next.status !== "all") params.set("status", next.status);
+  if (next.customer !== "all") params.set("customer", next.customer);
+  if (next.factory !== "all") params.set("factory", next.factory);
+  if (next.overdue !== "all") params.set("overdue", next.overdue);
   if (next.date_from) params.set("date_from", next.date_from);
   if (next.date_to) params.set("date_to", next.date_to);
 
@@ -104,24 +83,19 @@ function buildHref(
   return qs ? `${base}?${qs}` : base;
 }
 
-// Toggle de KPI: si clicas el mismo status que ya tienes, vuelve a all
 function buildKpiHref(base: string, current: QCSearchParams, kpiStatus: string) {
   const cur = normalizeParams(current);
   const nextStatus = cur.status === kpiStatus ? "all" : kpiStatus;
   return buildHref(base, current, { status: nextStatus });
 }
 
-/* -------------------------------------------------
- * DATE HELPERS
- * ------------------------------------------------- */
 function isValidDateString(s: any) {
-  if (!s || typeof s !== "string") return false;
-  // simple: YYYY-MM-DD
-  return /^\d{4}-\d{2}-\d{2}$/.test(s);
+  return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
 function inRange(dateStr: string | null | undefined, from?: string, to?: string) {
   if (!dateStr) return false;
+
   const d = new Date(dateStr).getTime();
   if (!Number.isFinite(d)) return false;
 
@@ -129,25 +103,20 @@ function inRange(dateStr: string | null | undefined, from?: string, to?: string)
     const df = new Date(from).getTime();
     if (Number.isFinite(df) && d < df) return false;
   }
+
   if (to) {
-    // incluimos el día completo
     const dt = new Date(to).getTime();
     if (Number.isFinite(dt) && d > dt) return false;
   }
+
   return true;
 }
 
-/* -------------------------------------------------
- * PAGE
- * ------------------------------------------------- */
 export default async function QCPage({
   searchParams,
 }: {
   searchParams: QCSearchParams;
 }) {
-  /* -------------------------------------------------
-   * 1) LOAD DATA
-   * ------------------------------------------------- */
   const { data: inspections, error } = await supabase
     .from("qc_inspections")
     .select(
@@ -160,7 +129,7 @@ export default async function QCPage({
 
   if (error) {
     return (
-      <div className="p-6 space-y-2">
+      <div className="space-y-2 p-6">
         <div className="font-semibold text-red-600">
           Failed to load inspections
         </div>
@@ -170,13 +139,7 @@ export default async function QCPage({
   }
 
   const safeInspections = inspections ?? [];
-  if (safeInspections.length === 0) {
-    return <div className="p-6">No inspections</div>;
-  }
 
-  /* -------------------------------------------------
-   * 2) ENRICH
-   * ------------------------------------------------- */
   const enriched = safeInspections.map((i: any) => {
     const computedStatus = computeInspectionStatus(i);
 
@@ -194,29 +157,22 @@ export default async function QCPage({
     };
   });
 
-  /* -------------------------------------------------
-   * 3) FILTERS (context vs final)
-   * ------------------------------------------------- */
   const sp = normalizeParams(searchParams);
-
-  const spStatus = sp.status;
-  const spCustomer = sp.customer;
-  const spFactory = sp.factory;
-  const spOverdue = sp.overdue;
 
   const spDateFrom = isValidDateString(sp.date_from) ? sp.date_from : "";
   const spDateTo = isValidDateString(sp.date_to) ? sp.date_to : "";
 
-  // A) Contexto: customer/factory/overdue/date (SIN status)
   let contextFiltered = [...enriched];
 
-  if (spCustomer !== "all") {
-    contextFiltered = contextFiltered.filter((i) => i.customer === spCustomer);
+  if (sp.customer !== "all") {
+    contextFiltered = contextFiltered.filter((i) => i.customer === sp.customer);
   }
-  if (spFactory !== "all") {
-    contextFiltered = contextFiltered.filter((i) => i.factory === spFactory);
+
+  if (sp.factory !== "all") {
+    contextFiltered = contextFiltered.filter((i) => i.factory === sp.factory);
   }
-  if (spOverdue === "yes") {
+
+  if (sp.overdue === "yes") {
     contextFiltered = contextFiltered.filter((i) => i.hasOverdue);
   }
 
@@ -226,25 +182,21 @@ export default async function QCPage({
     );
   }
 
-  // B) Tabla final: incluye status
   let filtered = [...contextFiltered];
 
-  if (spStatus !== "all") {
-    filtered = filtered.filter((i) => i.computedStatus === spStatus);
+  if (sp.status !== "all") {
+    filtered = filtered.filter((i) => i.computedStatus === sp.status);
   }
 
-  /* -------------------------------------------------
-   * 4) SORT BY PRIORITY + date desc
-   * ------------------------------------------------- */
-  const STATUS_ORDER: Record<string, number> = {
+  const statusOrder: Record<string, number> = {
     blocked: 1,
     pending: 2,
     ok: 3,
   };
 
   filtered = [...filtered].sort((a, b) => {
-    const sa = STATUS_ORDER[a.computedStatus] ?? 99;
-    const sb = STATUS_ORDER[b.computedStatus] ?? 99;
+    const sa = statusOrder[a.computedStatus] ?? 99;
+    const sb = statusOrder[b.computedStatus] ?? 99;
     if (sa !== sb) return sa - sb;
 
     const da = a.inspection_date ? new Date(a.inspection_date).getTime() : 0;
@@ -254,18 +206,12 @@ export default async function QCPage({
     return String(a.id).localeCompare(String(b.id));
   });
 
-  /* -------------------------------------------------
-   * 5) COUNTERS (CONTEXTUALES)
-   * ------------------------------------------------- */
   const counters = {
     blocked: contextFiltered.filter((i) => i.computedStatus === "blocked").length,
     pending: contextFiltered.filter((i) => i.computedStatus === "pending").length,
     ok: contextFiltered.filter((i) => i.computedStatus === "ok").length,
   };
 
-  /* -------------------------------------------------
-   * 6) UNIQUE VALUES
-   * ------------------------------------------------- */
   const customers = Array.from(
     new Set(enriched.map((i) => i.customer).filter(Boolean))
   ).sort();
@@ -274,27 +220,31 @@ export default async function QCPage({
     new Set(enriched.map((i) => i.factory).filter(Boolean))
   ).sort();
 
-  /* -------------------------------------------------
-   * RENDER
-   * ------------------------------------------------- */
   const activeKpiClass = "ring-2 ring-black/10";
 
   return (
-    <div className="p-6 space-y-6">
-      <Link href="/" className="text-sm text-blue-600 hover:underline">
-        ← Back to home
-      </Link>
+    <div className="space-y-6 p-6">
+      <div className="flex items-center justify-between gap-4">
+        <Link href="/" className="text-sm text-blue-600 hover:underline">
+          ← Back to home
+        </Link>
+
+        <Link
+          href="/qc/upload"
+          className="rounded bg-slate-900 px-3 py-2 text-sm text-white hover:bg-slate-800"
+        >
+          Subir QC Inspection
+        </Link>
+      </div>
 
       <h1 className="text-2xl font-bold">Quality Control (QC)</h1>
 
-      {/* KPIs (CLICKABLES) + RESET */}
-      <div className="flex gap-4 items-stretch">
+      <div className="flex items-stretch gap-4">
         <Link
           href={buildKpiHref("/qc", searchParams, "blocked")}
-          className={`border rounded px-4 py-2 bg-red-50 hover:opacity-90 block w-28 ${
-            spStatus === "blocked" ? activeKpiClass : ""
+          className={`block w-28 rounded border bg-red-50 px-4 py-2 hover:opacity-90 ${
+            sp.status === "blocked" ? activeKpiClass : ""
           }`}
-          title="Click to filter (click again to clear)"
         >
           <div className="text-xs text-gray-500">Blocked</div>
           <div className="text-xl font-semibold text-red-700">
@@ -304,10 +254,9 @@ export default async function QCPage({
 
         <Link
           href={buildKpiHref("/qc", searchParams, "pending")}
-          className={`border rounded px-4 py-2 bg-orange-50 hover:opacity-90 block w-28 ${
-            spStatus === "pending" ? activeKpiClass : ""
+          className={`block w-28 rounded border bg-orange-50 px-4 py-2 hover:opacity-90 ${
+            sp.status === "pending" ? activeKpiClass : ""
           }`}
-          title="Click to filter (click again to clear)"
         >
           <div className="text-xs text-gray-500">Pending</div>
           <div className="text-xl font-semibold text-orange-700">
@@ -317,10 +266,9 @@ export default async function QCPage({
 
         <Link
           href={buildKpiHref("/qc", searchParams, "ok")}
-          className={`border rounded px-4 py-2 bg-green-50 hover:opacity-90 block w-28 ${
-            spStatus === "ok" ? activeKpiClass : ""
+          className={`block w-28 rounded border bg-green-50 px-4 py-2 hover:opacity-90 ${
+            sp.status === "ok" ? activeKpiClass : ""
           }`}
-          title="Click to filter (click again to clear)"
         >
           <div className="text-xs text-gray-500">OK</div>
           <div className="text-xl font-semibold text-green-700">
@@ -332,21 +280,19 @@ export default async function QCPage({
 
         <Link
           href="/qc"
-          className="border rounded px-3 py-2 text-sm hover:bg-gray-50 self-center"
-          title="Clear all filters"
+          className="self-center rounded border px-3 py-2 text-sm hover:bg-gray-50"
         >
           Reset filters
         </Link>
       </div>
 
-      {/* FILTERS (APPLY + RESET) */}
-      <form method="GET" className="flex gap-3 items-end flex-wrap">
+      <form method="GET" className="flex flex-wrap items-end gap-3">
         <div>
           <label className="text-xs">Status</label>
           <select
             name="status"
-            defaultValue={spStatus}
-            className="border rounded px-2 py-1 text-sm"
+            defaultValue={sp.status}
+            className="rounded border px-2 py-1 text-sm"
           >
             <option value="all">All</option>
             <option value="blocked">Blocked</option>
@@ -359,13 +305,13 @@ export default async function QCPage({
           <label className="text-xs">Customer</label>
           <select
             name="customer"
-            defaultValue={spCustomer}
-            className="border rounded px-2 py-1 text-sm"
+            defaultValue={sp.customer}
+            className="rounded border px-2 py-1 text-sm"
           >
             <option value="all">All</option>
             {customers.map((c) => (
-              <option key={c} value={c}>
-                {c}
+              <option key={String(c)} value={String(c)}>
+                {String(c)}
               </option>
             ))}
           </select>
@@ -375,13 +321,13 @@ export default async function QCPage({
           <label className="text-xs">Factory</label>
           <select
             name="factory"
-            defaultValue={spFactory}
-            className="border rounded px-2 py-1 text-sm"
+            defaultValue={sp.factory}
+            className="rounded border px-2 py-1 text-sm"
           >
             <option value="all">All</option>
             {factories.map((f) => (
-              <option key={f} value={f}>
-                {f}
+              <option key={String(f)} value={String(f)}>
+                {String(f)}
               </option>
             ))}
           </select>
@@ -391,22 +337,21 @@ export default async function QCPage({
           <label className="text-xs">Has overdue</label>
           <select
             name="overdue"
-            defaultValue={spOverdue}
-            className="border rounded px-2 py-1 text-sm"
+            defaultValue={sp.overdue}
+            className="rounded border px-2 py-1 text-sm"
           >
             <option value="all">All</option>
             <option value="yes">Yes</option>
           </select>
         </div>
 
-        {/* DATE FILTERS */}
         <div>
           <label className="text-xs">From</label>
           <input
             type="date"
             name="date_from"
             defaultValue={spDateFrom}
-            className="border rounded px-2 py-1 text-sm"
+            className="rounded border px-2 py-1 text-sm"
           />
         </div>
 
@@ -416,28 +361,27 @@ export default async function QCPage({
             type="date"
             name="date_to"
             defaultValue={spDateTo}
-            className="border rounded px-2 py-1 text-sm"
+            className="rounded border px-2 py-1 text-sm"
           />
         </div>
 
-        <button type="submit" className="border rounded px-3 py-1 text-sm">
+        <button type="submit" className="rounded border px-3 py-1 text-sm">
           Apply
         </button>
 
-        <Link
-          href="/qc"
-          className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
-        >
+        <Link href="/qc" className="rounded border px-3 py-1 text-sm hover:bg-gray-50">
           Reset
         </Link>
       </form>
 
-      {/* TABLE */}
-      <div className="border rounded overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded border">
+        <table className="w-full min-w-[1300px] text-sm">
           <thead className="bg-gray-50">
             <tr>
               <th className="p-2 text-left">Date</th>
+              <th className="p-2 text-left">Report Nº</th>
+              <th className="p-2 text-left">Inspector</th>
+              <th className="p-2 text-left">Inspection Type</th>
               <th className="p-2 text-left">Customer</th>
               <th className="p-2 text-left">PO</th>
               <th className="p-2 text-left">Style</th>
@@ -451,15 +395,36 @@ export default async function QCPage({
           <tbody>
             {filtered.map((i) => (
               <tr key={i.id} className="border-t">
-                <td className="p-2">{i.inspection_date}</td>
-                <td className="p-2">{i.customer}</td>
-                <td className="p-2">{i.po_number}</td>
-                <td className="p-2">{i.style}</td>
-                <td className="p-2">{i.factory}</td>
+                <td className="whitespace-nowrap p-2">
+                  {i.inspection_date ?? "-"}
+                </td>
+                <td className="whitespace-nowrap p-2 font-medium">
+                  {i.report_number ?? "-"}
+                </td>
+                <td className="whitespace-nowrap p-2">
+                  {i.inspector ?? "-"}
+                </td>
+                <td className="whitespace-nowrap p-2">
+                  {i.inspection_type ?? "-"}
+                </td>
+                <td className="whitespace-nowrap p-2">
+                  {i.customer ?? "-"}
+                </td>
+                <td className="whitespace-nowrap p-2">
+                  {i.po_number ?? "-"}
+                </td>
+                <td className="whitespace-nowrap p-2">
+                  {i.style ?? "-"}
+                </td>
+                <td className="whitespace-nowrap p-2">
+                  {i.factory ?? "-"}
+                </td>
                 <td className="p-2">
                   <StatusBadge status={i.computedStatus} />
                 </td>
-                <td className="p-2 text-right">{i.qc_defects?.length || 0}</td>
+                <td className="p-2 text-right">
+                  {i.qc_defects?.length || 0}
+                </td>
                 <td className="p-2 text-right">
                   <Link
                     href={`/qc/inspections/${i.id}`}
@@ -473,7 +438,7 @@ export default async function QCPage({
 
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-6 text-center text-gray-500">
+                <td colSpan={11} className="p-6 text-center text-gray-500">
                   No inspections match these filters.
                 </td>
               </tr>

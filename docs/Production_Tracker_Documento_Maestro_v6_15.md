@@ -1,4 +1,4 @@
-# Production Tracker — Documento Maestro v6.14
+# Production Tracker — Documento Maestro v6.15
 
 Versión consolidada tras:
 
@@ -3428,3 +3428,294 @@ Executive Analytics parcialmente inconsistente debido a:
 
 Pendiente:
 refactor limpio y estabilización completa del módulo Executive.
+
+# 65. Ficha Cliente (Customer Daily Snapshot)
+
+## 65.1 Objetivo
+
+Se incorpora una nueva pantalla operativa denominada:
+
+/ficha-cliente
+
+Esta pantalla sustituye conceptualmente al Excel histórico utilizado por el equipo de producción.
+
+Su función es proporcionar una fotografía diaria completa de cada campaña agrupada por:
+
+* Cliente
+* Temporada
+* Proveedor
+
+Objetivo principal:
+
+Responder en menos de 30 segundos:
+
+* Qué está pendiente
+* Qué muestras faltan
+* Qué modelos están bloqueados
+* Qué fechas críticas se aproximan
+
+La Ficha Cliente se convierte en la herramienta principal de seguimiento diario de producción.
+
+---
+
+## 65.2 Filosofía operativa
+
+La Ficha Cliente no pertenece a Executive Analytics.
+
+Tampoco pertenece a Business Intelligence.
+
+Pertenece a la capa de Operativa Diaria.
+
+Su función es reemplazar el seguimiento manual realizado históricamente mediante Excel.
+
+Regla:
+
+Executive responde:
+
+"¿Qué requiere atención?"
+
+Ficha Cliente responde:
+
+"¿Cómo está exactamente la campaña hoy?"
+
+---
+
+## 65.3 Fuente de datos
+
+View principal:
+
+vw_customer_daily_snapshot
+
+La vista consume información consolidada de:
+
+* pos
+* lineas_pedido
+* muestras
+* qc_inspections
+
+No recalcula BI.
+
+Representa únicamente estado operativo.
+
+---
+
+## 65.4 Agrupación oficial
+
+Las filas se agrupan únicamente cuando coinciden:
+
+* customer
+* season
+* supplier
+* reference
+* style
+* color
+* etd_pi
+
+Si cambia ETD PI:
+
+crear nueva fila.
+
+Aunque:
+
+* style
+* color
+* reference
+
+sean iguales.
+
+Esta regla replica exactamente el comportamiento histórico del Excel operativo.
+
+---
+
+## 65.5 Columnas operativas
+
+Columnas consolidadas:
+
+* Customer
+* ETD PI
+* POs
+* Reference
+* Style
+* Color
+* Qty
+
+Muestras:
+
+* CFMS
+* COUNTERS
+* FITTINGS
+* PPS
+* TESTINGS
+* SHIPPINGS
+
+Producción:
+
+* Trial Upper
+* Trial Lasting
+* Lasting
+
+Logística:
+
+* Inspection
+* Booking
+* Closing
+* Shipping
+
+---
+
+## 65.6 Navegación operativa
+
+Los números de PO son clicables.
+
+Acceso directo:
+
+/produccion/po/[id]/editar
+
+Objetivo:
+
+Actualizar información operativa desde la propia Ficha Cliente.
+
+La navegación debe preservar filtros mediante search params.
+
+---
+
+## 65.7 Estados de muestras
+
+Estados soportados:
+
+* Aprobado
+* Enviado
+* Pendiente
+* Rechazado
+* N/N
+
+Colores oficiales:
+
+Aprobado → Verde
+Enviado → Amarillo
+Pendiente → Azul
+Rechazado → Rojo
+N/N → Gris neutro
+
+---
+
+## 65.8 Regla N/N (No Need)
+
+Regla consolidada:
+
+Si una muestra no existe en el sistema:
+
+estado visual = N/N
+
+No significa Pendiente.
+
+No significa Error.
+
+Significa:
+
+No requerida para ese modelo.
+
+Motivo:
+
+No todos los modelos requieren:
+
+* CFMS
+* COUNTERS
+* FITTINGS
+* PPS
+* TESTINGS
+* SHIPPINGS
+
+La ausencia de muestra debe interpretarse como:
+
+No Need.
+
+---
+
+## 65.9 Compatibilidad con importaciones
+
+Durante importación desde Excel:
+
+Cuando el equipo marca:
+
+Round = N/N
+
+la Ficha Cliente debe representar:
+
+N/N
+
+Cuando existe Round 1 o superior:
+
+la muestra existe y debe mostrar su estado real.
+
+Para pedidos creados directamente dentro del sistema:
+
+las muestras no creadas se consideran automáticamente:
+
+N/N
+
+---
+
+## 65.10 Relación con Command Center
+
+La Ficha Cliente se convierte en la fuente principal para futuras alertas operativas.
+
+Alertas previstas:
+
+* muestras pendientes
+* muestras rechazadas
+* shipping retrasados
+* inspections pendientes
+* booking retrasados
+* ETD en riesgo
+
+Estas alertas alimentarán progresivamente:
+
+/
+
+(Command Center)
+
+sin duplicar lógica de negocio.
+
+---
+
+## 65.11 Estado actual
+
+Implementado:
+
+✔ Pantalla Ficha Cliente
+✔ Filtros operativos
+✔ Agrupación por ETD
+✔ Navegación directa a PO
+✔ Estados de muestras
+✔ Gestión N/N
+
+Pendiente:
+
+⏳ Resumen ejecutivo por cliente
+⏳ KPIs operativos por campaña
+⏳ Integración avanzada con Command Center
+
+---
+
+## 65.12 Nuevo foco estratégico
+
+Production Tracker evoluciona desde:
+
+Analytics First
+
+hacia:
+
+Operations First
+
+La prioridad del sistema pasa a ser:
+
+* productividad diaria
+* seguimiento de campañas
+* reducción de Excel
+* rapidez operativa
+* trazabilidad
+
+La BI continúa existiendo como capa de soporte.
+
+La operativa diaria pasa a ser el centro del producto.
