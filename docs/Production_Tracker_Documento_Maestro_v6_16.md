@@ -1,4 +1,4 @@
-# Production Tracker — Documento Maestro v6.15
+# Production Tracker — Documento Maestro v6.16
 
 Versión consolidada tras:
 
@@ -3719,3 +3719,379 @@ La prioridad del sistema pasa a ser:
 La BI continúa existiendo como capa de soporte.
 
 La operativa diaria pasa a ser el centro del producto.
+
+# 66. Operations First Consolidation (v6.16)
+
+## 66.1 Cambio de enfoque del sistema
+
+Production Tracker consolida oficialmente la filosofía:
+
+OPERATIONS FIRST
+
+La prioridad principal del sistema deja de ser la exploración analítica y pasa a ser la gestión diaria de producción.
+
+La pregunta principal pasa a ser:
+
+¿Qué requiere acción hoy?
+
+antes que:
+
+¿Qué muestran los indicadores?
+
+---
+
+## 66.2 Ficha Cliente
+
+Nueva pantalla operativa principal:
+
+/ficha-cliente
+
+La Ficha Cliente representa la evolución digital del Excel operativo histórico utilizado por el equipo.
+
+Objetivo:
+
+Mostrar en una única pantalla el estado operativo real de cada campaña.
+
+Agrupación oficial:
+
+customer
+season
+supplier
+etd_pi
+reference
+style
+color
+
+View base:
+
+vw_customer_campaign_board_v1
+
+La Ficha Cliente es la referencia operativa principal para:
+
+* Producción
+* Muestras
+* Trials
+* QC
+* Logística
+
+---
+
+## 66.3 Principios operativos
+
+La Ficha Cliente debe responder:
+
+* Qué muestras faltan
+* Qué muestras han sido rechazadas
+* Qué trials están próximos
+* Qué inspecciones faltan
+* Qué campañas tienen incidencias
+* Qué ETDs requieren seguimiento
+
+No debe convertirse en un dashboard de KPIs.
+
+Debe representar trabajo real pendiente.
+
+---
+
+## 66.4 Regla N/N (No Need)
+
+Cuando una muestra no sea necesaria:
+
+N/N = No Need
+
+Reglas:
+
+* Estado neutro
+* Color gris
+* No genera alerta
+* No se considera pendiente
+
+---
+
+## 66.5 Alertas operativas
+
+Las alertas deben representar acciones reales.
+
+Se consolidan las siguientes familias:
+
+### Muestras
+
+* SAMPLE_PENDING
+* SAMPLE_REJECTED
+
+### Producción
+
+* TRIAL_UPPER_UPCOMING
+* TRIAL_LASTING_UPCOMING
+* LASTING_UPCOMING
+
+### Logística
+
+* CLOSING_UPCOMING
+* SHIPPING_UPCOMING
+* SHIPPING_OVERDUE
+
+### ETD
+
+* ETD_UPCOMING
+
+### QC
+
+* QC_PENDING
+* QC_ISSUES
+* QC_FAILED
+* QC_ACTION_OVERDUE
+* QC_OK
+
+---
+
+## 66.6 Niveles de alerta
+
+Clasificación oficial:
+
+CRITICAL
+WARNING
+MONITOR
+OK
+
+Regla:
+
+CRITICAL y WARNING siempre tienen prioridad visual.
+
+---
+
+## 66.7 Seasons activas
+
+Las vistas operativas diarias deben trabajar únicamente sobre campañas activas.
+
+Tabla de configuración:
+
+production_active_seasons
+
+Las campañas históricas no deben generar ruido operativo.
+
+---
+
+## 66.8 QC Operational Integration
+
+Se consolida la integración operativa entre QC y Ficha Cliente.
+
+Tablas:
+
+qc_inspections
+qc_defects
+qc_defect_photos
+qc_style_photos
+
+---
+
+### Importador QC
+
+La importación debe ser dinámica.
+
+No depende de posiciones fijas de Excel.
+
+Debe localizar mediante etiquetas:
+
+* Report Number
+* Inspection
+* Factory
+* Customer
+* Season
+* Qty Inspected
+* Inspector
+* PO Number
+* Reference
+* Style
+* Color
+
+---
+
+### Tipos de inspección soportados
+
+T4 = Trial Upper
+
+T5 = Trial Lasting
+
+T6 = Assembling
+
+T7 = Final Inspection
+
+Campo origen:
+
+qc_inspections.inspection_type
+
+---
+
+### Traducción operativa
+
+La traducción de tipos vive en Analytics Layer.
+
+Nunca en frontend.
+
+Mapeo oficial:
+
+T4 → Trial Upper
+
+T5 → Trial Lasting
+
+T6 → Assembling
+
+T7 → Final Inspection
+
+---
+
+### Asociación QC ↔ Ficha Cliente
+
+View puente:
+
+vw_customer_qc_trial_bridge_v1
+
+La asociación debe realizarse mediante:
+
+customer
+season
+po_number
+reference
+color
+
+No utilizar únicamente style.
+
+---
+
+### Normalización de color
+
+Regla crítica:
+
+Las asociaciones QC no deben romperse por problemas de encoding.
+
+Ejemplos:
+
+Marrón
+Marr�n
+
+La normalización debe realizarse en Analytics Layer.
+
+No modificando datos históricos.
+
+---
+
+### Vista detalle QC
+
+Ruta:
+
+/qc/inspections/[id]
+
+Debe mostrar:
+
+* Report Number
+* Inspection Type
+* Inspector
+* Customer
+* Season
+* Factory
+* Style
+* Color
+* Qty Inspected
+* Defect Summary
+* Critical / Major / Minor
+* Fotos PPS
+* Fotos de defectos
+
+---
+
+### PDF QC
+
+Ruta:
+
+/api/qc/inspections/[id]/report
+
+Debe utilizar siempre:
+
+inspection_type
+
+real.
+
+Nunca asumir Final Inspection por defecto.
+
+---
+
+## 66.9 Estado consolidado QC
+
+Completado:
+
+✔ Importación dinámica Excel QC
+
+✔ Qty Inspected
+
+✔ Inspection Type
+
+✔ Report Number
+
+✔ Inspector
+
+✔ Defectos D1..Dn
+
+✔ Fotos PPS
+
+✔ Fotos defectos
+
+✔ Vista detalle QC
+
+✔ PDF QC
+
+✔ Asociación correcta con Ficha Cliente
+
+✔ Normalización de colores
+
+---
+
+## 66.10 Command Center
+
+El Command Center debe evolucionar desde KPIs hacia trabajo operativo real.
+
+Debe priorizar:
+
+* muestras rechazadas
+* muestras pendientes
+* trials próximos
+* QC pendientes
+* QC con incidencias
+* shipping vencido
+* ETD próximo
+
+El Command Center consume señales calculadas en Analytics Layer.
+
+No recalcula reglas en frontend.
+
+---
+
+## 66.11 Regla arquitectónica definitiva
+
+Fact Layer:
+
+pos
+lineas_pedido
+muestras
+qc_inspections
+alertas
+
+Analytics Layer:
+
+views
+materialized views
+clasificación de alertas
+clasificación QC
+priorización operativa
+
+Frontend:
+
+representa datos
+
+No recalcula negocio.
+
+No clasifica alertas.
+
+No interpreta QC.
+
+No modifica snapshots históricos.

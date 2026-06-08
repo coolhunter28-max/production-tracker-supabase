@@ -55,6 +55,10 @@ export interface CustomerOperationalDetail {
   contribution_total?: number | null;
   contribution_pct?: number | null;
   avg_delay_production_days?: number | null;
+  xiamen_sales_mix_pct?: number | null;
+bsg_sales_mix_pct?: number | null;
+customer_size_band?: string | null;
+profitability_band?: string | null;
 }
 
 export interface CustomerDevelopmentDetail {

@@ -143,9 +143,9 @@ export async function POST(req: Request) {
 
     const images = await extractExcelImages(workbook);
 
-    const ppsImages = (images || []).filter(
-      (img: any) => String(img.sheetName || "").trim() === "Style Views"
-    );
+    const ppsImages = (images || []).filter((img: any) => {
+      return String(img.sheetName || "").trim() === "Style Views";
+    });
 
     await supabase
       .from("qc_pps_photos")
@@ -217,7 +217,9 @@ export async function POST(req: Request) {
 }
 
 function cell(sheet: ExcelJS.Worksheet, address: string): string {
-  return normalizeCellText(sheet.getCell(address).value || sheet.getCell(address).text);
+  return normalizeCellText(
+    sheet.getCell(address).value || sheet.getCell(address).text
+  );
 }
 
 function normalizeCellText(value: any): string {
@@ -240,6 +242,14 @@ function normalizeSearchText(value: string): string {
     .replace(/\s+/g, " ")
     .replace(/\n/g, " ")
     .trim();
+}
+
+function normalizeMatchText(value: string | null | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
 }
 
 function toInt(value: any): number {
@@ -282,9 +292,15 @@ function findNumericValueByLabel(
   for (let rowNumber = 1; rowNumber <= Math.min(sheet.rowCount, 80); rowNumber++) {
     const row = sheet.getRow(rowNumber);
 
-    for (let colNumber = 1; colNumber <= Math.min(sheet.columnCount, 20); colNumber++) {
+    for (
+      let colNumber = 1;
+      colNumber <= Math.min(sheet.columnCount, 20);
+      colNumber++
+    ) {
       const currentText = normalizeSearchText(
-        normalizeCellText(row.getCell(colNumber).value || row.getCell(colNumber).text)
+        normalizeCellText(
+          row.getCell(colNumber).value || row.getCell(colNumber).text
+        )
       );
 
       const matches = normalizedLabels.some((label) =>
@@ -335,9 +351,15 @@ function findDefectHeaderRow(sheet: ExcelJS.Worksheet): number {
     let hasDefectType = false;
     let hasDefectsFound = false;
 
-    for (let colNumber = 1; colNumber <= Math.min(sheet.columnCount, 20); colNumber++) {
+    for (
+      let colNumber = 1;
+      colNumber <= Math.min(sheet.columnCount, 20);
+      colNumber++
+    ) {
       const text = normalizeSearchText(
-        normalizeCellText(row.getCell(colNumber).value || row.getCell(colNumber).text)
+        normalizeCellText(
+          row.getCell(colNumber).value || row.getCell(colNumber).text
+        )
       );
 
       if (text.includes("DEFECT ID")) hasDefectId = true;
@@ -353,6 +375,18 @@ function findDefectHeaderRow(sheet: ExcelJS.Worksheet): number {
   return 15;
 }
 
+function isNonDefectBlock(...values: Array<string | null | undefined>): boolean {
+  const text = values.join(" ").toLowerCase();
+
+  return (
+    text.includes("po quantity") ||
+    text.includes("采购订单数量") ||
+    text.includes("acceptance quality limit") ||
+    text.includes("aql") ||
+    text.includes("inspection summary")
+  );
+}
+
 function extractDefects(sheet: ExcelJS.Worksheet): DefectDraft[] {
   const headerRow = findDefectHeaderRow(sheet);
   const startRow = headerRow + 1;
@@ -366,6 +400,17 @@ function extractDefects(sheet: ExcelJS.Worksheet): DefectDraft[] {
     const defectQty = toInt(sheet.getCell(`C${row}`).value);
     const defectCategory = cell(sheet, `D${row}`);
     const defectDescription = cell(sheet, `E${row}`);
+
+    if (
+      isNonDefectBlock(
+        defectId,
+        defectType,
+        defectCategory,
+        defectDescription
+      )
+    ) {
+      continue;
+    }
 
     const hasDefect =
       defectId ||

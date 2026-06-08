@@ -15,7 +15,6 @@ export async function extractExcelImages(
   for (const sheet of workbook.worksheets) {
     const sheetName = sheet.name;
 
-    // Solo nos interesan estas hojas
     const isDefectSheet = /^D([1-9]|10)$/.test(sheetName);
     const isPpsSheet = sheetName === "Style Views";
 
@@ -24,18 +23,24 @@ export async function extractExcelImages(
     const images = sheet.getImages();
 
     for (const img of images) {
-      const image = workbook.getImage(img.imageId);
+      const imageId = Number((img as any).imageId);
+      const image = workbook.getImage(imageId);
+
       if (!image) continue;
 
-      const buffer = Buffer.from(image.buffer);
-      const extension =
-        image.extension === "jpeg" || image.extension === "png"
-          ? image.extension
-          : "jpeg";
+      const rawBuffer = (image as any).buffer;
+      if (!rawBuffer) continue;
+
+      const buffer = Buffer.isBuffer(rawBuffer)
+        ? rawBuffer
+        : Buffer.from(rawBuffer);
+
+      const extension: "jpeg" | "png" =
+        (image as any).extension === "png" ? "png" : "jpeg";
 
       results.push({
         sheetName,
-        imageId: img.imageId,
+        imageId,
         buffer,
         extension,
       });

@@ -84,10 +84,13 @@ export default async function QCInspectionPage({
   }
 
   const { data: ppsPhotos } = await supabase
-    .from("qc_pps_photos")
-    .select("*")
-    .eq("po_id", inspection.po_id)
-    .order("photo_order", { ascending: true });
+  .from("qc_pps_photos")
+  .select("*")
+  .eq("po_id", inspection.po_id)
+  .eq("reference", inspection.reference)
+  .eq("style", inspection.style)
+  .eq("color", inspection.color)
+  .order("photo_order", { ascending: true });
 
   const defects = inspection.qc_defects ?? [];
   const inspected = inspection.qty_inspected || 0;

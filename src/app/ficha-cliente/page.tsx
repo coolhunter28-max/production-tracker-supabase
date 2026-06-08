@@ -29,32 +29,19 @@ function formatDate(value?: string | null) {
 
 function statusClass(status?: string | null) {
   if (!status) return "bg-slate-50 text-slate-400 border-slate-200";
-
   if (["Aprobado", "Confirmado"].includes(status)) {
     return "bg-green-50 text-green-700 border-green-200";
   }
-
-  if (status === "Enviado") {
-    return "bg-yellow-50 text-yellow-800 border-yellow-200";
-  }
-
-  if (status === "Rechazado") {
-    return "bg-red-50 text-red-700 border-red-200";
-  }
-
-  if (status === "Pendiente") {
-    return "bg-blue-50 text-blue-700 border-blue-200";
-  }
-
+  if (status === "Enviado") return "bg-yellow-50 text-yellow-800 border-yellow-200";
+  if (status === "Rechazado") return "bg-red-50 text-red-700 border-red-200";
+  if (status === "Pendiente") return "bg-blue-50 text-blue-700 border-blue-200";
   return "bg-slate-50 text-slate-500 border-slate-200";
 }
 
 function actionClass(level?: OperationalAlertLevel | null) {
   if (level === "CRITICAL") return "bg-red-50 text-red-700 border-red-200";
-  if (level === "WARNING")
-    return "bg-orange-50 text-orange-700 border-orange-200";
-  if (level === "MONITOR")
-    return "bg-yellow-50 text-yellow-800 border-yellow-200";
+  if (level === "WARNING") return "bg-orange-50 text-orange-700 border-orange-200";
+  if (level === "MONITOR") return "bg-yellow-50 text-yellow-800 border-yellow-200";
   return "bg-green-50 text-green-700 border-green-200";
 }
 
@@ -67,8 +54,7 @@ function actionDot(level?: OperationalAlertLevel | null) {
 
 function qcClass(status?: string | null) {
   if (status === "QC_FAILED") return "bg-red-50 text-red-700 border-red-200";
-  if (status === "QC_ISSUES")
-    return "bg-orange-50 text-orange-700 border-orange-200";
+  if (status === "QC_ISSUES") return "bg-orange-50 text-orange-700 border-orange-200";
   if (status === "QC_OK") return "bg-green-50 text-green-700 border-green-200";
   return "bg-slate-50 text-slate-500 border-slate-200";
 }
@@ -78,18 +64,6 @@ function qcFallbackLabel(status?: string | null) {
   if (status === "QC_ISSUES") return "QC Incidencias";
   if (status === "QC_OK") return "QC OK";
   return "QC Pendiente";
-}
-
-function getQcProcessLabel(row: FichaClienteRow) {
-  const qc = row.qc as FichaClienteRow["qc"] & {
-    qc_process_label?: string | null;
-  };
-
-  if (qc.qc_process_label) {
-    return `QC ${qc.qc_process_label}`;
-  }
-
-  return qcFallbackLabel(row.qc.qc_status);
 }
 
 function SampleCell({ status }: { status?: string | null }) {
@@ -129,61 +103,113 @@ function ActionCell({ row }: { row: FichaClienteRow }) {
         </span>
 
         {row.alert.alert_summary ? (
-          <span className="text-xs text-slate-500">
-            {row.alert.alert_summary}
-          </span>
+          <span className="text-xs text-slate-500">{row.alert.alert_summary}</span>
         ) : null}
       </div>
     </td>
   );
 }
 
-function QCCell({ row }: { row: FichaClienteRow }) {
-  const qc = row.qc as FichaClienteRow["qc"] & {
-    qc_process_label?: string | null;
-    inspection_type?: string | null;
-  };
+function QCStageLink({
+  id,
+  label,
+  report,
+  status,
+}: {
+  id?: string | null;
+  label: string;
+  report?: string | null;
+  status?: string | null;
+}) {
+  if (!id && !report) return null;
 
-  const label = getQcProcessLabel(row);
-
-  const content = (
+  const badge = (
     <span
       className={`inline-flex w-fit rounded border px-2 py-1 text-xs font-semibold ${qcClass(
-        row.qc.qc_status
+        status
       )}`}
-      title={
-        [
-          row.qc.qc_status_label,
-          qc.inspection_type ? `Tipo: ${qc.inspection_type}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · ") || undefined
-      }
     >
       {label}
     </span>
   );
 
   return (
-    <td className="min-w-[150px] p-2">
-      <div className="flex flex-col gap-1">
-        {row.qc.qc_inspection_id ? (
-          <Link
-            href={`/qc/inspections/${row.qc.qc_inspection_id}`}
-            className="w-fit"
-          >
-            {content}
-          </Link>
-        ) : (
-          content
-        )}
+    <div className="flex flex-col gap-0.5">
+      {id ? (
+        <Link href={`/qc/inspections/${id}`} className="w-fit">
+          {badge}
+        </Link>
+      ) : (
+        badge
+      )}
 
-        {row.qc.report_number ? (
-          <span className="text-xs text-slate-500">
-            {row.qc.report_number}
-          </span>
-        ) : null}
-      </div>
+      {report ? <span className="text-xs text-slate-500">{report}</span> : null}
+    </div>
+  );
+}
+
+function QCCell({ row }: { row: FichaClienteRow }) {
+  const qc = row.qc as FichaClienteRow["qc"] & {
+    trial_upper_qc_id?: string | null;
+    trial_upper_report_number?: string | null;
+    trial_upper_qc_status?: string | null;
+    trial_lasting_qc_id?: string | null;
+    trial_lasting_report_number?: string | null;
+    trial_lasting_qc_status?: string | null;
+    assembling_qc_id?: string | null;
+    assembling_report_number?: string | null;
+    assembling_qc_status?: string | null;
+  };
+
+  const hasStageQC =
+    qc.trial_upper_qc_id ||
+    qc.trial_upper_report_number ||
+    qc.trial_lasting_qc_id ||
+    qc.trial_lasting_report_number ||
+    qc.assembling_qc_id ||
+    qc.assembling_report_number;
+
+  if (hasStageQC) {
+    return (
+      <td className="min-w-[170px] p-2">
+        <div className="flex flex-col gap-1">
+          <QCStageLink
+            id={qc.trial_upper_qc_id}
+            label="QC Trial Upper"
+            report={qc.trial_upper_report_number}
+            status={qc.trial_upper_qc_status ?? row.qc.qc_status}
+          />
+
+          <QCStageLink
+            id={qc.trial_lasting_qc_id}
+            label="QC Trial Lasting"
+            report={qc.trial_lasting_report_number}
+            status={qc.trial_lasting_qc_status ?? row.qc.qc_status}
+          />
+
+          <QCStageLink
+            id={qc.assembling_qc_id}
+            label="QC Assembling"
+            report={qc.assembling_report_number}
+            status={qc.assembling_qc_status ?? row.qc.qc_status}
+          />
+        </div>
+      </td>
+    );
+  }
+
+  const label = qcFallbackLabel(row.qc.qc_status);
+
+  return (
+    <td className="min-w-[150px] p-2">
+      <span
+        className={`inline-flex w-fit rounded border px-2 py-1 text-xs font-semibold ${qcClass(
+          row.qc.qc_status
+        )}`}
+        title={row.qc.qc_status_label ?? undefined}
+      >
+        {label}
+      </span>
     </td>
   );
 }
@@ -243,10 +269,7 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
         </div>
 
         <div className="flex gap-2">
-          <Link
-            href="/"
-            className="rounded border bg-white px-3 py-2 text-sm hover:bg-slate-50"
-          >
+          <Link href="/" className="rounded border bg-white px-3 py-2 text-sm hover:bg-slate-50">
             Inicio
           </Link>
           <Link
@@ -262,48 +285,30 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
         <div className="grid gap-3 md:grid-cols-6">
           <label className="text-sm">
             <span className="mb-1 block text-slate-500">Cliente</span>
-            <select
-              name="customer"
-              defaultValue={filters.customer ?? ""}
-              className="w-full rounded border px-3 py-2"
-            >
+            <select name="customer" defaultValue={filters.customer ?? ""} className="w-full rounded border px-3 py-2">
               <option value="">Todos</option>
               {options.customers.map((customer) => (
-                <option key={customer} value={customer}>
-                  {customer}
-                </option>
+                <option key={customer} value={customer}>{customer}</option>
               ))}
             </select>
           </label>
 
           <label className="text-sm">
             <span className="mb-1 block text-slate-500">Temporada</span>
-            <select
-              name="season"
-              defaultValue={filters.season ?? ""}
-              className="w-full rounded border px-3 py-2"
-            >
+            <select name="season" defaultValue={filters.season ?? ""} className="w-full rounded border px-3 py-2">
               <option value="">Todas</option>
               {options.seasons.map((season) => (
-                <option key={season} value={season}>
-                  {season}
-                </option>
+                <option key={season} value={season}>{season}</option>
               ))}
             </select>
           </label>
 
           <label className="text-sm">
             <span className="mb-1 block text-slate-500">Proveedor</span>
-            <select
-              name="supplier"
-              defaultValue={filters.supplier ?? ""}
-              className="w-full rounded border px-3 py-2"
-            >
+            <select name="supplier" defaultValue={filters.supplier ?? ""} className="w-full rounded border px-3 py-2">
               <option value="">Todos</option>
               {options.suppliers.map((supplier) => (
-                <option key={supplier} value={supplier}>
-                  {supplier}
-                </option>
+                <option key={supplier} value={supplier}>{supplier}</option>
               ))}
             </select>
           </label>
@@ -330,16 +335,10 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
           </label>
 
           <div className="flex items-end gap-2">
-            <button
-              type="submit"
-              className="rounded bg-slate-900 px-4 py-2 text-sm text-white"
-            >
+            <button type="submit" className="rounded bg-slate-900 px-4 py-2 text-sm text-white">
               Aplicar
             </button>
-            <Link
-              href="/ficha-cliente"
-              className="rounded border px-4 py-2 text-sm hover:bg-slate-50"
-            >
+            <Link href="/ficha-cliente" className="rounded border px-4 py-2 text-sm hover:bg-slate-50">
               Limpiar
             </Link>
           </div>
@@ -354,9 +353,7 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
 
         <div className="rounded-xl border bg-white p-4 shadow-sm">
           <p className="text-sm text-slate-500">Qty total</p>
-          <p className="text-2xl font-bold">
-            {totalQty(rows).toLocaleString("es-ES")}
-          </p>
+          <p className="text-2xl font-bold">{totalQty(rows).toLocaleString("es-ES")}</p>
         </div>
 
         <div className="rounded-xl border bg-red-50 p-4 shadow-sm">
@@ -381,9 +378,7 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
 
         <div className="rounded-xl border bg-slate-50 p-4 shadow-sm">
           <p className="text-sm text-slate-600">QC recibidos</p>
-          <p className="text-2xl font-bold text-slate-800">
-            {qcReportsCount}
-          </p>
+          <p className="text-2xl font-bold text-slate-800">{qcReportsCount}</p>
         </div>
       </section>
 
@@ -426,16 +421,10 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
                   key={`${row.customer}-${row.etd_pi}-${row.reference}-${row.style}-${row.color}-${index}`}
                   className="border-b hover:bg-slate-50"
                 >
-                  <td className="whitespace-nowrap p-2 font-medium">
-                    {row.customer}
-                  </td>
-
+                  <td className="whitespace-nowrap p-2 font-medium">{row.customer}</td>
                   <DateCell value={row.etd_pi} />
-
                   <ActionCell row={row} />
-
                   <DateCell value={row.alert.next_alert_date} />
-
                   <QCCell row={row} />
 
                   <td className="whitespace-nowrap p-2">
@@ -451,10 +440,7 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
                               {po}
                             </Link>
                           ) : (
-                            <span
-                              key={po}
-                              className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600"
-                            >
+                            <span key={po} className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">
                               {po}
                             </span>
                           )
@@ -465,9 +451,7 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
                     )}
                   </td>
 
-                  <td className="whitespace-nowrap p-2">
-                    {row.reference ?? "-"}
-                  </td>
+                  <td className="whitespace-nowrap p-2">{row.reference ?? "-"}</td>
                   <td className="whitespace-nowrap p-2">{row.style ?? "-"}</td>
                   <td className="whitespace-nowrap p-2">{row.color ?? "-"}</td>
                   <td className="whitespace-nowrap p-2 text-right font-semibold">

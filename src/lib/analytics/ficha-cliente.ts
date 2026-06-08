@@ -32,6 +32,23 @@ export type FichaClienteQC = {
   qc_status_label: string;
   qc_process_stage: string | null;
   qc_process_label: string | null;
+
+  trial_upper_qc_id: string | null;
+  trial_upper_report_number: string | null;
+  trial_upper_qc_date: string | null;
+  trial_upper_qc_status: string | null;
+
+  trial_lasting_qc_id: string | null;
+  trial_lasting_report_number: string | null;
+  trial_lasting_qc_date: string | null;
+  trial_lasting_qc_status: string | null;
+
+  assembling_qc_id: string | null;
+  assembling_report_number: string | null;
+  assembling_qc_date: string | null;
+  assembling_qc_status: string | null;
+
+  qc_report_count: number | null;
 };
 
 export type FichaClienteRow = {
@@ -82,7 +99,29 @@ type QCBridgeRow = {
   reference: string | null;
   style: string | null;
   color: string | null;
-} & FichaClienteQC;
+  qty_total: number | null;
+  trial_upper: string | null;
+  trial_lasting: string | null;
+  lasting: string | null;
+
+  trial_upper_qc_id: string | null;
+  trial_upper_report_number: string | null;
+  trial_upper_qc_date: string | null;
+  trial_upper_qc_status: string | null;
+
+  trial_lasting_qc_id: string | null;
+  trial_lasting_report_number: string | null;
+  trial_lasting_qc_date: string | null;
+  trial_lasting_qc_status: string | null;
+
+  assembling_qc_id: string | null;
+  assembling_report_number: string | null;
+  assembling_qc_date: string | null;
+  assembling_qc_status: string | null;
+
+  qc_report_count: number | null;
+  qc_status: "QC_PENDING" | "QC_OK" | "QC_ISSUES" | "QC_FAILED";
+};
 
 export type FichaClienteFilters = {
   customer?: string;
@@ -145,6 +184,85 @@ function emptyQC(): FichaClienteQC {
     qc_status_label: "No hay reporte QC vinculado.",
     qc_process_stage: null,
     qc_process_label: null,
+
+    trial_upper_qc_id: null,
+    trial_upper_report_number: null,
+    trial_upper_qc_date: null,
+    trial_upper_qc_status: null,
+
+    trial_lasting_qc_id: null,
+    trial_lasting_report_number: null,
+    trial_lasting_qc_date: null,
+    trial_lasting_qc_status: null,
+
+    assembling_qc_id: null,
+    assembling_report_number: null,
+    assembling_qc_date: null,
+    assembling_qc_status: null,
+
+    qc_report_count: 0,
+  };
+}
+
+function buildQC(qc: QCBridgeRow): FichaClienteQC {
+  const hasTrialUpper = Boolean(qc.trial_upper_report_number);
+  const hasTrialLasting = Boolean(qc.trial_lasting_report_number);
+  const hasAssembling = Boolean(qc.assembling_report_number);
+
+  const hasAnyQC = hasTrialUpper || hasTrialLasting || hasAssembling;
+
+  const labels: string[] = [];
+
+  if (hasTrialUpper) labels.push("Trial Upper");
+  if (hasTrialLasting) labels.push("Trial Lasting");
+  if (hasAssembling) labels.push("Assembling");
+
+  const reportNumbers = [
+    qc.trial_upper_report_number,
+    qc.trial_lasting_report_number,
+    qc.assembling_report_number,
+  ].filter(Boolean) as string[];
+
+  return {
+    qc_inspection_id:
+      qc.trial_lasting_qc_id ?? qc.trial_upper_qc_id ?? qc.assembling_qc_id,
+
+    report_number: reportNumbers.join(" / ") || null,
+    inspection_type: labels.join(" / ") || null,
+    inspection_date:
+      qc.trial_lasting_qc_date ?? qc.trial_upper_qc_date ?? qc.assembling_qc_date,
+
+    inspector: null,
+    factory: null,
+    aql_result: null,
+    critical_found: null,
+    major_found: null,
+    minor_found: null,
+
+    has_qc_report: hasAnyQC,
+    qc_status: qc.qc_status ?? "QC_PENDING",
+    qc_status_label: hasAnyQC
+      ? `QC recibido: ${labels.join(" + ")}`
+      : "No hay reporte QC vinculado.",
+    qc_process_stage: hasAnyQC ? "MULTI_STAGE_QC" : null,
+    qc_process_label: labels.join(" + ") || null,
+
+    trial_upper_qc_id: qc.trial_upper_qc_id,
+    trial_upper_report_number: qc.trial_upper_report_number,
+    trial_upper_qc_date: qc.trial_upper_qc_date,
+    trial_upper_qc_status: qc.trial_upper_qc_status,
+
+    trial_lasting_qc_id: qc.trial_lasting_qc_id,
+    trial_lasting_report_number: qc.trial_lasting_report_number,
+    trial_lasting_qc_date: qc.trial_lasting_qc_date,
+    trial_lasting_qc_status: qc.trial_lasting_qc_status,
+
+    assembling_qc_id: qc.assembling_qc_id,
+    assembling_report_number: qc.assembling_report_number,
+    assembling_qc_date: qc.assembling_qc_date,
+    assembling_qc_status: qc.assembling_qc_status,
+
+    qc_report_count: qc.qc_report_count ?? 0,
   };
 }
 
@@ -155,7 +273,7 @@ export async function getFichaClienteRows(
 
   let boardQuery = supabase.from("vw_customer_campaign_board_v1").select("*");
   let alertQuery = supabase.from("vw_customer_daily_alert_summary_v1").select("*");
-  let qcQuery = supabase.from("vw_customer_qc_trial_bridge_v1").select("*");
+  let qcQuery = supabase.from("vw_customer_qc_trial_bridge_v2").select("*");
 
   if (filters.customer) {
     boardQuery = boardQuery.eq("customer", filters.customer);
@@ -220,23 +338,7 @@ export async function getFichaClienteRows(
   });
 
   ((qcResult.data ?? []) as QCBridgeRow[]).forEach((qc) => {
-    qcMap.set(buildKey(qc), {
-      qc_inspection_id: qc.qc_inspection_id,
-      report_number: qc.report_number,
-      inspection_type: qc.inspection_type,
-      inspection_date: qc.inspection_date,
-      inspector: qc.inspector,
-      factory: qc.factory,
-      aql_result: qc.aql_result,
-      critical_found: qc.critical_found,
-      major_found: qc.major_found,
-      minor_found: qc.minor_found,
-      has_qc_report: qc.has_qc_report,
-      qc_status: qc.qc_status ?? "QC_PENDING",
-      qc_status_label: qc.qc_status_label ?? "No hay reporte QC vinculado.",
-      qc_process_stage: qc.qc_process_stage,
-      qc_process_label: qc.qc_process_label,
-    });
+    qcMap.set(buildKey(qc), buildQC(qc));
   });
 
   const rows = ((boardResult.data ?? []) as CampaignBoardRow[]).map((row) => ({
