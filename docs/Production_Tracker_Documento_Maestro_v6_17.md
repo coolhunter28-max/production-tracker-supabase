@@ -1,4 +1,4 @@
-# Production Tracker — Documento Maestro v6.16
+# Production Tracker — Documento Maestro v6.17
 
 Versión consolidada tras:
 
@@ -4095,3 +4095,276 @@ No clasifica alertas.
 No interpreta QC.
 
 No modifica snapshots históricos.
+
+# 66. Ficha Cliente — Consolidación Operativa (v6.17)
+
+## 66.1 Principio Operations First
+
+Se consolida oficialmente la filosofía:
+
+Operations First.
+
+La pantalla operativa principal del sistema pasa a ser:
+
+```text
+/ficha-cliente
+```
+
+Objetivo:
+
+Representar la fotografía diaria real del trabajo de producción.
+
+La Ficha Cliente es la evolución digital del Excel operativo histórico utilizado por el equipo.
+
+Regla:
+
+Antes de crear nuevas métricas, dashboards o KPIs, debe evaluarse si la necesidad puede resolverse desde Ficha Cliente.
+
+---
+
+## 66.2 Fuente principal de datos
+
+View principal:
+
+```sql
+vw_customer_campaign_board_v1
+```
+
+Agrupación oficial:
+
+```text
+customer
+season
+supplier
+etd_pi
+reference
+style
+color
+```
+
+La vista representa un snapshot operativo consolidado.
+
+El frontend no recalcula lógica de negocio.
+
+---
+
+## 66.3 Sistema de alertas operativas
+
+Nueva arquitectura:
+
+```sql
+vw_customer_daily_alerts
+vw_customer_daily_alert_summary_v1
+```
+
+Objetivo:
+
+Mostrar trabajo pendiente real.
+
+Las alertas deben representar acciones operativas y no ausencia genérica de datos.
+
+Prioridades:
+
+CRITICAL
+WARNING
+MONITOR
+OK
+
+Ejemplos válidos:
+
+* muestras rechazadas
+* muestras pendientes
+* inspection pendiente
+* booking pendiente
+* closing pendiente
+* shipping vencido
+* ETD próxima
+* retrasos operativos reales
+
+Ejemplos inválidos:
+
+* campos vacíos sin contexto
+* métricas abstractas
+* scores sin acción asociada
+
+---
+
+## 66.4 QC Multi-Stage Bridge
+
+Se consolida la integración QC por etapas de proceso.
+
+View principal:
+
+```sql
+vw_customer_qc_trial_bridge_v2
+```
+
+Objetivo:
+
+Relacionar inspecciones QC con la realidad operativa mostrada en Ficha Cliente.
+
+Matching oficial:
+
+```text
+customer
+season
+reference
+style
+color
+```
+
+Regla crítica:
+
+NO utilizar po_id para vincular inspecciones QC.
+
+Una misma combinación:
+
+reference
+style
+color
+
+puede tener múltiples inspecciones asociadas.
+
+---
+
+## 66.5 Etapas QC soportadas
+
+Mapeo oficial:
+
+```text
+T4 -> TRIAL_UPPER
+T5 -> TRIAL_LASTING
+T6 -> ASSEMBLING
+T7 -> FINAL_INSPECTION
+```
+
+La Ficha Cliente puede mostrar simultáneamente múltiples inspecciones abiertas para una misma línea.
+
+Ejemplo:
+
+QC Trial Upper
+020626_03IR03
+
+QC Trial Lasting
+050626_03IR02
+
+Cada inspección mantiene su propio enlace a:
+
+```text
+/qc/inspections/[id]
+```
+
+No se colapsan múltiples inspecciones en un único registro QC.
+
+---
+
+## 66.6 Regla N/N (No Need)
+
+Cuando una muestra no es necesaria:
+
+```text
+N/N
+```
+
+Interpretación oficial:
+
+No Need
+
+Comportamiento:
+
+* no pendiente
+* no warning
+* no monitor
+* no crítica
+
+Representación visual:
+
+estado neutro
+
+---
+
+## 66.7 Integridad histórica
+
+La incorporación de Ficha Cliente NO modifica el modelo histórico existente.
+
+Regla crítica:
+
+```text
+lineas_pedido
+```
+
+continúa siendo un snapshot histórico inmutable.
+
+No se permiten:
+
+* recálculos históricos
+* sobrescrituras masivas
+* modificaciones automáticas retroactivas
+
+Toda nueva lógica debe implementarse mediante:
+
+```text
+views
+materialized views
+analytics layer
+```
+
+y nunca modificando snapshots históricos.
+
+---
+
+## 66.8 Rutas oficiales
+
+Ficha Cliente:
+
+```text
+/ficha-cliente
+```
+
+Edición de PO:
+
+```text
+/po/[id]/editar
+```
+
+Ruta obsoleta:
+
+```text
+/produccion/po/[id]/editar
+```
+
+No debe utilizarse.
+
+---
+
+## 66.9 Estado consolidado
+
+Módulo Estado
+
+Ficha Cliente ✔ Implementado
+Alertas operativas ✔ Implementadas
+QC Multi-Stage ✔ Implementado
+QC Bridge ✔ Implementado
+N/N Handling ✔ Implementado
+Operations First ✔ Consolidado
+
+---
+
+## 66.10 Punto de corte
+
+Versión:
+
+```text
+v6.17
+```
+
+Estado:
+
+* Ficha Cliente consolidada como herramienta operativa principal.
+* Alertas operativas centralizadas en Analytics Layer.
+* Integración QC multi-stage estabilizada.
+* Matching QC basado en customer + season + reference + style + color.
+* Arquitectura alineada con Operations First.
+* Frontend limitado a representación.
+* SQL y Analytics Layer mantienen la lógica de negocio.
+

@@ -81,7 +81,7 @@ export type FichaClienteRow = {
 
 type CampaignBoardRow = Omit<FichaClienteRow, "alert" | "qc">;
 
-type AlertSummaryRow = {
+type AlertSummaryV2Row = {
   customer: string;
   season: string;
   supplier: string;
@@ -89,7 +89,16 @@ type AlertSummaryRow = {
   reference: string | null;
   style: string | null;
   color: string | null;
-} & FichaClienteAlertSummary;
+  alert_level: OperationalAlertLevel | null;
+  priority: number | null;
+  top_alert_event: string | null;
+  top_alert_title: string | null;
+  top_alert_message: string | null;
+  alert_count: number | null;
+  critical_count: number | null;
+  warning_count: number | null;
+  monitor_count: number | null;
+};
 
 type QCBridgeRow = {
   customer: string;
@@ -99,10 +108,6 @@ type QCBridgeRow = {
   reference: string | null;
   style: string | null;
   color: string | null;
-  qty_total: number | null;
-  trial_upper: string | null;
-  trial_lasting: string | null;
-  lasting: string | null;
 
   trial_upper_qc_id: string | null;
   trial_upper_report_number: string | null;
@@ -167,6 +172,22 @@ function emptyAlert(): FichaClienteAlertSummary {
   };
 }
 
+function buildAlert(alert: AlertSummaryV2Row): FichaClienteAlertSummary {
+  return {
+    highest_alert_priority: alert.priority ?? 9,
+    highest_alert_level: alert.alert_level ?? "OK",
+    alerts_count: alert.alert_count ?? 0,
+    critical_count: alert.critical_count ?? 0,
+    warning_count: alert.warning_count ?? 0,
+    monitor_count: alert.monitor_count ?? 0,
+    next_alert_date: alert.etd_pi,
+    alert_types: alert.top_alert_event,
+    primary_action_type: alert.top_alert_event ?? "OK",
+    primary_action_label: alert.top_alert_title ?? alert.top_alert_event ?? "Sin acciones",
+    alert_summary: alert.top_alert_message,
+  };
+}
+
 function emptyQC(): FichaClienteQC {
   return {
     qc_inspection_id: null,
@@ -208,11 +229,9 @@ function buildQC(qc: QCBridgeRow): FichaClienteQC {
   const hasTrialUpper = Boolean(qc.trial_upper_report_number);
   const hasTrialLasting = Boolean(qc.trial_lasting_report_number);
   const hasAssembling = Boolean(qc.assembling_report_number);
-
   const hasAnyQC = hasTrialUpper || hasTrialLasting || hasAssembling;
 
   const labels: string[] = [];
-
   if (hasTrialUpper) labels.push("Trial Upper");
   if (hasTrialLasting) labels.push("Trial Lasting");
   if (hasAssembling) labels.push("Assembling");
@@ -266,14 +285,38 @@ function buildQC(qc: QCBridgeRow): FichaClienteQC {
   };
 }
 
+async function getActiveSeasons(): Promise<string[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("production_active_seasons")
+    .select("season")
+    .eq("is_active", true)
+    .order("season");
+
+  if (error) {
+    console.error("[getActiveSeasons]", error);
+    return [];
+  }
+
+  return (data ?? []).map((row) => row.season).filter(Boolean);
+}
+
 export async function getFichaClienteRows(
   filters: FichaClienteFilters = {}
 ): Promise<FichaClienteRow[]> {
   const supabase = await createClient();
+  const activeSeasons = await getActiveSeasons();
 
   let boardQuery = supabase.from("vw_customer_campaign_board_v1").select("*");
-  let alertQuery = supabase.from("vw_customer_daily_alert_summary_v1").select("*");
+  let alertQuery = supabase.from("vw_customer_daily_alert_summary_v2").select("*");
   let qcQuery = supabase.from("vw_customer_qc_trial_bridge_v2").select("*");
+
+  if (activeSeasons.length > 0) {
+    boardQuery = boardQuery.in("season", activeSeasons);
+    alertQuery = alertQuery.in("season", activeSeasons);
+    qcQuery = qcQuery.in("season", activeSeasons);
+  }
 
   if (filters.customer) {
     boardQuery = boardQuery.eq("customer", filters.customer);
@@ -311,7 +354,7 @@ export async function getFichaClienteRows(
   }
 
   if (alertResult.error) {
-    console.error("[getFichaClienteRows][alerts]", alertResult.error);
+    console.error("[getFichaClienteRows][alerts-v2]", alertResult.error);
   }
 
   if (qcResult.error) {
@@ -321,20 +364,8 @@ export async function getFichaClienteRows(
   const alertMap = new Map<string, FichaClienteAlertSummary>();
   const qcMap = new Map<string, FichaClienteQC>();
 
-  ((alertResult.data ?? []) as AlertSummaryRow[]).forEach((alert) => {
-    alertMap.set(buildKey(alert), {
-      highest_alert_priority: alert.highest_alert_priority,
-      highest_alert_level: alert.highest_alert_level ?? "OK",
-      alerts_count: alert.alerts_count,
-      critical_count: alert.critical_count,
-      warning_count: alert.warning_count,
-      monitor_count: alert.monitor_count,
-      next_alert_date: alert.next_alert_date,
-      alert_types: alert.alert_types,
-      primary_action_type: alert.primary_action_type,
-      primary_action_label: alert.primary_action_label,
-      alert_summary: alert.alert_summary,
-    });
+  ((alertResult.data ?? []) as AlertSummaryV2Row[]).forEach((alert) => {
+    alertMap.set(buildKey(alert), buildAlert(alert));
   });
 
   ((qcResult.data ?? []) as QCBridgeRow[]).forEach((qc) => {
@@ -356,24 +387,30 @@ export async function getFichaClienteRows(
 
 export async function getFichaClienteFilters() {
   const supabase = await createClient();
+  const activeSeasons = await getActiveSeasons();
 
-  const [customers, seasons, suppliers] = await Promise.all([
-    supabase.from("vw_customer_campaign_board_v1").select("customer"),
-    supabase.from("vw_customer_campaign_board_v1").select("season"),
-    supabase.from("vw_customer_campaign_board_v1").select("supplier"),
-  ]);
+  let baseQuery = supabase
+    .from("vw_customer_campaign_board_v1")
+    .select("customer, season, supplier");
+
+  if (activeSeasons.length > 0) {
+    baseQuery = baseQuery.in("season", activeSeasons);
+  }
+
+  const { data, error } = await baseQuery;
+
+  if (error) {
+    console.error("[getFichaClienteFilters]", error);
+    return {
+      customers: [],
+      seasons: activeSeasons,
+      suppliers: [],
+    };
+  }
 
   return {
-    customers: [
-      ...new Set((customers.data ?? []).map((r) => r.customer).filter(Boolean)),
-    ].sort(),
-
-    seasons: [
-      ...new Set((seasons.data ?? []).map((r) => r.season).filter(Boolean)),
-    ].sort(),
-
-    suppliers: [
-      ...new Set((suppliers.data ?? []).map((r) => r.supplier).filter(Boolean)),
-    ].sort(),
+    customers: [...new Set((data ?? []).map((r) => r.customer).filter(Boolean))].sort(),
+    seasons: [...new Set((data ?? []).map((r) => r.season).filter(Boolean))].sort(),
+    suppliers: [...new Set((data ?? []).map((r) => r.supplier).filter(Boolean))].sort(),
   };
 }

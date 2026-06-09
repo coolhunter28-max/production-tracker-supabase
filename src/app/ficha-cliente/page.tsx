@@ -19,6 +19,10 @@ type PageProps = {
   };
 };
 
+const stickyHeader = "sticky top-0 z-30 bg-slate-100";
+const stickyCell = "sticky z-40 bg-white";
+const stickyHeaderCell = "sticky top-0 z-50 bg-slate-100";
+
 function formatDate(value?: string | null) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("es-ES", {
@@ -52,6 +56,21 @@ function actionDot(level?: OperationalAlertLevel | null) {
   return "🟢";
 }
 
+function actionLabel(event?: string | null) {
+  if (event === "SAMPLE_REJECTED") return "Sample rejected";
+  if (event === "SAMPLE_PENDING") return "Sample pending";
+  if (event === "TRIAL_PENDING") return "Trial pending";
+  if (event === "INSPECTION_DUE") return "Inspection due";
+  if (event === "QC_FAILED") return "QC failed";
+  if (event === "QC_ISSUES") return "QC issues";
+  if (event === "QC_PENDING") return "QC pending";
+  if (event === "BOOKING_DUE") return "Booking due";
+  if (event === "CLOSING_DUE") return "Closing due";
+  if (event === "SHIPPING_OVERDUE") return "Shipping overdue";
+  if (event === "ETD_SOON") return "ETD soon";
+  return "Sin acciones";
+}
+
 function qcClass(status?: string | null) {
   if (status === "QC_FAILED") return "bg-red-50 text-red-700 border-red-200";
   if (status === "QC_ISSUES") return "bg-orange-50 text-orange-700 border-orange-200";
@@ -67,43 +86,48 @@ function qcFallbackLabel(status?: string | null) {
 }
 
 function SampleCell({ status }: { status?: string | null }) {
-  const label = status ?? "N/N";
-
   return (
-    <td className="p-1">
+    <td className="border-b p-1">
       <span
         className={`inline-flex min-w-20 justify-center rounded border px-2 py-1 text-xs font-medium ${statusClass(
           status
         )}`}
       >
-        {label}
+        {status ?? "N/N"}
       </span>
     </td>
   );
 }
 
 function DateCell({ value }: { value?: string | null }) {
-  return <td className="whitespace-nowrap p-2">{formatDate(value)}</td>;
+  return <td className="whitespace-nowrap border-b p-2">{formatDate(value)}</td>;
 }
 
 function ActionCell({ row }: { row: FichaClienteRow }) {
   const level = row.alert.highest_alert_level ?? "OK";
+  const event = row.alert.primary_action_type ?? "OK";
+  const count = Number(row.alert.alerts_count ?? 0);
 
   return (
-    <td className="min-w-[180px] p-2">
+    <td
+      className={`${stickyCell} w-[220px] min-w-[220px] border-b border-r p-2 group-hover:bg-slate-50`}
+      style={{ left: 200 }}
+    >
       <div className="flex flex-col gap-1">
         <span
           className={`inline-flex w-fit items-center gap-1 rounded border px-2 py-1 text-xs font-semibold ${actionClass(
             level
           )}`}
-          title={row.alert.alert_types ?? undefined}
         >
           <span>{actionDot(level)}</span>
-          <span>{row.alert.primary_action_label ?? "Sin acciones"}</span>
+          <span>{actionLabel(event)}</span>
+          {count > 1 ? (
+            <span className="ml-1 text-[11px] opacity-80">{count} acciones</span>
+          ) : null}
         </span>
 
-        {row.alert.alert_summary ? (
-          <span className="text-xs text-slate-500">{row.alert.alert_summary}</span>
+        {row.alert.primary_action_label && row.alert.primary_action_label !== event ? (
+          <span className="text-xs text-slate-500">{row.alert.primary_action_label}</span>
         ) : null}
       </div>
     </td>
@@ -149,17 +173,7 @@ function QCStageLink({
 }
 
 function QCCell({ row }: { row: FichaClienteRow }) {
-  const qc = row.qc as FichaClienteRow["qc"] & {
-    trial_upper_qc_id?: string | null;
-    trial_upper_report_number?: string | null;
-    trial_upper_qc_status?: string | null;
-    trial_lasting_qc_id?: string | null;
-    trial_lasting_report_number?: string | null;
-    trial_lasting_qc_status?: string | null;
-    assembling_qc_id?: string | null;
-    assembling_report_number?: string | null;
-    assembling_qc_status?: string | null;
-  };
+  const qc = row.qc;
 
   const hasStageQC =
     qc.trial_upper_qc_id ||
@@ -171,44 +185,46 @@ function QCCell({ row }: { row: FichaClienteRow }) {
 
   if (hasStageQC) {
     return (
-      <td className="min-w-[170px] p-2">
+      <td
+        className={`${stickyCell} w-[190px] min-w-[190px] border-b border-r p-2 group-hover:bg-slate-50`}
+        style={{ left: 420 }}
+      >
         <div className="flex flex-col gap-1">
           <QCStageLink
             id={qc.trial_upper_qc_id}
             label="QC Trial Upper"
             report={qc.trial_upper_report_number}
-            status={qc.trial_upper_qc_status ?? row.qc.qc_status}
+            status={qc.trial_upper_qc_status ?? qc.qc_status}
           />
-
           <QCStageLink
             id={qc.trial_lasting_qc_id}
             label="QC Trial Lasting"
             report={qc.trial_lasting_report_number}
-            status={qc.trial_lasting_qc_status ?? row.qc.qc_status}
+            status={qc.trial_lasting_qc_status ?? qc.qc_status}
           />
-
           <QCStageLink
             id={qc.assembling_qc_id}
             label="QC Assembling"
             report={qc.assembling_report_number}
-            status={qc.assembling_qc_status ?? row.qc.qc_status}
+            status={qc.assembling_qc_status ?? qc.qc_status}
           />
         </div>
       </td>
     );
   }
 
-  const label = qcFallbackLabel(row.qc.qc_status);
-
   return (
-    <td className="min-w-[150px] p-2">
+    <td
+      className={`${stickyCell} w-[190px] min-w-[190px] border-b border-r p-2 group-hover:bg-slate-50`}
+      style={{ left: 420 }}
+    >
       <span
         className={`inline-flex w-fit rounded border px-2 py-1 text-xs font-semibold ${qcClass(
-          row.qc.qc_status
+          qc.qc_status
         )}`}
-        title={row.qc.qc_status_label ?? undefined}
+        title={qc.qc_status_label ?? undefined}
       >
-        {label}
+        {qcFallbackLabel(qc.qc_status)}
       </span>
     </td>
   );
@@ -257,14 +273,14 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
   const qcReportsCount = countQCReports(rows);
 
   return (
-    <main className="mx-auto max-w-[1800px] px-6 py-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
+    <main className="mx-auto max-w-[1800px] px-6 py-6">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-slate-500">Operativa diaria</p>
           <h1 className="text-2xl font-bold">Ficha Cliente</h1>
           <p className="mt-1 text-sm text-slate-600">
-            Fotografía diaria por cliente, temporada, ETD, modelo, color,
-            acciones operativas y evidencia QC.
+            Fotografía diaria por cliente, temporada, ETD, modelo, color, acciones operativas y
+            evidencia QC.
           </p>
         </div>
 
@@ -281,34 +297,52 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <form className="mb-6 rounded-xl border bg-white p-4 shadow-sm">
+      <form className="mb-4 rounded-xl border bg-white p-4 shadow-sm">
         <div className="grid gap-3 md:grid-cols-6">
           <label className="text-sm">
             <span className="mb-1 block text-slate-500">Cliente</span>
-            <select name="customer" defaultValue={filters.customer ?? ""} className="w-full rounded border px-3 py-2">
+            <select
+              name="customer"
+              defaultValue={filters.customer ?? ""}
+              className="w-full rounded border px-3 py-2"
+            >
               <option value="">Todos</option>
               {options.customers.map((customer) => (
-                <option key={customer} value={customer}>{customer}</option>
+                <option key={customer} value={customer}>
+                  {customer}
+                </option>
               ))}
             </select>
           </label>
 
           <label className="text-sm">
             <span className="mb-1 block text-slate-500">Temporada</span>
-            <select name="season" defaultValue={filters.season ?? ""} className="w-full rounded border px-3 py-2">
+            <select
+              name="season"
+              defaultValue={filters.season ?? ""}
+              className="w-full rounded border px-3 py-2"
+            >
               <option value="">Todas</option>
               {options.seasons.map((season) => (
-                <option key={season} value={season}>{season}</option>
+                <option key={season} value={season}>
+                  {season}
+                </option>
               ))}
             </select>
           </label>
 
           <label className="text-sm">
             <span className="mb-1 block text-slate-500">Proveedor</span>
-            <select name="supplier" defaultValue={filters.supplier ?? ""} className="w-full rounded border px-3 py-2">
+            <select
+              name="supplier"
+              defaultValue={filters.supplier ?? ""}
+              className="w-full rounded border px-3 py-2"
+            >
               <option value="">Todos</option>
               {options.suppliers.map((supplier) => (
-                <option key={supplier} value={supplier}>{supplier}</option>
+                <option key={supplier} value={supplier}>
+                  {supplier}
+                </option>
               ))}
             </select>
           </label>
@@ -345,146 +379,153 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
         </div>
       </form>
 
-      <section className="mb-6 grid gap-3 md:grid-cols-7">
+      <section className="mb-4 grid gap-3 md:grid-cols-7">
         <div className="rounded-xl border bg-white p-4 shadow-sm">
           <p className="text-sm text-slate-500">Líneas</p>
           <p className="text-2xl font-bold">{rows.length}</p>
         </div>
-
         <div className="rounded-xl border bg-white p-4 shadow-sm">
           <p className="text-sm text-slate-500">Qty total</p>
           <p className="text-2xl font-bold">{totalQty(rows).toLocaleString("es-ES")}</p>
         </div>
-
         <div className="rounded-xl border bg-red-50 p-4 shadow-sm">
           <p className="text-sm text-red-600">Críticas</p>
           <p className="text-2xl font-bold text-red-700">{criticalCount}</p>
         </div>
-
         <div className="rounded-xl border bg-orange-50 p-4 shadow-sm">
           <p className="text-sm text-orange-600">Acciones</p>
           <p className="text-2xl font-bold text-orange-700">{warningCount}</p>
         </div>
-
         <div className="rounded-xl border bg-yellow-50 p-4 shadow-sm">
           <p className="text-sm text-yellow-700">Monitor</p>
           <p className="text-2xl font-bold text-yellow-800">{monitorCount}</p>
         </div>
-
         <div className="rounded-xl border bg-green-50 p-4 shadow-sm">
           <p className="text-sm text-green-700">OK</p>
           <p className="text-2xl font-bold text-green-800">{okCount}</p>
         </div>
-
         <div className="rounded-xl border bg-slate-50 p-4 shadow-sm">
           <p className="text-sm text-slate-600">QC recibidos</p>
           <p className="text-2xl font-bold text-slate-800">{qcReportsCount}</p>
         </div>
       </section>
 
-      <div className="overflow-x-auto rounded-xl border bg-white shadow-sm">
-        <table className="min-w-[1850px] text-sm">
-          <thead className="sticky top-0 bg-slate-100">
-            <tr className="border-b">
-              <th className="p-2 text-left">Cliente</th>
-              <th className="p-2 text-left">ETD PI</th>
-              <th className="p-2 text-left">Acción</th>
-              <th className="p-2 text-left">Próx. fecha</th>
-              <th className="p-2 text-left">QC</th>
-              <th className="p-2 text-left">POs</th>
-              <th className="p-2 text-left">Reference</th>
-              <th className="p-2 text-left">Style</th>
-              <th className="p-2 text-left">Color</th>
-              <th className="p-2 text-right">Qty</th>
-              <th className="p-2 text-left">CFMs</th>
-              <th className="p-2 text-left">Counter</th>
-              <th className="p-2 text-left">Fitting</th>
-              <th className="p-2 text-left">PPS</th>
-              <th className="p-2 text-left">Testing</th>
-              <th className="p-2 text-left">Shipping Sample</th>
-              <th className="p-2 text-left">Trial U</th>
-              <th className="p-2 text-left">Trial L</th>
-              <th className="p-2 text-left">Lasting</th>
-              <th className="p-2 text-left">Inspection</th>
-              <th className="p-2 text-left">Booking</th>
-              <th className="p-2 text-left">Closing</th>
-              <th className="p-2 text-left">Shipping</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {rows.map((row, index) => {
-              const poLinks = getPoLinks(row);
-
-              return (
-                <tr
-                  key={`${row.customer}-${row.etd_pi}-${row.reference}-${row.style}-${row.color}-${index}`}
-                  className="border-b hover:bg-slate-50"
-                >
-                  <td className="whitespace-nowrap p-2 font-medium">{row.customer}</td>
-                  <DateCell value={row.etd_pi} />
-                  <ActionCell row={row} />
-                  <DateCell value={row.alert.next_alert_date} />
-                  <QCCell row={row} />
-
-                  <td className="whitespace-nowrap p-2">
-                    {poLinks.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {poLinks.map(({ po, poId }) =>
-                          poId ? (
-                            <Link
-                              key={`${poId}-${po}`}
-                              href={`/po/${poId}/editar`}
-                              className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                            >
-                              {po}
-                            </Link>
-                          ) : (
-                            <span key={po} className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">
-                              {po}
-                            </span>
-                          )
-                        )}
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-
-                  <td className="whitespace-nowrap p-2">{row.reference ?? "-"}</td>
-                  <td className="whitespace-nowrap p-2">{row.style ?? "-"}</td>
-                  <td className="whitespace-nowrap p-2">{row.color ?? "-"}</td>
-                  <td className="whitespace-nowrap p-2 text-right font-semibold">
-                    {Number(row.qty_total ?? 0).toLocaleString("es-ES")}
-                  </td>
-
-                  <SampleCell status={row.cfms_status} />
-                  <SampleCell status={row.counters_status} />
-                  <SampleCell status={row.fittings_status} />
-                  <SampleCell status={row.pps_status} />
-                  <SampleCell status={row.testings_status} />
-                  <SampleCell status={row.shippings_status} />
-
-                  <DateCell value={row.trial_upper} />
-                  <DateCell value={row.trial_lasting} />
-                  <DateCell value={row.lasting} />
-                  <DateCell value={row.inspection} />
-                  <DateCell value={row.booking} />
-                  <DateCell value={row.closing} />
-                  <DateCell value={row.shipping_date} />
-                </tr>
-              );
-            })}
-
-            {rows.length === 0 && (
+      <div className="rounded-xl border bg-white shadow-sm">
+        <div className="max-h-[68vh] overflow-auto">
+          <table className="min-w-[2100px] border-separate border-spacing-0 text-sm">
+            <thead>
               <tr>
-                <td colSpan={23} className="p-6 text-center text-slate-500">
-                  No hay datos para los filtros seleccionados.
-                </td>
+                <th className={`${stickyHeaderCell} w-[120px] min-w-[120px] border-b border-r p-2 text-left`} style={{ left: 0 }}>
+                  Cliente
+                </th>
+                <th className={`${stickyHeaderCell} w-[80px] min-w-[80px] border-b border-r p-2 text-left`} style={{ left: 120 }}>
+                  ETD PI
+                </th>
+                <th className={`${stickyHeaderCell} w-[220px] min-w-[220px] border-b border-r p-2 text-left`} style={{ left: 200 }}>
+                  Acción
+                </th>
+                <th className={`${stickyHeaderCell} w-[190px] min-w-[190px] border-b border-r p-2 text-left`} style={{ left: 420 }}>
+                  QC
+                </th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>POs</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Reference</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Style</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Color</th>
+                <th className={`${stickyHeader} border-b p-2 text-right`}>Qty</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>CFMs</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Counter</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Fitting</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>PPS</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Testing</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Shipping Sample</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Trial U</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Trial L</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Lasting</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Inspection</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Booking</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Closing</th>
+                <th className={`${stickyHeader} border-b p-2 text-left`}>Shipping</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+              {rows.map((row, index) => {
+                const poLinks = getPoLinks(row);
+
+                return (
+                  <tr
+                    key={`${row.customer}-${row.etd_pi}-${row.reference}-${row.style}-${row.color}-${index}`}
+                    className="group hover:bg-slate-50"
+                  >
+                    <td className={`${stickyCell} w-[120px] min-w-[120px] border-b border-r p-2 font-medium group-hover:bg-slate-50`} style={{ left: 0 }}>
+                      {row.customer}
+                    </td>
+                    <td className={`${stickyCell} w-[80px] min-w-[80px] whitespace-nowrap border-b border-r p-2 group-hover:bg-slate-50`} style={{ left: 120 }}>
+                      {formatDate(row.etd_pi)}
+                    </td>
+
+                    <ActionCell row={row} />
+                    <QCCell row={row} />
+
+                    <td className="whitespace-nowrap border-b p-2">
+                      {poLinks.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {poLinks.map(({ po, poId }) =>
+                            poId ? (
+                              <Link
+                                key={`${poId}-${po}`}
+                                href={`/po/${poId}/editar`}
+                                className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                              >
+                                {po}
+                              </Link>
+                            ) : (
+                              <span key={po} className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                                {po}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+
+                    <td className="whitespace-nowrap border-b p-2">{row.reference ?? "-"}</td>
+                    <td className="whitespace-nowrap border-b p-2">{row.style ?? "-"}</td>
+                    <td className="whitespace-nowrap border-b p-2">{row.color ?? "-"}</td>
+                    <td className="whitespace-nowrap border-b p-2 text-right font-semibold">
+                      {Number(row.qty_total ?? 0).toLocaleString("es-ES")}
+                    </td>
+
+                    <SampleCell status={row.cfms_status} />
+                    <SampleCell status={row.counters_status} />
+                    <SampleCell status={row.fittings_status} />
+                    <SampleCell status={row.pps_status} />
+                    <SampleCell status={row.testings_status} />
+                    <SampleCell status={row.shippings_status} />
+
+                    <DateCell value={row.trial_upper} />
+                    <DateCell value={row.trial_lasting} />
+                    <DateCell value={row.lasting} />
+                    <DateCell value={row.inspection} />
+                    <DateCell value={row.booking} />
+                    <DateCell value={row.closing} />
+                    <DateCell value={row.shipping_date} />
+                  </tr>
+                );
+              })}
+
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={22} className="p-6 text-center text-slate-500">
+                    No hay datos para los filtros seleccionados.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </main>
   );
