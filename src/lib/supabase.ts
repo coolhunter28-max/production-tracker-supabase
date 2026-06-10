@@ -1,13 +1,32 @@
-// src/lib/supabase.ts
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import "server-only";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
-// Cliente por defecto (para usar directamente en el frontend)
-export const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+export async function createClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// 🧩 Función para crear cliente nuevo (por ejemplo, en rutas API)
-export function createClient() {
-  return createSupabaseClient(supabaseUrl, supabaseAnonKey);
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing Supabase environment variables.");
+  }
+
+  const cookieStore = cookies();
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // Server Components cannot always set cookies.
+        }
+      },
+    },
+  });
 }

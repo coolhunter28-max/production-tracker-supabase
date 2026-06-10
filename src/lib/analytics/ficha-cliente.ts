@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase";
+import { getCurrentUserAccess } from "@/lib/ownership";
 
 export type OperationalAlertLevel = "CRITICAL" | "WARNING" | "MONITOR" | "OK";
 
@@ -307,10 +308,21 @@ export async function getFichaClienteRows(
 ): Promise<FichaClienteRow[]> {
   const supabase = await createClient();
   const activeSeasons = await getActiveSeasons();
+  const access = await getCurrentUserAccess();
 
   let boardQuery = supabase.from("vw_customer_campaign_board_v1").select("*");
   let alertQuery = supabase.from("vw_customer_daily_alert_summary_v2").select("*");
   let qcQuery = supabase.from("vw_customer_qc_trial_bridge_v2").select("*");
+
+  if (!access.canSeeAllCustomers) {
+    if (access.customers.length === 0) {
+      return [];
+    }
+
+    boardQuery = boardQuery.in("customer", access.customers);
+    alertQuery = alertQuery.in("customer", access.customers);
+    qcQuery = qcQuery.in("customer", access.customers);
+  }
 
   if (activeSeasons.length > 0) {
     boardQuery = boardQuery.in("season", activeSeasons);
@@ -388,10 +400,23 @@ export async function getFichaClienteRows(
 export async function getFichaClienteFilters() {
   const supabase = await createClient();
   const activeSeasons = await getActiveSeasons();
+  const access = await getCurrentUserAccess();
 
   let baseQuery = supabase
     .from("vw_customer_campaign_board_v1")
     .select("customer, season, supplier");
+
+  if (!access.canSeeAllCustomers) {
+    if (access.customers.length === 0) {
+      return {
+        customers: [],
+        seasons: [],
+        suppliers: [],
+      };
+    }
+
+    baseQuery = baseQuery.in("customer", access.customers);
+  }
 
   if (activeSeasons.length > 0) {
     baseQuery = baseQuery.in("season", activeSeasons);

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase";
+import { getCurrentUserAccess } from "@/lib/ownership";
 
 export type CommandCenterAlertLevel = "CRITICAL" | "WARNING" | "MONITOR" | "OK";
 
@@ -76,7 +77,6 @@ export type CommandCenterStats = {
   critical_customers: number;
   warning_customers: number;
   monitor_customers: number;
-
   shipping_overdue_count: number;
   inspection_due_count: number;
   sample_pending_count: number;
@@ -86,6 +86,12 @@ export type CommandCenterStats = {
 export type CommandCenterBundle = {
   customers: CommandCenterCustomerGroup[];
   stats: CommandCenterStats;
+  access: {
+    email: string | null;
+    role: string;
+    canSeeAllCustomers: boolean;
+    customers: string[];
+  };
 };
 
 function emptyGroup(customer: string): CommandCenterCustomerGroup {
@@ -116,6 +122,20 @@ function emptyGroup(customer: string): CommandCenterCustomerGroup {
     closing_due_count: 0,
     trial_pending_count: 0,
     etd_soon_count: 0,
+  };
+}
+
+function emptyStats(): CommandCenterStats {
+  return {
+    customers_with_fronts: 0,
+    fronts_total: 0,
+    critical_customers: 0,
+    warning_customers: 0,
+    monitor_customers: 0,
+    shipping_overdue_count: 0,
+    inspection_due_count: 0,
+    sample_pending_count: 0,
+    qc_pending_count: 0,
   };
 }
 
@@ -154,8 +174,22 @@ function summaryCounterKey(event?: string | null) {
   return null;
 }
 
+function applyCustomerScope<T extends { customer: string | null }>(
+  rows: T[],
+  canSeeAllCustomers: boolean,
+  customers: string[]
+) {
+  if (canSeeAllCustomers) return rows;
+  if (customers.length === 0) return [];
+
+  const allowed = new Set(customers);
+
+  return rows.filter((row) => row.customer && allowed.has(row.customer));
+}
+
 export async function getCommandCenterBundle(): Promise<CommandCenterBundle> {
   const supabase = await createClient();
+  const access = await getCurrentUserAccess();
 
   const [summaryResult, eventsResult] = await Promise.all([
     supabase
@@ -181,8 +215,17 @@ export async function getCommandCenterBundle(): Promise<CommandCenterBundle> {
     console.error("[getCommandCenterBundle][events]", eventsResult.error);
   }
 
-  const summaries = (summaryResult.data ?? []) as CommandCenterAlertSummary[];
-  const events = (eventsResult.data ?? []) as CommandCenterAlertEvent[];
+  const summaries = applyCustomerScope(
+    (summaryResult.data ?? []) as CommandCenterAlertSummary[],
+    access.canSeeAllCustomers,
+    access.customers
+  );
+
+  const events = applyCustomerScope(
+    (eventsResult.data ?? []) as CommandCenterAlertEvent[],
+    access.canSeeAllCustomers,
+    access.customers
+  );
 
   const map = new Map<string, CommandCenterCustomerGroup>();
 
@@ -236,19 +279,13 @@ export async function getCommandCenterBundle(): Promise<CommandCenterBundle> {
     return a.customer.localeCompare(b.customer);
   });
 
-  const stats: CommandCenterStats = {
-    customers_with_fronts: customers.length,
-    fronts_total: summaries.length,
+  const stats = emptyStats();
 
-    critical_customers: customers.filter((row) => row.critical_count > 0).length,
-    warning_customers: customers.filter((row) => row.warning_count > 0).length,
-    monitor_customers: customers.filter((row) => row.monitor_count > 0).length,
-
-    shipping_overdue_count: 0,
-    inspection_due_count: 0,
-    sample_pending_count: 0,
-    qc_pending_count: 0,
-  };
+  stats.customers_with_fronts = customers.length;
+  stats.fronts_total = summaries.length;
+  stats.critical_customers = customers.filter((row) => row.critical_count > 0).length;
+  stats.warning_customers = customers.filter((row) => row.warning_count > 0).length;
+  stats.monitor_customers = customers.filter((row) => row.monitor_count > 0).length;
 
   for (const row of summaries) {
     const key = summaryCounterKey(row.top_alert_event);
@@ -258,5 +295,14 @@ export async function getCommandCenterBundle(): Promise<CommandCenterBundle> {
     }
   }
 
-  return { customers, stats };
+  return {
+    customers,
+    stats,
+    access: {
+      email: access.email,
+      role: access.role,
+      canSeeAllCustomers: access.canSeeAllCustomers,
+      customers: access.customers,
+    },
+  };
 }
