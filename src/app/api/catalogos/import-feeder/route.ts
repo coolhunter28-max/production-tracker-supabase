@@ -122,9 +122,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "File is required" }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(new Uint8Array(arrayBuffer));
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
+    await wb.xlsx.load(buffer as any);
 
     // 1) Elegir hoja: preferimos una que contenga "feeder" o si no, la primera
     const sheet =

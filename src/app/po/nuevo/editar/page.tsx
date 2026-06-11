@@ -1,9 +1,9 @@
-﻿"use client";
+﻿import { POForm } from "@/components/po/po-form";
 
-import EditarPOPage from "../../[id]/editar/page";
-
-export default function NuevoPOEditarWrapper() {
-  // Reutiliza exactamente el mismo editor de /po/[id]/editar
-  // pero entrando por /po/nuevo/editar
-  return <EditarPOPage />;
+export default function NuevoPOPage() {
+  return (
+    <main className="min-h-screen bg-slate-50 px-6 py-8">
+      <POForm successUrl="/produccion/pos" cancelUrl="/produccion/pos" />
+    </main>
+  );
 }

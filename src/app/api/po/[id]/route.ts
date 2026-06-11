@@ -1,223 +1,187 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
+import { getCurrentUserAccess } from "@/lib/ownership";
 
 export const runtime = "nodejs";
-
-type LineaPayload = {
-  id?: string;
-  reference?: string | null;
-  style?: string | null;
-  color?: string | null;
-  size_run?: string | null;
-  category?: string | null;
-  channel?: string | null;
-  qty?: number | null;
-  price?: number | null;
-  price_selling?: number | null;
-  amount_selling?: number | null;
-  pi_bsg?: string | null;
-  trial_upper?: string | null;
-  trial_lasting?: string | null;
-  lasting?: string | null;
-  finish_date?: string | null;
-  muestras?: MuestraPayload[];
-};
-
-type MuestraPayload = {
-  id?: string;
-  tipo_muestra?: string | null;
-  fecha_muestra?: string | null;
-  estado_muestra?: string | null;
-  round?: number | null;
-  notas?: string | null;
-};
-
-function emptyToNull(value: unknown) {
-  if (value === undefined || value === null) return null;
-  if (typeof value === "string" && value.trim() === "") return null;
-  return value;
-}
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function text(value: unknown) {
   if (value === undefined || value === null) return null;
-  return String(value).trim();
+  const v = String(value).trim();
+  return v === "" ? null : v;
+}
+
+function dateOrNull(value: unknown) {
+  return text(value);
 }
 
 function num(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
-  const n = Number(value);
+  const n = Number(String(value).replace(",", "."));
   return Number.isFinite(n) ? n : null;
 }
 
-// GET: obtener un PO con líneas + muestras
-export async function GET(
-  req: Request,
-  { params }: { params: { id: string } },
-) {
-  const { data, error } = await supabase
+function jsonError(message: string, status = 400) {
+  return NextResponse.json({ success: false, error: message }, { status });
+}
+
+async function getPOAccessStatus(poId: string) {
+  const supabase = await createClient();
+  const access = await getCurrentUserAccess();
+
+  if (!access.userId || !access.isActive) {
+    return { allowed: false, status: 401, error: "Usuario no autenticado.", supabase, access };
+  }
+
+  if (!poId || poId === "undefined" || poId === "null") {
+    return { allowed: false, status: 400, error: "PO id inválido.", supabase, access };
+  }
+
+  const { data: po, error } = await supabase
+    .from("pos")
+    .select("id, customer")
+    .eq("id", poId)
+    .maybeSingle();
+
+  if (error) return { allowed: false, status: 500, error: error.message, supabase, access };
+  if (!po) return { allowed: false, status: 404, error: "PO no encontrado.", supabase, access };
+
+  if (!access.canSeeAllCustomers && !access.customers.includes(po.customer ?? "")) {
+    return { allowed: false, status: 403, error: "No tienes acceso a este PO.", supabase, access };
+  }
+
+  return { allowed: true, status: 200, error: null, supabase, access };
+}
+
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const poId = params.id;
+  const accessStatus = await getPOAccessStatus(poId);
+
+  if (!accessStatus.allowed) {
+    return jsonError(accessStatus.error ?? "Acceso no permitido.", accessStatus.status);
+  }
+
+  const { data, error } = await accessStatus.supabase
     .from("pos")
     .select("*, lineas_pedido(*, muestras(*))")
-    .eq("id", params.id)
+    .eq("id", poId)
     .single();
 
-  if (error) {
-    console.error("❌ Error obteniendo PO:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) return jsonError(error.message, 500);
 
   return NextResponse.json(data);
 }
 
-// PUT: actualizar PO + líneas + muestras
-export async function PUT(
-  req: Request,
-  { params }: { params: { id: string } },
-) {
-  try {
-    const body = await req.json();
-    const poId = params.id;
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  const poId = params.id;
+  const accessStatus = await getPOAccessStatus(poId);
 
-    const poPayload = {
-      po: text(body.po),
-      season: text(body.season),
-      customer: text(body.customer),
-      supplier: text(body.supplier),
-      factory: text(body.factory),
-      currency: text(body.currency) ?? "USD",
-      po_date: emptyToNull(body.po_date),
-      etd_pi: emptyToNull(body.etd_pi),
-      booking: emptyToNull(body.booking),
-      closing: emptyToNull(body.closing),
-      shipping_date: emptyToNull(body.shipping_date),
-      inspection: emptyToNull(body.inspection),
-      estado_inspeccion: emptyToNull(body.estado_inspeccion),
+  if (!accessStatus.allowed) {
+    return jsonError(accessStatus.error ?? "Acceso no permitido.", accessStatus.status);
+  }
+
+  const body = await req.json();
+  const po = body.po ?? body;
+  const lineas = Array.isArray(body.lineas_pedido) ? body.lineas_pedido : [];
+
+  const nextCustomer = text(po.customer);
+
+  if (
+    !accessStatus.access.canSeeAllCustomers &&
+    nextCustomer &&
+    !accessStatus.access.customers.includes(nextCustomer)
+  ) {
+    return jsonError("No puedes reasignar el PO a un cliente fuera de tu cartera.", 403);
+  }
+
+  const { error: poError } = await accessStatus.supabase
+    .from("pos")
+    .update({
+      po: text(po.po),
+      season: text(po.season),
+      customer: nextCustomer,
+      supplier: text(po.supplier),
+      factory: text(po.factory),
+      currency: text(po.currency) ?? "USD",
+      po_date: dateOrNull(po.po_date),
+      etd_pi: dateOrNull(po.etd_pi),
+      pi: text(po.pi),
+      channel: text(po.channel),
+      booking: text(po.booking),
+      closing: text(po.closing),
+      shipping_date: dateOrNull(po.shipping_date),
+      inspection: text(po.inspection),
+      estado_inspeccion: text(po.estado_inspeccion),
+    })
+    .eq("id", poId);
+
+  if (poError) return jsonError(poError.message, 500);
+
+  for (const linea of lineas) {
+    const basePayload = {
+      reference: text(linea.reference) ?? "",
+      style: text(linea.style) ?? "",
+      color: text(linea.color) ?? "",
+      size_run: text(linea.size_run),
+      category: text(linea.category),
+      channel: text(linea.channel),
+      qty: num(linea.qty) ?? 0,
+      price: num(linea.price),
+      amount: num(linea.amount),
+      pi_number: text(linea.pi_number),
+      pi_bsg: text(linea.pi_bsg),
+      price_selling: num(linea.price_selling),
+      amount_selling: num(linea.amount_selling),
+      etd: dateOrNull(linea.etd),
+      inspection: dateOrNull(linea.inspection),
+      estado_inspeccion: text(linea.estado_inspeccion),
+      trial_upper: text(linea.trial_upper),
+      trial_lasting: text(linea.trial_lasting),
+      lasting: text(linea.lasting),
+      finish_date: dateOrNull(linea.finish_date),
+      modelo_id: text(linea.modelo_id),
+      variante_id: text(linea.variante_id),
     };
 
-    const { error: poError } = await supabase
-      .from("pos")
-      .update(poPayload)
-      .eq("id", poId);
-
-    if (poError) {
-      throw new Error(poError.message);
-    }
-
-    const lineas = Array.isArray(body.lineas_pedido)
-      ? (body.lineas_pedido as LineaPayload[])
-      : [];
-
-    for (const linea of lineas) {
-      if (!linea.id) continue;
-
-      const lineaPayload = {
-        reference: text(linea.reference) ?? "",
-        style: text(linea.style) ?? "",
-        color: text(linea.color) ?? "",
-        size_run: text(linea.size_run),
-        category: text(linea.category),
-        channel: text(linea.channel),
-        qty: num(linea.qty),
-        price: num(linea.price),
-        price_selling: num(linea.price_selling),
-        amount_selling: num(linea.amount_selling),
-        pi_bsg: emptyToNull(linea.pi_bsg),
-        trial_upper: emptyToNull(linea.trial_upper),
-        trial_lasting: emptyToNull(linea.trial_lasting),
-        lasting: emptyToNull(linea.lasting),
-        finish_date: emptyToNull(linea.finish_date),
-
-        // Importante:
-        // NO tocamos snapshot master_*_used aquí.
-        // NO recalculamos modelo_id / variante_id aquí.
-        // Master Sync se encarga de backfill seguro.
-      };
-
-      const { error: lineaError } = await supabase
+    if (linea.id) {
+      await accessStatus.supabase
         .from("lineas_pedido")
-        .update(lineaPayload)
-        .eq("id", linea.id);
-
-      if (lineaError) {
-        throw new Error(lineaError.message);
-      }
-
-      const muestras = Array.isArray(linea.muestras)
-        ? (linea.muestras as MuestraPayload[])
-        : [];
-
-      for (const muestra of muestras) {
-        if (!muestra.id) continue;
-
-        const muestraPayload = {
-          tipo_muestra: text(muestra.tipo_muestra),
-          fecha_muestra: emptyToNull(muestra.fecha_muestra),
-          estado_muestra: text(muestra.estado_muestra),
-          round: num(muestra.round),
-          notas: emptyToNull(muestra.notas),
-        };
-
-        const { error: muestraError } = await supabase
-          .from("muestras")
-          .update(muestraPayload)
-          .eq("id", muestra.id);
-
-        if (muestraError) {
-          throw new Error(muestraError.message);
-        }
-      }
+        .update(basePayload)
+        .eq("id", linea.id)
+        .eq("po_id", poId);
+    } else {
+      await accessStatus.supabase.from("lineas_pedido").insert({
+        ...basePayload,
+        po_id: poId,
+        master_buy_price_used: num(linea.master_buy_price_used),
+        master_sell_price_used: num(linea.master_sell_price_used),
+        master_currency_used: text(linea.master_currency_used),
+        master_valid_from_used: dateOrNull(linea.master_valid_from_used),
+        master_price_id_used: text(linea.master_price_id_used),
+        master_price_source: text(linea.master_price_source),
+      });
     }
-
-    return NextResponse.json({
-      success: true,
-      updated: {
-        po: true,
-        lineas: lineas.length,
-      },
-    });
-  } catch (error: any) {
-    console.error("❌ Error actualizando PO:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Error actualizando PO",
-      },
-      { status: 500 },
-    );
   }
+
+  return NextResponse.json({ success: true });
 }
 
-// DELETE: eliminar un PO
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } },
-) {
-  try {
-    const { data: existing, error: findErr } = await supabase
-      .from("pos")
-      .select("id, po")
-      .eq("id", params.id)
-      .maybeSingle();
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const poId = params.id;
+  const accessStatus = await getPOAccessStatus(poId);
 
-    if (findErr) {
-      return NextResponse.json({ error: findErr.message }, { status: 500 });
-    }
-
-    if (!existing) {
-      return NextResponse.json({ error: "PO no encontrado" }, { status: 404 });
-    }
-
-    const { error } = await supabase.from("pos").delete().eq("id", params.id);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || "Error inesperado" },
-      { status: 500 },
-    );
+  if (!accessStatus.allowed) {
+    return jsonError(accessStatus.error ?? "Acceso no permitido.", accessStatus.status);
   }
+
+  if (!["ADMIN", "MANAGER", "OPERATOR"].includes(accessStatus.access.role)) {
+    return jsonError("No tienes permisos para eliminar POs.", 403);
+  }
+
+  const { error } = await accessStatus.supabase.from("pos").delete().eq("id", poId);
+
+  if (error) return jsonError(error.message, 500);
+
+  return NextResponse.json({ success: true });
 }

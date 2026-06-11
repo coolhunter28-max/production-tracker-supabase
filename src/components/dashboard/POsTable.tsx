@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
 } from "@/components/ui/card";
-
 import {
   Table,
   TableBody,
@@ -16,12 +16,35 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
 import { Button } from "@/components/ui/button";
 import { PO } from "@/types";
 import { getEstadoPO } from "@/utils/getEstadoPO";
 
 export default function POsTable({ pos }: { pos: PO[] }) {
+  const router = useRouter();
+
+  async function handleDelete(poId: string, poNumber?: string | null) {
+    const confirmed = window.confirm(
+      `¿Estás seguro de que deseas eliminar este PO${
+        poNumber ? ` (${poNumber})` : ""
+      }?\n\nEsta acción no se puede deshacer.`
+    );
+
+    if (!confirmed) return;
+
+    const response = await fetch(`/api/po/${poId}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      alert("No se ha podido eliminar el PO.");
+      return;
+    }
+
+    router.refresh();
+    window.location.reload();
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -60,7 +83,7 @@ export default function POsTable({ pos }: { pos: PO[] }) {
                       <TableCell>{po.po_date || "-"}</TableCell>
                       <TableCell>{po.etd_pi || "-"}</TableCell>
 
-                      <TableCell className={`font-semibold text-${estado.color}-600`}>
+                      <TableCell className="font-semibold">
                         {estado.icon} {estado.estado}
                       </TableCell>
 
@@ -77,6 +100,14 @@ export default function POsTable({ pos }: { pos: PO[] }) {
                               Ver
                             </Button>
                           </Link>
+
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDelete(po.id, po.po)}
+                          >
+                            Eliminar
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -84,7 +115,7 @@ export default function POsTable({ pos }: { pos: PO[] }) {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-4">
+                  <TableCell colSpan={9} className="py-4 text-center">
                     No hay resultados
                   </TableCell>
                 </TableRow>

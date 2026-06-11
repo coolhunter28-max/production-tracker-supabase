@@ -5,8 +5,6 @@ import { fetchPOs } from "@/services/pos";
 import FiltersBox from "@/components/dashboard/FiltersBox";
 import POsTable from "@/components/dashboard/POsTable";
 import Link from "next/link";
-import { PO } from "@/types";
-
 import { getEstadoPO } from "@/utils/getEstadoPO";
 
 type Filters = {
@@ -14,6 +12,7 @@ type Filters = {
   supplier: string;
   factory: string;
   season: string;
+  style: string;
   estado: string;
   search: string;
 };
@@ -23,6 +22,7 @@ const DEFAULT_FILTERS: Filters = {
   supplier: "todos",
   factory: "todos",
   season: "todos",
+  style: "",
   estado: "todos",
   search: "",
 };
@@ -34,16 +34,13 @@ export default function POsPage() {
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
-  // -----------------------------------------------------
-  // Load POs + calcular estado dinámico
-  // -----------------------------------------------------
   useEffect(() => {
     const load = async () => {
       const data = await fetchPOs();
 
-      // ⭐ Añadir estado calculado
       const enriched = data.map((po: any) => {
         const estadoInfo = getEstadoPO(po);
+
         return {
           ...po,
           estado: estadoInfo.estado ?? "Sin datos",
@@ -58,9 +55,6 @@ export default function POsPage() {
     load();
   }, []);
 
-  // -----------------------------------------------------
-  // Unique filter values
-  // -----------------------------------------------------
   const customers = useMemo(
     () => [...new Set(pos.map((p) => p.customer).filter(Boolean))].sort(),
     [pos]
@@ -81,93 +75,119 @@ export default function POsPage() {
     [pos]
   );
 
-  const estados = useMemo(
+  const styles = useMemo(
     () =>
-      [...new Set(pos.map((p) => p.estado).filter(Boolean))].sort(), // Delay / Finalizado / En producción / Sin datos
+      [
+        ...new Set(
+          pos
+            .flatMap((p) => p.lineas_pedido ?? [])
+            .map((line: any) => line.style)
+            .filter(Boolean)
+        ),
+      ].sort(),
     [pos]
   );
 
-  // -----------------------------------------------------
-  // Apply filters
-  // -----------------------------------------------------
+  const estados = useMemo(
+    () => [...new Set(pos.map((p) => p.estado).filter(Boolean))].sort(),
+    [pos]
+  );
+
   useEffect(() => {
     let result = pos;
 
-    const test = (val?: string) =>
-      (val || "").toLowerCase().includes(filters.search.toLowerCase());
+    const test = (val?: string | null) =>
+      String(val ?? "").toLowerCase().includes(filters.search.toLowerCase());
 
-    if (filters.customer !== "todos")
+    if (filters.customer !== "todos") {
       result = result.filter((p) => p.customer === filters.customer);
+    }
 
-    if (filters.supplier !== "todos")
+    if (filters.supplier !== "todos") {
       result = result.filter((p) => p.supplier === filters.supplier);
+    }
 
-    if (filters.factory !== "todos")
+    if (filters.factory !== "todos") {
       result = result.filter((p) => p.factory === filters.factory);
+    }
 
-    if (filters.season !== "todos")
+    if (filters.season !== "todos") {
       result = result.filter((p) => p.season === filters.season);
+    }
 
-    if (filters.estado !== "todos")
+    if (filters.estado !== "todos") {
       result = result.filter((p) => p.estado === filters.estado);
+    }
 
-    if (filters.search)
+    if (filters.style) {
+      result = result.filter((p) =>
+        (p.lineas_pedido ?? []).some((line: any) =>
+          String(line.style ?? "")
+            .toLowerCase()
+            .includes(filters.style.toLowerCase())
+        )
+      );
+    }
+
+    if (filters.search) {
       result = result.filter(
         (p) =>
           test(p.po) ||
+          test(p.po_number) ||
           test(p.customer) ||
           test(p.supplier) ||
           test(p.factory) ||
           test(p.season) ||
-          test(p.estado)
+          test(p.estado) ||
+          (p.lineas_pedido ?? []).some(
+            (line: any) =>
+              test(line.reference) ||
+              test(line.style) ||
+              test(line.color) ||
+              test(line.category)
+          )
       );
+    }
 
     setFilteredPOs(result);
   }, [filters, pos]);
 
-  const handleFilterChange = (field: keyof Filters, value: string) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
-  };
-
   if (loading) return <div className="p-10">Cargando...</div>;
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      {/* HEADER */}
-      <div className="flex justify-between items-center">
+    <div className="container mx-auto space-y-6 py-6">
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Lista de Purchase Orders</h1>
 
         <div className="flex gap-3">
           <Link
             href="/"
-            className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 transition"
+            className="rounded bg-gray-200 px-4 py-2 transition hover:bg-gray-300"
           >
             ← Inicio
           </Link>
 
-          {/* Ruta correcta */}
           <Link
             href="/po/nuevo/editar"
-            className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800 transition"
+            className="rounded bg-black px-4 py-2 text-white transition hover:bg-gray-800"
           >
             + Nuevo PO
           </Link>
         </div>
       </div>
 
-      {/* FILTERS */}
       <FiltersBox
         customers={customers}
         suppliers={suppliers}
         factories={factories}
         seasons={seasons}
+        styles={styles}
         estados={estados}
         filters={filters}
-        onChange={handleFilterChange}
+        onChange={setFilters}
         onClear={() => setFilters(DEFAULT_FILTERS)}
       />
 
-      {/* TABLE */}
       <POsTable pos={filteredPOs} />
     </div>
   );

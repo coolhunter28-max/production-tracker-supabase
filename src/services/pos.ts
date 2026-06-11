@@ -1,43 +1,17 @@
-import { supabase } from "@/lib/supabase";
 import { PO } from "@/types";
 
 export async function fetchPOs(): Promise<PO[]> {
-  const { data, error } = await supabase
-    .from("pos")
-    .select(
-      `
-      *,
-      lineas_pedido (
-        id,
-        po_id,
-        reference,
-        style,
-        color,
-        size_run,
-        category,
-        qty,
-        price,
-        amount,
-        pi_bsg,
-        price_selling,
-        amount_selling
-      )
-    `
-    )
-    .order("po_date", { ascending: false });
+  const response = await fetch("/api/pos", {
+    method: "GET",
+    cache: "no-store",
+  });
 
-  if (error) {
-    console.error("❌ Error fetching POs:", error);
+  if (!response.ok) {
+    console.error("❌ Error fetching POs:", response.statusText);
     return [];
   }
 
-  if (!data) return [];
+  const data = await response.json();
 
-  // ⚠️ REGLA: si no hay estado, generamos uno por defecto
-  const enriched = data.map((po: any) => ({
-    ...po,
-    estado: po.estado || "Sin datos",
-  }));
-
-  return enriched as PO[];
+  return data as PO[];
 }
