@@ -110,6 +110,8 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
   const router = useRouter();
 
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [channelOptions, setChannelOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -168,6 +170,8 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
       const json = await res.json();
 
       setCatalog(json.data ?? []);
+      setCategoryOptions(json.meta?.categories ?? []);
+      setChannelOptions(json.meta?.channels ?? []);
     }
 
     loadCatalog();
@@ -177,7 +181,11 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
     return catalog.filter((item) => {
       if (formData.customer && item.customer !== formData.customer) return false;
       if (formData.supplier && item.supplier !== formData.supplier) return false;
-      if (formData.factory && item.factory !== formData.factory) return false;
+
+      // Si el catálogo tiene factory null, no lo ocultamos.
+      // Pero el PO sí exige factory antes de guardar.
+      if (formData.factory && item.factory && item.factory !== formData.factory) return false;
+
       if (formData.season && item.season !== formData.season) return false;
 
       return true;
@@ -269,8 +277,36 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
     setLineas((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function validateBeforeSave() {
+    if (!formData.po.trim()) return "PO es obligatorio.";
+    if (!formData.customer.trim()) return "Customer es obligatorio.";
+    if (!formData.supplier.trim()) return "Supplier es obligatorio.";
+    if (!formData.factory.trim()) return "Factory es obligatorio.";
+    if (!formData.season.trim()) return "Season es obligatorio.";
+
+    if (lineas.length === 0) return "Debes añadir al menos una línea.";
+
+    for (const [index, linea] of lineas.entries()) {
+      const rowNumber = index + 1;
+
+      if (!linea.style.trim()) return `La línea ${rowNumber} no tiene modelo/style.`;
+      if (!linea.color.trim()) return `La línea ${rowNumber} no tiene color.`;
+      if (!linea.qty || Number(linea.qty) <= 0) return `La línea ${rowNumber} no tiene cantidad válida.`;
+    }
+
+    return null;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    const validationError = validateBeforeSave();
+
+    if (validationError) {
+      alert(validationError);
+      return;
+    }
+
     setLoading(true);
 
     const payload = {
@@ -311,33 +347,10 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
         <div className="grid gap-3 md:grid-cols-4">
           <Field label="PO" value={formData.po} onChange={(v) => updateHeader("po", v)} required />
 
-          <SelectOrInput
-            label="Season"
-            value={formData.season}
-            options={seasons}
-            onChange={(v) => updateHeader("season", v)}
-          />
-
-          <SelectOrInput
-            label="Customer"
-            value={formData.customer}
-            options={customers}
-            onChange={(v) => updateHeader("customer", v)}
-          />
-
-          <SelectOrInput
-            label="Supplier"
-            value={formData.supplier}
-            options={suppliers}
-            onChange={(v) => updateHeader("supplier", v)}
-          />
-
-          <SelectOrInput
-            label="Factory"
-            value={formData.factory}
-            options={factories}
-            onChange={(v) => updateHeader("factory", v)}
-          />
+          <SelectOrInput label="Season" value={formData.season} options={seasons} onChange={(v) => updateHeader("season", v)} />
+          <SelectOrInput label="Customer" value={formData.customer} options={customers} onChange={(v) => updateHeader("customer", v)} />
+          <SelectOrInput label="Supplier" value={formData.supplier} options={suppliers} onChange={(v) => updateHeader("supplier", v)} />
+          <SelectOrInput label="Factory" value={formData.factory} options={factories} onChange={(v) => updateHeader("factory", v)} />
 
           <Field label="Currency" value={formData.currency} onChange={(v) => updateHeader("currency", v)} />
           <Field label="PO Date" type="date" value={formData.po_date} onChange={(v) => updateHeader("po_date", v)} />
@@ -354,17 +367,13 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold">Líneas de pedido</h2>
 
-          <button
-            type="button"
-            onClick={addLinea}
-            className="rounded bg-slate-900 px-3 py-2 text-sm text-white"
-          >
+          <button type="button" onClick={addLinea} className="rounded bg-slate-900 px-3 py-2 text-sm text-white">
             + Añadir línea
           </button>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-[1700px] text-sm">
+          <table className="min-w-[2100px] text-sm">
             <thead className="bg-slate-100">
               <tr>
                 <Th>Modelo / Style</Th>
@@ -375,7 +384,9 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
                 <Th>Channel</Th>
                 <Th>Qty</Th>
                 <Th>Buy</Th>
+                <Th>Amount</Th>
                 <Th>Sell</Th>
+                <Th>Sell Amount</Th>
                 <Th>PI línea</Th>
                 <Th>PI BSG</Th>
                 <Th>ETD línea</Th>
@@ -402,6 +413,7 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
                         onChange={(e) => {
                           updateLinea(index, "style", e.target.value);
                           updateLinea(index, "color", "");
+                          updateLinea(index, "variante_id", "");
                         }}
                       >
                         <option value="">Seleccionar</option>
@@ -416,80 +428,53 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
                     <Td>
                       <select
                         className="w-full rounded border px-2 py-1"
-                        value={linea.color}
+                        value={linea.variante_id}
                         onChange={(e) => {
-                          const item = colorOptions.find((x) => x.color === e.target.value);
+                          const item = colorOptions.find((x) => x.variante_id === e.target.value);
                           if (item) applyCatalogItem(index, item);
                         }}
                       >
                         <option value="">Seleccionar</option>
                         {colorOptions.map((item) => (
-                          <option key={item.variante_id} value={item.color ?? ""}>
-                            {item.color}
+                          <option key={item.variante_id} value={item.variante_id}>
+                            {item.color} · {item.reference} · {item.season}
                           </option>
                         ))}
                       </select>
                     </Td>
 
+                    <Td><SmallInput value={linea.reference} onChange={(v) => updateLinea(index, "reference", v)} /></Td>
+                    <Td><SmallInput value={linea.size_run} onChange={(v) => updateLinea(index, "size_run", v)} /></Td>
+
                     <Td>
-                      <SmallInput value={linea.reference} onChange={(v) => updateLinea(index, "reference", v)} />
+                      <DataListInput
+                        value={linea.category}
+                        options={categoryOptions}
+                        onChange={(v) => updateLinea(index, "category", v)}
+                      />
                     </Td>
 
                     <Td>
-                      <SmallInput value={linea.size_run} onChange={(v) => updateLinea(index, "size_run", v)} />
+                      <DataListInput
+                        value={linea.channel}
+                        options={channelOptions}
+                        onChange={(v) => updateLinea(index, "channel", v)}
+                      />
                     </Td>
 
-                    <Td>
-                      <SmallInput value={linea.category} onChange={(v) => updateLinea(index, "category", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput value={linea.channel} onChange={(v) => updateLinea(index, "channel", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput type="number" value={linea.qty} onChange={(v) => updateLinea(index, "qty", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput value={linea.price} onChange={(v) => updateLinea(index, "price", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput value={linea.price_selling} onChange={(v) => updateLinea(index, "price_selling", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput value={linea.pi_number} onChange={(v) => updateLinea(index, "pi_number", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput value={linea.pi_bsg} onChange={(v) => updateLinea(index, "pi_bsg", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput type="date" value={linea.etd} onChange={(v) => updateLinea(index, "etd", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput type="date" value={linea.inspection} onChange={(v) => updateLinea(index, "inspection", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput value={linea.trial_upper} onChange={(v) => updateLinea(index, "trial_upper", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput value={linea.trial_lasting} onChange={(v) => updateLinea(index, "trial_lasting", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput value={linea.lasting} onChange={(v) => updateLinea(index, "lasting", v)} />
-                    </Td>
-
-                    <Td>
-                      <SmallInput type="date" value={linea.finish_date} onChange={(v) => updateLinea(index, "finish_date", v)} />
-                    </Td>
+                    <Td><SmallInput type="number" value={linea.qty} onChange={(v) => updateLinea(index, "qty", v)} /></Td>
+                    <Td><SmallInput value={linea.price} onChange={(v) => updateLinea(index, "price", v)} /></Td>
+                    <Td><ReadOnlyValue value={linea.amount} /></Td>
+                    <Td><SmallInput value={linea.price_selling} onChange={(v) => updateLinea(index, "price_selling", v)} /></Td>
+                    <Td><ReadOnlyValue value={linea.amount_selling} /></Td>
+                    <Td><SmallInput value={linea.pi_number} onChange={(v) => updateLinea(index, "pi_number", v)} /></Td>
+                    <Td><SmallInput value={linea.pi_bsg} onChange={(v) => updateLinea(index, "pi_bsg", v)} /></Td>
+                    <Td><SmallInput type="date" value={linea.etd} onChange={(v) => updateLinea(index, "etd", v)} /></Td>
+                    <Td><SmallInput type="date" value={linea.inspection} onChange={(v) => updateLinea(index, "inspection", v)} /></Td>
+                    <Td><SmallInput value={linea.trial_upper} onChange={(v) => updateLinea(index, "trial_upper", v)} /></Td>
+                    <Td><SmallInput value={linea.trial_lasting} onChange={(v) => updateLinea(index, "trial_lasting", v)} /></Td>
+                    <Td><SmallInput value={linea.lasting} onChange={(v) => updateLinea(index, "lasting", v)} /></Td>
+                    <Td><SmallInput type="date" value={linea.finish_date} onChange={(v) => updateLinea(index, "finish_date", v)} /></Td>
 
                     <Td>
                       <button
@@ -506,7 +491,7 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
 
               {lineas.length === 0 ? (
                 <tr>
-                  <td colSpan={18} className="p-6 text-center text-sm text-slate-500">
+                  <td colSpan={20} className="p-6 text-center text-sm text-slate-500">
                     No hay líneas añadidas.
                   </td>
                 </tr>
@@ -589,6 +574,35 @@ function SelectOrInput({
   );
 }
 
+function DataListInput({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  const listId = `list-${Math.random().toString(36).slice(2)}`;
+
+  return (
+    <>
+      <input
+        list={listId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full min-w-24 rounded border px-2 py-1"
+      />
+
+      <datalist id={listId}>
+        {options.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
 function SmallInput({
   value,
   onChange,
@@ -605,6 +619,14 @@ function SmallInput({
       onChange={(e) => onChange(e.target.value)}
       className="w-full min-w-24 rounded border px-2 py-1"
     />
+  );
+}
+
+function ReadOnlyValue({ value }: { value: string }) {
+  return (
+    <div className="min-w-24 rounded border bg-slate-50 px-2 py-1 text-slate-700">
+      {value || "-"}
+    </div>
   );
 }
 
