@@ -1,3 +1,11 @@
+# OBSOLETO
+
+Este documento queda reemplazado por:
+
+Production_Tracker_Documento_Maestro_v7_0.md
+
+Mantener únicamente como histórico.
+
 # Production Tracker — Documento Maestro v6.17
 
 Versión consolidada tras:
