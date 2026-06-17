@@ -33,7 +33,7 @@ function uniqueSortedStrings(values: Array<string | null | undefined>) {
 export async function getQualityByCustomer(
   filters: QualityFilters
 ): Promise<QualityByCustomerRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query: any = supabase.from("vw_qc_by_customer").select("*");
   query = applyTextFilter(query, "customer", filters.customer);
@@ -50,7 +50,7 @@ export async function getQualityByCustomer(
 export async function getQualityByFactory(
   filters: QualityFilters
 ): Promise<QualityByFactoryRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query: any = supabase.from("vw_qc_by_factory").select("*");
   query = applyTextFilter(query, "factory", filters.factory);
@@ -67,7 +67,7 @@ export async function getQualityByFactory(
 export async function getQualityByModel(
   filters: QualityFilters
 ): Promise<QualityByModelRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query: any = supabase.from("vw_qc_by_model").select("*");
   query = applyTextFilter(query, "style", filters.style);
@@ -82,7 +82,7 @@ export async function getQualityByModel(
 }
 
 export async function getQualityFilterOptions(): Promise<QualityFilterOptions> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [
     { data: customerData, error: customerError },
@@ -107,9 +107,7 @@ export async function getQualityFilterOptions(): Promise<QualityFilterOptions> {
   }
 
   if (styleError) {
-    throw new Error(
-      `Error loading style filter options: ${styleError.message}`
-    );
+    throw new Error(`Error loading style filter options: ${styleError.message}`);
   }
 
   return {

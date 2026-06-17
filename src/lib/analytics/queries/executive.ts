@@ -38,7 +38,7 @@ function emptyToNull(value?: string) {
 export async function getExecutiveKPIs(
   filters: ExecutiveFilters
 ): Promise<ExecutiveKPIDashboardRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const season = emptyToNull(filters.season);
   const customer = emptyToNull(filters.customer);
@@ -60,7 +60,7 @@ export async function getExecutiveKPIs(
 export async function getExecutiveCustomerRanking(
   filters: ExecutiveFilters
 ): Promise<ExecutiveCustomerRankingRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query: any = supabase.from("vw_exec_customer_ranking").select("*");
 
@@ -78,7 +78,7 @@ export async function getExecutiveCustomerRanking(
 export async function getExecutiveFactoryRanking(
   filters: ExecutiveFilters
 ): Promise<ExecutiveFactoryRankingRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query: any = supabase.from("vw_exec_factory_ranking").select("*");
 
@@ -96,7 +96,7 @@ export async function getExecutiveFactoryRanking(
 export async function getExecutiveSeasonRanking(
   filters: ExecutiveFilters
 ): Promise<ExecutiveSeasonRankingRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query: any = supabase
     .from("vw_exec_season_performance_ranking")
@@ -116,7 +116,7 @@ export async function getExecutiveSeasonRanking(
 }
 
 export async function getExecutiveFilterOptions() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [
     { data: customerData, error: customerError },

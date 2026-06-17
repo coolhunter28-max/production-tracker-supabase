@@ -11,38 +11,28 @@ type DefectPhoto = {
 };
 
 type Props = {
-  images?: DefectPhoto[]; // 👈 ahora opcional
+  images?: DefectPhoto[];
   inspectionId: string;
   defectId: string;
 };
 
 export function DefectImageGrid({
-  images = [], // 👈 fallback seguro
+  images = [],
   inspectionId,
   defectId,
 }: Props) {
-  // Estado local de imágenes
   const [localImages, setLocalImages] = useState<DefectPhoto[]>(images);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
-  // Mantener sincronizado si cambian las props
   useEffect(() => {
     setLocalImages(images);
   }, [images]);
 
-  // UX states
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-
-  // Lightbox
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-
-  /* ---------- Upload ---------- */
   const handleUploaded = (photo: DefectPhoto) => {
     setLocalImages((prev) => [...prev, photo]);
-    setUploading(false);
   };
 
-  /* ---------- Delete ---------- */
   const handleDelete = async (photoId: string) => {
     if (!confirm("Delete this photo?")) return;
 
@@ -64,7 +54,6 @@ export function DefectImageGrid({
 
   return (
     <>
-      {/* GRID */}
       <div className="grid grid-cols-4 gap-2">
         {localImages.map((img, idx) => {
           const isDeleting = deletingId === img.id;
@@ -72,7 +61,7 @@ export function DefectImageGrid({
           return (
             <div
               key={img.id}
-              className="relative w-20 h-20 group cursor-pointer"
+              className="group relative h-20 w-20 cursor-pointer"
             >
               <Image
                 src={img.photo_url}
@@ -80,12 +69,11 @@ export function DefectImageGrid({
                 fill
                 unoptimized
                 onClick={() => setLightboxIndex(idx)}
-                className={`object-cover rounded transition ${
+                className={`rounded object-cover transition ${
                   isDeleting ? "opacity-40" : "hover:opacity-90"
                 }`}
               />
 
-              {/* Delete button */}
               <button
                 type="button"
                 onClick={(e) => {
@@ -93,47 +81,37 @@ export function DefectImageGrid({
                   handleDelete(img.id);
                 }}
                 disabled={isDeleting}
-                className="absolute top-1 right-1 hidden group-hover:flex items-center justify-center w-6 h-6 rounded bg-white/90 border text-xs shadow"
+                className="absolute right-1 top-1 hidden h-6 w-6 items-center justify-center rounded border bg-white/90 text-xs shadow group-hover:flex"
                 title="Delete"
               >
                 ✕
               </button>
 
-              {/* Spinner al borrar */}
-              {isDeleting && (
+              {isDeleting ? (
                 <div className="absolute inset-0 flex items-center justify-center rounded bg-white/50">
-                  <div className="animate-spin h-5 w-5 border-2 border-gray-400 border-t-transparent rounded-full" />
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
                 </div>
-              )}
+              ) : null}
             </div>
           );
         })}
 
-        {/* Upload slot */}
-        <div className="relative w-20 h-20">
+        <div className="relative h-20 w-20">
           <UploadDefectImageButton
             inspectionId={inspectionId}
             defectId={defectId}
-            onUploadStart={() => setUploading(true)}
             onUploaded={handleUploaded}
           />
-
-          {uploading && (
-            <div className="absolute inset-0 flex items-center justify-center rounded bg-white/70 border">
-              <div className="animate-spin h-5 w-5 border-2 border-gray-400 border-t-transparent rounded-full" />
-            </div>
-          )}
         </div>
       </div>
 
-      {/* LIGHTBOX */}
-      {lightboxIndex !== null && (
+      {lightboxIndex !== null ? (
         <DefectImageLightbox
           photos={localImages}
           startIndex={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
         />
-      )}
+      ) : null}
     </>
   );
 }

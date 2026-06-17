@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type OperacionesFactoriesFiltersBarProps = {
   factories: string[];
@@ -21,7 +21,6 @@ function buildQueryString(
     }
   });
 
-  // eliminamos filtros que no aplican a esta pantalla v1
   params.delete("season");
   params.delete("customer");
   params.delete("operativa");
@@ -37,23 +36,31 @@ export function OperacionesFactoriesFiltersBar({
   factories,
 }: OperacionesFactoriesFiltersBarProps) {
   const router = useRouter();
+
   const pathname = usePathname();
+  const safePathname = pathname ?? "";
+
   const searchParams = useSearchParams();
 
-  const current = useMemo(
-    () => ({
-      factory: searchParams.get("factory") ?? "",
-    }),
+  const safeSearchParams = useMemo(
+    () => new URLSearchParams(searchParams?.toString() ?? ""),
     [searchParams]
   );
 
+  const current = useMemo(
+    () => ({
+      factory: safeSearchParams.get("factory") ?? "",
+    }),
+    [safeSearchParams]
+  );
+
   function updateFilter(value: string) {
-    const query = buildQueryString(searchParams, { factory: value });
-    router.push(query ? `${pathname}?${query}` : pathname);
+    const query = buildQueryString(safeSearchParams, { factory: value });
+    router.push(query ? `${safePathname}?${query}` : safePathname);
   }
 
   function clearFilters() {
-    router.push(pathname);
+    router.push(safePathname);
   }
 
   return (
@@ -75,12 +82,14 @@ export function OperacionesFactoriesFiltersBar({
           <label className="text-xs font-medium text-muted-foreground">
             Factory
           </label>
+
           <select
             className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
             value={current.factory}
             onChange={(e) => updateFilter(e.target.value)}
           >
             <option value="">Todas</option>
+
             {factories.map((factory) => (
               <option key={factory} value={factory}>
                 {factory}

@@ -1,109 +1,136 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Plus, Edit, Trash2, Eye, Search } from 'lucide-react'
-import Link from 'next/link'
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Edit, Eye, Plus, Search, Trash2 } from "lucide-react";
+
+import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+type Pedido = {
+  id: string;
+  cliente: string | null;
+  estilo: string | null;
+  last: string | null;
+  outsole: string | null;
+  cantidad: number | null;
+  fecha_entrega: string | null;
+  estado: string | null;
+  prioridad: string | null;
+  created_at?: string | null;
+};
 
 export function PedidosContent() {
-  const [pedidos, setPedidos] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [estadoFilter, setEstadoFilter] = useState('todos')
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [estadoFilter] = useState("todos");
 
-  useEffect(() => {
-    fetchPedidos()
-  }, [])
+  async function fetchPedidos() {
+    setLoading(true);
 
-  const fetchPedidos = async () => {
-    setLoading(true)
+    const supabase = createBrowserSupabaseClient();
 
     const { data, error } = await supabase
-      .from('pedidos')
-      .select('*')
-      .order('created_at', { ascending: false })
+      .from("pedidos")
+      .select("*")
+      .order("created_at", { ascending: false });
 
     if (error) {
-      console.error('Error al cargar pedidos:', error)
+      console.error("Error al cargar pedidos:", error);
     } else {
-      setPedidos(data || [])
+      setPedidos((data ?? []) as Pedido[]);
     }
 
-    setLoading(false)
+    setLoading(false);
   }
 
-  const handleDelete = async (id: string) => {
-    if (confirm('¿Estás seguro de que quieres eliminar este pedido?')) {
-      const { error } = await supabase
-        .from('pedidos')
-        .delete()
-        .eq('id', id)
+  useEffect(() => {
+    fetchPedidos();
+  }, []);
 
-      if (error) {
-        console.error('Error al eliminar pedido:', error)
-      } else {
-        fetchPedidos()
-      }
+  async function handleDelete(id: string) {
+    const confirmed = window.confirm(
+      "¿Estás seguro de que quieres eliminar este pedido?"
+    );
+
+    if (!confirmed) return;
+
+    const supabase = createBrowserSupabaseClient();
+
+    const { error } = await supabase
+      .from("pedidos")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error al eliminar pedido:", error);
+      return;
     }
+
+    fetchPedidos();
   }
 
-  const getEstadoBadge = (estado: string) => {
+  function getEstadoBadge(estado: string | null) {
     switch (estado) {
-      case 'pendiente':
-        return <Badge variant="secondary">Pendiente</Badge>
-      case 'en_produccion':
-        return <Badge className="bg-blue-500 text-white">En Producción</Badge>
-      case 'completado':
-        return <Badge className="bg-green-500 text-white">Completado</Badge>
-      case 'cancelado':
-        return <Badge variant="destructive">Cancelado</Badge>
+      case "pendiente":
+        return <Badge variant="secondary">Pendiente</Badge>;
+      case "en_produccion":
+        return <Badge className="bg-blue-500 text-white">En Producción</Badge>;
+      case "completado":
+        return <Badge className="bg-green-500 text-white">Completado</Badge>;
+      case "cancelado":
+        return <Badge variant="destructive">Cancelado</Badge>;
       default:
-        return <Badge>{estado}</Badge>
+        return <Badge>{estado || "-"}</Badge>;
     }
   }
 
-  // Filtrar pedidos según búsqueda y estado
   const filteredPedidos = pedidos.filter((pedido) => {
+    const search = searchTerm.toLowerCase();
+
     const matchesSearch =
-      searchTerm === '' ||
-      pedido.cliente?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pedido.estilo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pedido.last?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pedido.outsole?.toLowerCase().includes(searchTerm.toLowerCase())
+      searchTerm === "" ||
+      String(pedido.cliente ?? "").toLowerCase().includes(search) ||
+      String(pedido.estilo ?? "").toLowerCase().includes(search) ||
+      String(pedido.last ?? "").toLowerCase().includes(search) ||
+      String(pedido.outsole ?? "").toLowerCase().includes(search);
 
     const matchesEstado =
-      estadoFilter === 'todos' || pedido.estado === estadoFilter
+      estadoFilter === "todos" || pedido.estado === estadoFilter;
 
-    return matchesSearch && matchesEstado
-  })
+    return matchesSearch && matchesEstado;
+  });
 
   return (
     <div className="container mx-auto py-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <h1 className="text-3xl font-bold">Gestión de Pedidos</h1>
+
         <Button>
-          <Plus className="w-4 h-4 mr-2" />
+          <Plus className="mr-2 h-4 w-4" />
           Nuevo Pedido
         </Button>
       </div>
 
-      {/* Filtros y búsqueda */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Filtros y Búsqueda</CardTitle>
         </CardHeader>
+
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <Label htmlFor="search">Buscar</Label>
+
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
                 <Input
                   id="search"
                   placeholder="Buscar por cliente, estilo, last o outsole..."
@@ -117,7 +144,6 @@ export function PedidosContent() {
         </CardContent>
       </Card>
 
-      {/* Tabla de pedidos */}
       <Card>
         <CardHeader>
           <CardTitle>Lista de Pedidos</CardTitle>
@@ -125,15 +151,16 @@ export function PedidosContent() {
             Gestiona todos los pedidos del sistema
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           {loading ? (
-            <p className="text-center py-4">Cargando pedidos...</p>
+            <p className="py-4 text-center">Cargando pedidos...</p>
           ) : filteredPedidos.length === 0 ? (
-            <p className="text-center py-4">
+            <p className="py-4 text-center">
               No se encontraron pedidos con los filtros seleccionados
             </p>
           ) : (
-            <div className="rounded-md border overflow-x-auto">
+            <div className="overflow-x-auto rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -149,48 +176,50 @@ export function PedidosContent() {
                     <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
                   {filteredPedidos.map((pedido) => (
                     <TableRow key={pedido.id}>
-                      <TableCell className="font-medium">{pedido.id}</TableCell>
-                      <TableCell>{pedido.cliente}</TableCell>
-                      <TableCell>{pedido.estilo}</TableCell>
-                      <TableCell>{pedido.last}</TableCell>
-                      <TableCell>{pedido.outsole}</TableCell>
-                      <TableCell>{pedido.cantidad}</TableCell>
+                      <TableCell className="font-medium">
+                        {pedido.id}
+                      </TableCell>
+                      <TableCell>{pedido.cliente || "-"}</TableCell>
+                      <TableCell>{pedido.estilo || "-"}</TableCell>
+                      <TableCell>{pedido.last || "-"}</TableCell>
+                      <TableCell>{pedido.outsole || "-"}</TableCell>
+                      <TableCell>{pedido.cantidad ?? "-"}</TableCell>
                       <TableCell>
-                        {new Date(pedido.fecha_entrega).toLocaleDateString()}
+                        {pedido.fecha_entrega
+                          ? new Date(pedido.fecha_entrega).toLocaleDateString()
+                          : "-"}
                       </TableCell>
                       <TableCell>{getEstadoBadge(pedido.estado)}</TableCell>
                       <TableCell>
                         <Badge
                           variant={
-                            pedido.prioridad === 'alta' ||
-                            pedido.prioridad === 'urgente'
-                              ? 'destructive'
-                              : 'outline'
+                            pedido.prioridad === "alta" ||
+                            pedido.prioridad === "urgente"
+                              ? "destructive"
+                              : "outline"
                           }
                         >
-                          {pedido.prioridad}
+                          {pedido.prioridad || "-"}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {/* 🔹 Ver detalle del pedido */}
                           <Link href={`/po/${pedido.id}`}>
                             <Button variant="ghost" size="sm">
                               <Eye className="h-4 w-4" />
                             </Button>
                           </Link>
 
-                          {/* 🔹 Editar pedido */}
                           <Link href={`/po/${pedido.id}/editar`}>
                             <Button variant="ghost" size="sm">
                               <Edit className="h-4 w-4" />
                             </Button>
                           </Link>
 
-                          {/* 🔹 Eliminar pedido */}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -209,5 +238,5 @@ export function PedidosContent() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

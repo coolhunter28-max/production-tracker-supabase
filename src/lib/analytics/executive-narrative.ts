@@ -65,17 +65,17 @@ function toSeverity(value: string | null): ExecutiveNarrativeSeverity {
 export async function getExecutiveNarrative(
   _filters: ExecutiveNarrativeFilters = {}
 ): Promise<ExecutiveNarrativeRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
-  .from("mv_exec_morning_brief_fast")
+    .from("mv_exec_morning_brief_fast")
     .select("*")
     .order("generated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (error) {
-    console.error("[getExecutiveNarrative] vw_exec_morning_brief_v1 error:", error);
+    console.error("[getExecutiveNarrative] error:", error);
     throw new Error(`Error loading Executive Narrative: ${error.message}`);
   }
 

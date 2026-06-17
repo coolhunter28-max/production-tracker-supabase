@@ -17,89 +17,65 @@ export type ExecutiveActionPriority =
 export type ExecutiveActionQueueRow = {
   id: string;
   action_key: string;
-
   source_view: string;
   source_type: string;
   source_entity_type: string;
   source_entity_id: string;
-
   customer: string | null;
   factory: string | null;
   season: string | null;
   module: string | null;
-
   priority: ExecutiveActionPriority;
   priority_rank: number;
-
   status: ExecutiveActionStatus;
   status_rank: number;
-
   title: string;
-
   description: string | null;
   recommended_action: string | null;
-
   owner_user_id: string | null;
   owner_label: string | null;
-
   first_detected_at: string;
   last_seen_at: string;
-
   due_date: string | null;
-
   resolved_at: string | null;
   resolution_note: string | null;
-
   metadata: Record<string, unknown>;
-
   created_at: string;
   updated_at: string;
-
   notes_count: number;
   decisions_count: number;
 };
 
 export type ExecutiveActionLifecycleRow = {
   id: string;
-
   priority: ExecutiveActionPriority;
   status: ExecutiveActionStatus;
-
   sla_bucket: string;
-
   age_days: number;
   days_since_update: number;
-
   without_owner_flag: boolean;
   stale_critical_flag: boolean;
   stale_action_flag: boolean;
   escalation_flag: boolean;
-
   lifecycle_priority_rank: number;
 };
 
 export type ExecutiveActionNote = {
   id: string;
   action_id: string;
-
   note: string;
-
   created_by: string | null;
   created_by_label: string | null;
-
   created_at: string;
 };
 
 export type ExecutiveActionDecision = {
   id: string;
   action_id: string;
-
   decision: string;
   decision_reason: string | null;
-
   decision_by: string | null;
   decision_by_label: string | null;
-
   created_at: string;
 };
 
@@ -115,20 +91,14 @@ export function parseExecutiveActionsSearchParams(
 ): ExecutiveActionsFilters {
   const getValue = (key: string) => {
     const value = searchParams[key];
-
     return Array.isArray(value) ? value[0] : value;
   };
 
   return {
     status: (getValue("status") as ExecutiveActionsFilters["status"]) || "ALL",
-
     priority:
-      (getValue(
-        "priority"
-      ) as ExecutiveActionsFilters["priority"]) || "ALL",
-
+      (getValue("priority") as ExecutiveActionsFilters["priority"]) || "ALL",
     customer: getValue("customer") || undefined,
-
     owner: getValue("owner") || undefined,
   };
 }
@@ -136,7 +106,7 @@ export function parseExecutiveActionsSearchParams(
 export async function getExecutiveActionQueue(
   filters: ExecutiveActionsFilters = {}
 ): Promise<ExecutiveActionQueueRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query = supabase.from("vw_exec_action_queue_v1").select("*");
 
@@ -163,7 +133,6 @@ export async function getExecutiveActionQueue(
 
   if (error) {
     console.error("getExecutiveActionQueue error:", error);
-
     return [];
   }
 
@@ -173,18 +142,15 @@ export async function getExecutiveActionQueue(
 export async function getExecutiveActionLifecycle(): Promise<
   ExecutiveActionLifecycleRow[]
 > {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("vw_exec_action_lifecycle_v1")
     .select("*")
-    .order("lifecycle_priority_rank", {
-      ascending: true,
-    });
+    .order("lifecycle_priority_rank", { ascending: true });
 
   if (error) {
     console.error("getExecutiveActionLifecycle error:", error);
-
     return [];
   }
 
@@ -194,7 +160,7 @@ export async function getExecutiveActionLifecycle(): Promise<
 export async function getExecutiveActionById(
   id: string
 ): Promise<ExecutiveActionQueueRow | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("vw_exec_action_queue_v1")
@@ -204,7 +170,6 @@ export async function getExecutiveActionById(
 
   if (error) {
     console.error("getExecutiveActionById error:", error);
-
     return null;
   }
 
@@ -214,7 +179,7 @@ export async function getExecutiveActionById(
 export async function getExecutiveActionNotes(
   actionId: string
 ): Promise<ExecutiveActionNote[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("executive_action_notes")
@@ -224,7 +189,6 @@ export async function getExecutiveActionNotes(
 
   if (error) {
     console.error("getExecutiveActionNotes error:", error);
-
     return [];
   }
 
@@ -234,7 +198,7 @@ export async function getExecutiveActionNotes(
 export async function getExecutiveActionDecisions(
   actionId: string
 ): Promise<ExecutiveActionDecision[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("executive_action_decisions")
@@ -244,7 +208,6 @@ export async function getExecutiveActionDecisions(
 
   if (error) {
     console.error("getExecutiveActionDecisions error:", error);
-
     return [];
   }
 
@@ -256,7 +219,7 @@ export async function updateExecutiveActionStatus(params: {
   status: ExecutiveActionStatus;
   resolutionNote?: string;
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const payload: {
     status: ExecutiveActionStatus;
@@ -286,7 +249,7 @@ export async function assignExecutiveActionOwner(params: {
   id: string;
   ownerLabel: string | null;
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { error } = await supabase
     .from("executive_actions")
@@ -308,7 +271,7 @@ export async function addExecutiveActionNote(params: {
   note: string;
   createdByLabel?: string;
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const note = params.note.trim();
 
@@ -338,7 +301,7 @@ export async function addExecutiveActionDecision(params: {
   decisionReason?: string;
   decisionByLabel?: string;
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const decision = params.decision.trim();
 
@@ -368,43 +331,21 @@ export function buildExecutiveActionKPIs(
 ) {
   return {
     total: actions.length,
-
     open: actions.filter((item) => item.status === "OPEN").length,
-
-    inProgress: actions.filter(
-      (item) => item.status === "IN_PROGRESS"
-    ).length,
-
+    inProgress: actions.filter((item) => item.status === "IN_PROGRESS").length,
     waiting: actions.filter((item) => item.status === "WAITING").length,
-
-    critical: actions.filter(
-      (item) => item.priority === "CRITICAL"
-    ).length,
-
-    resolved: actions.filter(
-      (item) => item.status === "RESOLVED"
-    ).length,
+    critical: actions.filter((item) => item.priority === "CRITICAL").length,
+    resolved: actions.filter((item) => item.status === "RESOLVED").length,
   };
 }
 
 export function buildExecutiveWorkflowKPIs(
   lifecycle: ExecutiveActionLifecycleRow[]
 ) {
-  const criticalAging = lifecycle.filter(
-    (item) => item.stale_critical_flag
-  ).length;
-
-  const withoutOwner = lifecycle.filter(
-    (item) => item.without_owner_flag
-  ).length;
-
-  const escalations = lifecycle.filter(
-    (item) => item.escalation_flag
-  ).length;
-
-  const stale = lifecycle.filter(
-    (item) => item.stale_action_flag
-  ).length;
+  const criticalAging = lifecycle.filter((item) => item.stale_critical_flag).length;
+  const withoutOwner = lifecycle.filter((item) => item.without_owner_flag).length;
+  const escalations = lifecycle.filter((item) => item.escalation_flag).length;
+  const stale = lifecycle.filter((item) => item.stale_action_flag).length;
 
   const open = lifecycle.filter(
     (item) =>

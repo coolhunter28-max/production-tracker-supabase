@@ -1,18 +1,23 @@
 // src/app/api/master/variante-precio/route.ts
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
 
-function norm(s: string | null) {
-  return (s ?? "").trim();
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function norm(value: string | null) {
+  return (value ?? "").trim();
 }
 
 export async function GET(req: Request) {
   try {
+    const supabase = await createClient();
+
     const { searchParams } = new URL(req.url);
 
     const variante_id = norm(searchParams.get("variante_id"));
     const season = norm(searchParams.get("season"));
-    const base_date_raw = norm(searchParams.get("base_date")); // puede venir vacío
+    const base_date_raw = norm(searchParams.get("base_date"));
 
     if (!variante_id || !season) {
       return NextResponse.json(
@@ -39,14 +44,18 @@ export async function GET(req: Request) {
     if (error) throw error;
 
     return NextResponse.json({
-      price: data || null,
+      price: data ?? null,
       source: data ? "past_latest" : "none",
       baseDate,
     });
-  } catch (err: any) {
-    console.error("❌ variante-precio error:", err);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "variante-precio failed";
+
+    console.error("❌ variante-precio error:", error);
+
     return NextResponse.json(
-      { error: err?.message || "variante-precio failed" },
+      { error: message },
       { status: 500 }
     );
   }

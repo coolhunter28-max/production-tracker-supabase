@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type OperacionesFiltersBarProps = {
   seasons: string[];
@@ -34,28 +34,39 @@ export function OperacionesFiltersBar({
   factories,
 }: OperacionesFiltersBarProps) {
   const router = useRouter();
+
   const pathname = usePathname();
+  const safePathname = pathname ?? "";
+
   const searchParams = useSearchParams();
 
-  const current = useMemo(
-    () => ({
-      season: searchParams.get("season") ?? "",
-      customer: searchParams.get("customer") ?? "",
-      factory: searchParams.get("factory") ?? "",
-      dateType: searchParams.get("dateType") ?? "shipping",
-      dateFrom: searchParams.get("dateFrom") ?? "",
-      dateTo: searchParams.get("dateTo") ?? "",
-    }),
+  const safeSearchParams = useMemo(
+    () => new URLSearchParams(searchParams?.toString() ?? ""),
     [searchParams]
   );
 
+  const current = useMemo(
+    () => ({
+      season: safeSearchParams.get("season") ?? "",
+      customer: safeSearchParams.get("customer") ?? "",
+      factory: safeSearchParams.get("factory") ?? "",
+      dateType: safeSearchParams.get("dateType") ?? "shipping",
+      dateFrom: safeSearchParams.get("dateFrom") ?? "",
+      dateTo: safeSearchParams.get("dateTo") ?? "",
+    }),
+    [safeSearchParams]
+  );
+
   function updateFilter(name: string, value: string) {
-    const query = buildQueryString(searchParams, { [name]: value });
-    router.push(query ? `${pathname}?${query}` : pathname);
+    const query = buildQueryString(safeSearchParams, {
+      [name]: value,
+    });
+
+    router.push(query ? `${safePathname}?${query}` : safePathname);
   }
 
   function clearFilters() {
-    router.push(pathname);
+    router.push(safePathname);
   }
 
   return (
@@ -77,12 +88,14 @@ export function OperacionesFiltersBar({
           <label className="text-xs font-medium text-muted-foreground">
             Season
           </label>
+
           <select
             className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
             value={current.season}
             onChange={(e) => updateFilter("season", e.target.value)}
           >
             <option value="">Todas</option>
+
             {seasons.map((season) => (
               <option key={season} value={season}>
                 {season}
@@ -95,12 +108,14 @@ export function OperacionesFiltersBar({
           <label className="text-xs font-medium text-muted-foreground">
             Customer
           </label>
+
           <select
             className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
             value={current.customer}
             onChange={(e) => updateFilter("customer", e.target.value)}
           >
             <option value="">Todos</option>
+
             {customers.map((customer) => (
               <option key={customer} value={customer}>
                 {customer}
@@ -113,12 +128,14 @@ export function OperacionesFiltersBar({
           <label className="text-xs font-medium text-muted-foreground">
             Factory
           </label>
+
           <select
             className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
             value={current.factory}
             onChange={(e) => updateFilter("factory", e.target.value)}
           >
             <option value="">Todas</option>
+
             {factories.map((factory) => (
               <option key={factory} value={factory}>
                 {factory}
@@ -129,8 +146,9 @@ export function OperacionesFiltersBar({
 
         <div className="space-y-2">
           <label className="text-xs font-medium text-muted-foreground">
-            Tipo de fecha
+            Tipo fecha
           </label>
+
           <select
             className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
             value={current.dateType}
@@ -147,6 +165,7 @@ export function OperacionesFiltersBar({
           <label className="text-xs font-medium text-muted-foreground">
             Desde
           </label>
+
           <input
             type="date"
             className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
@@ -159,6 +178,7 @@ export function OperacionesFiltersBar({
           <label className="text-xs font-medium text-muted-foreground">
             Hasta
           </label>
+
           <input
             type="date"
             className="w-full rounded-xl border bg-background px-3 py-2 text-sm"

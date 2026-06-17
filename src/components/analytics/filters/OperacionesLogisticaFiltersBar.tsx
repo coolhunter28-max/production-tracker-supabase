@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type OperacionesLogisticaFiltersBarProps = {
   customers: string[];
@@ -21,7 +21,6 @@ function buildQueryString(
     }
   });
 
-  // eliminamos filtros que no aplican a esta pantalla v1
   params.delete("season");
   params.delete("factory");
   params.delete("operativa");
@@ -37,23 +36,31 @@ export function OperacionesLogisticaFiltersBar({
   customers,
 }: OperacionesLogisticaFiltersBarProps) {
   const router = useRouter();
+
   const pathname = usePathname();
+  const safePathname = pathname ?? "";
+
   const searchParams = useSearchParams();
 
-  const current = useMemo(
-    () => ({
-      customer: searchParams.get("customer") ?? "",
-    }),
+  const safeSearchParams = useMemo(
+    () => new URLSearchParams(searchParams?.toString() ?? ""),
     [searchParams]
   );
 
+  const current = useMemo(
+    () => ({
+      customer: safeSearchParams.get("customer") ?? "",
+    }),
+    [safeSearchParams]
+  );
+
   function updateFilter(value: string) {
-    const query = buildQueryString(searchParams, { customer: value });
-    router.push(query ? `${pathname}?${query}` : pathname);
+    const query = buildQueryString(safeSearchParams, { customer: value });
+    router.push(query ? `${safePathname}?${query}` : safePathname);
   }
 
   function clearFilters() {
-    router.push(pathname);
+    router.push(safePathname);
   }
 
   return (
@@ -75,12 +82,14 @@ export function OperacionesLogisticaFiltersBar({
           <label className="text-xs font-medium text-muted-foreground">
             Customer
           </label>
+
           <select
             className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
             value={current.customer}
             onChange={(e) => updateFilter(e.target.value)}
           >
             <option value="">Todos</option>
+
             {customers.map((customer) => (
               <option key={customer} value={customer}>
                 {customer}

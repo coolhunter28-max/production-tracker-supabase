@@ -1,62 +1,46 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
 
-type MasterSyncMode = "development" | "operational";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-function parseMode(value: unknown): MasterSyncMode {
-  if (value === "operational") return "operational";
-  return "development";
-}
-
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const mode = parseMode(body?.mode);
+    const body = await req.json().catch(() => ({}));
+    const mode = body?.mode === "production" ? "production" : "development";
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     const { data, error } = await supabase.rpc("run_master_sync_pipeline", {
       p_mode: mode,
     });
 
     if (error) {
-      console.error("[master-sync] RPC error", error);
+      console.error("[master-sync]", error);
 
       return NextResponse.json(
         {
-          ok: false,
-          message: "Master Sync failed",
+          success: false,
           error: error.message,
         },
-        { status: 500 },
-      );
-    }
-
-    // Refresh Executive fast materialized views
-    const { error: refreshError } = await supabase.rpc(
-      "refresh_analytics_materialized_views"
-    );
-
-    if (refreshError) {
-      console.error(
-        "[master-sync] refresh_analytics_materialized_views error",
-        refreshError
+        { status: 500 }
       );
     }
 
     return NextResponse.json({
-      ok: true,
-      mode,
-      result: data,
-      analytics_refresh: refreshError ? "failed" : "ok",
+      success: true,
+      data,
     });
   } catch (error) {
-    console.error("[master-sync] unexpected error", error);
+    const message =
+      error instanceof Error ? error.message : "Error ejecutando Master Sync";
+
+    console.error("[master-sync][fatal]", error);
 
     return NextResponse.json(
       {
-        ok: false,
-        message: "Unexpected Master Sync error",
+        success: false,
+        error: message,
       },
       { status: 500 }
     );

@@ -54,6 +54,59 @@ async function getPOAccessStatus(poId: string) {
   return { allowed: true, status: 200, error: null, supabase, access };
 }
 
+function buildLineaUpdatePayload(linea: any) {
+  return {
+    reference: text(linea.reference) ?? "",
+    style: text(linea.style) ?? "",
+    color: text(linea.color) ?? "",
+    size_run: text(linea.size_run),
+    category: text(linea.category),
+    channel: text(linea.channel),
+    qty: num(linea.qty) ?? 0,
+    price: num(linea.price),
+    amount: num(linea.amount),
+    pi_number: text(linea.pi_number),
+    pi_bsg: text(linea.pi_bsg),
+    price_selling: num(linea.price_selling),
+    amount_selling: num(linea.amount_selling),
+    etd: dateOrNull(linea.etd),
+    inspection: dateOrNull(linea.inspection),
+    estado_inspeccion: text(linea.estado_inspeccion),
+    trial_upper: text(linea.trial_upper),
+    trial_lasting: text(linea.trial_lasting),
+    lasting: text(linea.lasting),
+    finish_date: dateOrNull(linea.finish_date),
+    modelo_id: text(linea.modelo_id),
+    variante_id: text(linea.variante_id),
+  };
+}
+
+function buildLineaInsertPayload(linea: any, poId: string) {
+  return {
+    ...buildLineaUpdatePayload(linea),
+    po_id: poId,
+
+    // Snapshots solo al crear línea nueva.
+    master_buy_price_used: num(linea.master_buy_price_used),
+    master_sell_price_used: num(linea.master_sell_price_used),
+    master_currency_used: text(linea.master_currency_used),
+    master_valid_from_used: dateOrNull(linea.master_valid_from_used),
+    master_price_id_used: text(linea.master_price_id_used),
+    master_price_source: text(linea.master_price_source),
+  };
+}
+
+function buildMuestraPayload(muestra: any, lineaPedidoId: string) {
+  return {
+    linea_pedido_id: lineaPedidoId,
+    tipo_muestra: text(muestra.tipo_muestra),
+    round: text(muestra.round) ?? "1",
+    fecha_muestra: dateOrNull(muestra.fecha_muestra),
+    estado_muestra: text(muestra.estado_muestra) ?? "Pendiente",
+    notas: text(muestra.notas),
+  };
+}
+
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const poId = params.id;
   const accessStatus = await getPOAccessStatus(poId);
@@ -119,48 +172,71 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   if (poError) return jsonError(poError.message, 500);
 
   for (const linea of lineas) {
-    const basePayload = {
-      reference: text(linea.reference) ?? "",
-      style: text(linea.style) ?? "",
-      color: text(linea.color) ?? "",
-      size_run: text(linea.size_run),
-      category: text(linea.category),
-      channel: text(linea.channel),
-      qty: num(linea.qty) ?? 0,
-      price: num(linea.price),
-      amount: num(linea.amount),
-      pi_number: text(linea.pi_number),
-      pi_bsg: text(linea.pi_bsg),
-      price_selling: num(linea.price_selling),
-      amount_selling: num(linea.amount_selling),
-      etd: dateOrNull(linea.etd),
-      inspection: dateOrNull(linea.inspection),
-      estado_inspeccion: text(linea.estado_inspeccion),
-      trial_upper: text(linea.trial_upper),
-      trial_lasting: text(linea.trial_lasting),
-      lasting: text(linea.lasting),
-      finish_date: dateOrNull(linea.finish_date),
-      modelo_id: text(linea.modelo_id),
-      variante_id: text(linea.variante_id),
-    };
+    let lineaId = text(linea.id);
 
-    if (linea.id) {
-      await accessStatus.supabase
+    if (lineaId) {
+      const { error: lineaError } = await accessStatus.supabase
         .from("lineas_pedido")
-        .update(basePayload)
-        .eq("id", linea.id)
+        .update(buildLineaUpdatePayload(linea))
+        .eq("id", lineaId)
         .eq("po_id", poId);
+
+      if (lineaError) return jsonError(lineaError.message, 500);
     } else {
-      await accessStatus.supabase.from("lineas_pedido").insert({
-        ...basePayload,
-        po_id: poId,
-        master_buy_price_used: num(linea.master_buy_price_used),
-        master_sell_price_used: num(linea.master_sell_price_used),
-        master_currency_used: text(linea.master_currency_used),
-        master_valid_from_used: dateOrNull(linea.master_valid_from_used),
-        master_price_id_used: text(linea.master_price_id_used),
-        master_price_source: text(linea.master_price_source),
-      });
+      const { data: insertedLinea, error: insertError } = await accessStatus.supabase
+        .from("lineas_pedido")
+        .insert(buildLineaInsertPayload(linea, poId))
+        .select("id")
+        .single();
+
+      if (insertError) return jsonError(insertError.message, 500);
+      lineaId = insertedLinea.id;
+    }
+
+    if (!lineaId) {
+      return jsonError("No se pudo resolver la línea para guardar muestras.", 500);
+    }
+    
+    const safeLineaId: string = lineaId;
+    
+    const muestras = Array.isArray(linea.muestras) ? linea.muestras : [];
+    const incomingMuestraIds = muestras.map((m: any) => text(m.id)).filter(Boolean) as string[];
+
+    const { data: existingMuestras } = await accessStatus.supabase
+      .from("muestras")
+      .select("id")
+      .eq("linea_pedido_id", lineaId);
+
+    const existingIds = (existingMuestras ?? []).map((m: any) => m.id);
+    const idsToDelete = existingIds.filter((id: string) => !incomingMuestraIds.includes(id));
+
+    if (idsToDelete.length > 0) {
+      const { error: deleteMuestrasError } = await accessStatus.supabase
+        .from("muestras")
+        .delete()
+        .in("id", idsToDelete);
+
+      if (deleteMuestrasError) return jsonError(deleteMuestrasError.message, 500);
+    }
+
+    for (const muestra of muestras) {
+      if (!text(muestra.tipo_muestra)) continue;
+
+      if (muestra.id) {
+        const { error: updateMuestraError } = await accessStatus.supabase
+          .from("muestras")
+          .update(buildMuestraPayload(muestra, lineaId))
+          .eq("id", muestra.id)
+          .eq("linea_pedido_id", lineaId);
+
+        if (updateMuestraError) return jsonError(updateMuestraError.message, 500);
+      } else {
+        const { error: insertMuestraError } = await accessStatus.supabase
+          .from("muestras")
+          .insert(buildMuestraPayload(muestra, lineaId));
+
+        if (insertMuestraError) return jsonError(insertMuestraError.message, 500);
+      }
     }
   }
 

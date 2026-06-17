@@ -1,4 +1,11 @@
-import { parseMoney, parseQty, parseDate } from "./parse-utils";
+import {
+  parseMoneyES,
+  parseIntES,
+  parseDate,
+} from "./csv-utils";
+
+const parseMoney = parseMoneyES;
+const parseQty = parseIntES;
 
 function buildNota(approval?: string, approvalDate?: string): string {
   if (!approval) return "-";

@@ -470,8 +470,9 @@ export async function POST(req: Request) {
     }
 
     const pdfBytes = await pdfDoc.save();
-
-    return new NextResponse(pdfBytes, {
+    const pdfBuffer = Buffer.from(pdfBytes);
+    
+    return new NextResponse(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename=offer_${customer}_${season}_${date}.pdf`,

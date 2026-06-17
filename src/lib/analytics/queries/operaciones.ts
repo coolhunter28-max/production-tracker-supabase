@@ -34,7 +34,7 @@ function uniqueSortedStrings(values: Array<string | null | undefined>) {
 export async function getOperacionesCustomerRanking(
   filters: OperacionesFilters
 ): Promise<OperacionesCustomerRankingRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query: any = supabase.from("vw_exec_customer_ranking").select("*");
 
@@ -52,7 +52,7 @@ export async function getOperacionesCustomerRanking(
 export async function getOperacionesFactoryRanking(
   filters: OperacionesFilters
 ): Promise<OperacionesFactoryRankingRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query: any = supabase.from("vw_exec_factory_ranking").select("*");
 
@@ -70,7 +70,7 @@ export async function getOperacionesFactoryRanking(
 export async function getOperacionesSeasonRanking(
   filters: OperacionesFilters
 ): Promise<OperacionesSeasonRankingRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query: any = supabase
     .from("vw_exec_season_performance_ranking")
@@ -92,7 +92,7 @@ export async function getOperacionesSeasonRanking(
 export async function getOperacionesLogisticsRanking(
   filters: OperacionesFilters
 ): Promise<OperacionesLogisticsPressureRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query: any = supabase
     .from("vw_exec_customer_logistics_pressure_ranking")
@@ -112,7 +112,7 @@ export async function getOperacionesLogisticsRanking(
 }
 
 export async function getOperacionesFilterOptions(): Promise<OperacionesFilterOptions> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [
     { data: customerData, error: customerError },

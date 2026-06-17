@@ -48,9 +48,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "File is required" }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    const arrayBuffer = await file.arrayBuffer();
+const buffer = Buffer.from(new Uint8Array(arrayBuffer));
+const workbook = new ExcelJS.Workbook();
+
+await workbook.xlsx.load(buffer as any);
 
     const sheet = workbook.getWorksheet("China");
     if (!sheet) {

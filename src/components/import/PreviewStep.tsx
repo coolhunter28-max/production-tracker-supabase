@@ -3,9 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-/* ============================================================
-   INTERFACES COMPLETAS (incluye approvals + rounds)
-   ============================================================ */
 interface LineData {
   reference: string;
   style: string;
@@ -13,53 +10,19 @@ interface LineData {
   size_run?: string;
   category?: string | null;
   channel?: string | null;
-
   qty: number;
   price: number;
   amount?: number;
-
   trial_upper?: string | null;
   trial_lasting?: string | null;
   lasting?: string | null;
   finish_date?: string | null;
-
-  // === FECHAS REALES DE MUESTRAS ===
   cfm?: string | null;
   counter_sample?: string | null;
   fitting?: string | null;
   pps?: string | null;
   testing_sample?: string | null;
   shipping_sample?: string | null;
-
-  // === ROUNDS ===
-  cfm_round?: string | null;
-  counter_round?: string | null;
-  fitting_round?: string | null;
-  pps_round?: string | null;
-  testing_round?: string | null;
-  shipping_round?: string | null;
-
-  // === APPROVALS ===
-  cfm_approval?: string | null;
-  cfm_approval_date?: string | null;
-
-  counter_approval?: string | null;
-  counter_approval_date?: string | null;
-
-  fitting_approval?: string | null;
-  fitting_approval_date?: string | null;
-
-  pps_approval?: string | null;
-  pps_approval_date?: string | null;
-
-  testing_approval?: string | null;
-  testing_approval_date?: string | null;
-
-  shipping_approval?: string | null;
-  shipping_approval_date?: string | null;
-
-  // === INSPECTION ===
-  inspection_approval?: string | null;
   inspection_approval_date?: string | null;
 }
 
@@ -92,9 +55,6 @@ interface PreviewStepProps {
   onNextWithCompare: (compareResult: any) => void;
 }
 
-/* ============================================================
-   COMPONENTE PRINCIPAL
-   ============================================================ */
 export default function PreviewStep({
   data,
   onBack,
@@ -103,27 +63,33 @@ export default function PreviewStep({
   const [compareResult, setCompareResult] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // === Fetch Comparación ===
   useEffect(() => {
     const fetchCompare = async () => {
       setLoading(true);
+
       const res = await fetch("/api/compare-csv", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ groupedPOs: data, fileName: "preview.csv" }),
       });
+
       const json = await res.json();
+
       setCompareResult(json);
       setLoading(false);
     };
+
     fetchCompare();
   }, [data]);
 
-  const formatDate = (v?: string | null) => {
-    if (!v) return "-";
-    const d = new Date(v);
-    if (isNaN(d.getTime())) return v;
-    return d.toISOString().split("T")[0];
+  const formatDate = (value?: string | null) => {
+    if (!value) return "-";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return value;
+
+    return date.toISOString().split("T")[0];
   };
 
   const formatUSD = (num?: number) =>
@@ -131,66 +97,73 @@ export default function PreviewStep({
       ? "-"
       : `$${num.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`;
 
-  const highlight = (po: string, field: string, value: any) => {
+  const highlight = (po: string, field: string, value: React.ReactNode) => {
     const cambios = compareResult?.detalles?.[po]?.cambios || [];
     const changed = cambios.some((c: any) => c.campo?.includes(field));
+
     return changed ? (
-      <span className="bg-yellow-100 px-1 rounded">{value}</span>
+      <span className="rounded bg-yellow-100 px-1">{value}</span>
     ) : (
       value
     );
   };
 
-  if (loading)
+  if (loading) {
     return (
-      <div className="text-center py-10 text-gray-600">
+      <div className="py-10 text-center text-gray-600">
         Comparando datos...
       </div>
     );
+  }
 
   return (
     <div className="space-y-8">
-      <h2 className="text-2xl font-semibold text-center">
+      <h2 className="text-center text-2xl font-semibold">
         Previsualización y comparación
       </h2>
 
-      {compareResult && (
+      {compareResult ? (
         <p className="text-center">
           🟢 Nuevos: <b>{compareResult.nuevos}</b> | 🟠 Modificados:{" "}
           <b>{compareResult.modificados}</b> | ⚪ Sin cambios:{" "}
           <b>{compareResult.sinCambios}</b>
         </p>
-      )}
+      ) : null}
 
-      {data.map((po, i) => {
-        const h = po.header!;
-        const lines = po.lines || [];
-        const totalQty = lines.reduce((a, b) => a + (b.qty || 0), 0);
+      {data.map((po, index) => {
+        const h = po.header ?? {};
+        const poKey = h.po ?? "";
+        const lines = po.lines ?? [];
+
+        const totalQty = lines.reduce((acc, line) => acc + (line.qty || 0), 0);
         const totalAmount = lines.reduce(
-          (a, b) => a + (b.qty || 0) * (b.price || 0),
+          (acc, line) => acc + (line.qty || 0) * (line.price || 0),
           0
         );
 
         return (
           <div
-            key={i}
-            className="border border-gray-200 rounded-xl p-6 bg-white"
+            key={`${poKey}-${index}`}
+            className="rounded-xl border border-gray-200 bg-white p-6"
           >
-            <div className="flex justify-between items-start mb-2">
+            <div className="mb-2 flex items-start justify-between">
               <div>
-                <p className="font-semibold text-lg">
-                  PO: {h.po}{" "}
-                  {compareResult?.detalles?.[h.po]?.status === "modificado" && (
-                    <span className="text-orange-500 text-sm">
+                <p className="text-lg font-semibold">
+                  PO: {poKey || "-"}{" "}
+                  {poKey &&
+                  compareResult?.detalles?.[poKey]?.status === "modificado" ? (
+                    <span className="text-sm text-orange-500">
                       (modificado)
                     </span>
-                  )}
+                  ) : null}
                 </p>
+
                 <p className="text-sm text-gray-600">
                   {h.supplier || "-"} / {h.customer || "-"} /{" "}
                   {h.factory || "-"}
                 </p>
               </div>
+
               <div className="text-sm text-gray-500">
                 {totalQty.toLocaleString("es-ES")} uds —{" "}
                 {formatUSD(totalAmount)}
@@ -201,21 +174,19 @@ export default function PreviewStep({
               Season: {h.season || "-"} | Category: {h.category || "-"} |
               Channel: {h.channel || "-"}
               <br />
-              PO Date:{" "}
-              {highlight(h.po!, "po_date", formatDate(h.po_date))} | ETD
-              PI: {highlight(h.po!, "etd_pi", formatDate(h.etd_pi))} |
-              Booking: {highlight(h.po!, "booking", formatDate(h.booking))} |
+              PO Date: {highlight(poKey, "po_date", formatDate(h.po_date))} |
+              ETD PI: {highlight(poKey, "etd_pi", formatDate(h.etd_pi))} |
+              Booking: {highlight(poKey, "booking", formatDate(h.booking))} |
               Shipping:{" "}
-              {highlight(h.po!, "shipping_date", formatDate(h.shipping_date))} |
-              Closing:{" "}
-              {highlight(h.po!, "closing", formatDate(h.closing))}
+              {highlight(poKey, "shipping_date", formatDate(h.shipping_date))} |
+              Closing: {highlight(poKey, "closing", formatDate(h.closing))}
               <br />
-              PI: {highlight(h.po!, "pi", h.pi || "-")} | Currency:{" "}
+              PI: {highlight(poKey, "pi", h.pi || "-")} | Currency:{" "}
               {h.currency || "USD"} | Insp.: {h.estado_inspeccion || "-"}
             </p>
 
-            <div className="overflow-x-auto mt-3">
-              <table className="min-w-full text-sm border-t border-gray-200">
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full border-t border-gray-200 text-sm">
                 <thead className="bg-gray-100 text-gray-700">
                   <tr>
                     <th className="p-2 text-left">Ref</th>
@@ -239,99 +210,95 @@ export default function PreviewStep({
                 </thead>
 
                 <tbody>
-                  {lines.map((l, idx) => (
+                  {lines.map((line, lineIndex) => (
                     <tr
-                      key={idx}
+                      key={`${line.reference}-${lineIndex}`}
                       className="border-b border-gray-100 hover:bg-gray-50"
                     >
-                      <td className="p-2">{l.reference}</td>
-                      <td className="p-2">{l.style}</td>
-                      <td className="p-2">{l.color}</td>
-                      <td className="p-2 text-right">{l.qty}</td>
-                      <td className="p-2 text-right">
-                        {formatUSD(l.price)}
-                      </td>
-                      <td className="p-2 text-right">
-                        {formatUSD(l.amount)}
-                      </td>
+                      <td className="p-2">{line.reference}</td>
+                      <td className="p-2">{line.style}</td>
+                      <td className="p-2">{line.color}</td>
+                      <td className="p-2 text-right">{line.qty}</td>
+                      <td className="p-2 text-right">{formatUSD(line.price)}</td>
+                      <td className="p-2 text-right">{formatUSD(line.amount)}</td>
 
                       <td className="p-2 text-center">
                         {highlight(
-                          h.po!,
-                          `${l.reference} → trial_upper`,
-                          formatDate(l.trial_upper)
+                          poKey,
+                          `${line.reference} → trial_upper`,
+                          formatDate(line.trial_upper)
                         )}
                       </td>
 
                       <td className="p-2 text-center">
                         {highlight(
-                          h.po!,
-                          `${l.reference} → trial_lasting`,
-                          formatDate(l.trial_lasting)
+                          poKey,
+                          `${line.reference} → trial_lasting`,
+                          formatDate(line.trial_lasting)
                         )}
                       </td>
 
                       <td className="p-2 text-center">
                         {highlight(
-                          h.po!,
-                          `${l.reference} → lasting`,
-                          formatDate(l.lasting)
+                          poKey,
+                          `${line.reference} → lasting`,
+                          formatDate(line.lasting)
                         )}
                       </td>
 
                       <td className="p-2 text-center">
                         {highlight(
-                          h.po!,
-                          `${l.reference} → finish_date`,
-                          formatDate(l.finish_date)
+                          poKey,
+                          `${line.reference} → finish_date`,
+                          formatDate(line.finish_date)
                         )}
                       </td>
 
                       <td className="p-2 text-center">
                         {highlight(
-                          h.po!,
-                          `${l.reference} → CFM`,
-                          formatDate(l.cfm)
+                          poKey,
+                          `${line.reference} → CFM`,
+                          formatDate(line.cfm)
                         )}
                       </td>
 
                       <td className="p-2 text-center">
-                        {formatDate(l.counter_sample)}
+                        {formatDate(line.counter_sample)}
                       </td>
 
                       <td className="p-2 text-center">
-                        {formatDate(l.fitting)}
-                      </td>
-
-                      <td className="p-2 text-center">
-                        {highlight(
-                          h.po!,
-                          `${l.reference} → PPS`,
-                          formatDate(l.pps)
-                        )}
+                        {formatDate(line.fitting)}
                       </td>
 
                       <td className="p-2 text-center">
                         {highlight(
-                          h.po!,
-                          `${l.reference} → TESTINGS`,
-                          formatDate(l.testing_sample)
+                          poKey,
+                          `${line.reference} → PPS`,
+                          formatDate(line.pps)
                         )}
                       </td>
 
                       <td className="p-2 text-center">
                         {highlight(
-                          h.po!,
-                          `${l.reference} → SHIPPINGS`,
-                          formatDate(l.shipping_sample)
+                          poKey,
+                          `${line.reference} → TESTINGS`,
+                          formatDate(line.testing_sample)
                         )}
                       </td>
 
                       <td className="p-2 text-center">
                         {highlight(
-                          h.po!,
-                          `${l.reference} → INSPECTION`,
-                          formatDate(l.inspection_approval_date)
+                          poKey,
+                          `${line.reference} → SHIPPINGS`,
+                          formatDate(line.shipping_sample)
+                        )}
+                      </td>
+
+                      <td className="p-2 text-center">
+                        {highlight(
+                          poKey,
+                          `${line.reference} → INSPECTION`,
+                          formatDate(line.inspection_approval_date)
                         )}
                       </td>
                     </tr>
@@ -347,9 +314,10 @@ export default function PreviewStep({
         <Button onClick={onBack} variant="outline">
           ← Volver
         </Button>
+
         <Button
           onClick={() => onNextWithCompare(compareResult)}
-          className="bg-green-600 text-white font-semibold hover:bg-green-700"
+          className="bg-green-600 font-semibold text-white hover:bg-green-700"
         >
           Confirmar importación →
         </Button>

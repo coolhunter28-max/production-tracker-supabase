@@ -1,24 +1,18 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type QualityFactoriesFiltersBarProps = {
   factories: string[];
 };
 
-function buildQueryString(
-  searchParams: URLSearchParams,
-  updates: Record<string, string>
-) {
+function buildQueryString(searchParams: URLSearchParams, updates: Record<string, string>) {
   const params = new URLSearchParams(searchParams.toString());
 
   Object.entries(updates).forEach(([key, value]) => {
-    if (!value) {
-      params.delete(key);
-    } else {
-      params.set(key, value);
-    }
+    if (!value) params.delete(key);
+    else params.set(key, value);
   });
 
   params.delete("customer");
@@ -33,58 +27,49 @@ function buildQueryString(
   return params.toString();
 }
 
-export function QualityFactoriesFiltersBar({
-  factories,
-}: QualityFactoriesFiltersBarProps) {
+export function QualityFactoriesFiltersBar({ factories }: QualityFactoriesFiltersBarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const safePathname = pathname ?? "";
   const searchParams = useSearchParams();
 
-  const current = useMemo(
-    () => ({
-      factory: searchParams.get("factory") ?? "",
-    }),
+  const safeSearchParams = useMemo(
+    () => new URLSearchParams(searchParams?.toString() ?? ""),
     [searchParams]
   );
 
+  const current = useMemo(
+    () => ({
+      factory: safeSearchParams.get("factory") ?? "",
+    }),
+    [safeSearchParams]
+  );
+
   function updateFilter(value: string) {
-    const query = buildQueryString(searchParams, { factory: value });
-    router.push(query ? `${pathname}?${query}` : pathname);
+    const query = buildQueryString(safeSearchParams, { factory: value });
+    router.push(query ? `${safePathname}?${query}` : safePathname);
   }
 
   function clearFilters() {
-    router.push(pathname);
+    router.push(safePathname);
   }
 
   return (
     <section className="rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2 className="text-base font-medium">Filtros</h2>
-
-        <button
-          type="button"
-          onClick={clearFilters}
-          className="rounded-xl border px-3 py-2 text-sm transition-colors hover:bg-muted"
-        >
+        <button type="button" onClick={clearFilters} className="rounded-xl border px-3 py-2 text-sm transition-colors hover:bg-muted">
           Limpiar filtros
         </button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">
-            Factory
-          </label>
-          <select
-            className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
-            value={current.factory}
-            onChange={(e) => updateFilter(e.target.value)}
-          >
+          <label className="text-xs font-medium text-muted-foreground">Factory</label>
+          <select className="w-full rounded-xl border bg-background px-3 py-2 text-sm" value={current.factory} onChange={(e) => updateFilter(e.target.value)}>
             <option value="">Todas</option>
             {factories.map((factory) => (
-              <option key={factory} value={factory}>
-                {factory}
-              </option>
+              <option key={factory} value={factory}>{factory}</option>
             ))}
           </select>
         </div>

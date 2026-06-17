@@ -310,3 +310,18 @@ export function groupRowsByPO(rows: any[]) {
 
   return Array.from(map.values());
 }
+/* ============================================================
+   EXPORTS COMPATIBILIDAD LEGADO
+   ============================================================ */
+
+   export function parseDate(value: any): string | null {
+    return parseDateSmart(value);
+  }
+  
+  export function parseIntES(value: any): number {
+    return parseQty(value);
+  }
+  
+  export function parseMoneyES(value: any): number {
+    return parseMoney(value);
+  }

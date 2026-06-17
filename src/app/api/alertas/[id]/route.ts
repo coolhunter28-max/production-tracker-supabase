@@ -1,70 +1,86 @@
-import { supabase } from "@/lib/supabase";
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase";
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
+function jsonError(message: string, status = 500) {
+  return NextResponse.json({ error: message }, { status });
+}
+
+export async function GET(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
+    const supabase = await createClient();
+
     const { data, error } = await supabase
-      .from("po")
-      .select(`
-        *,
-        lineas_pedido (
-          *,
-          muestras (*)
-        )
-      `)
-      .eq("id", id)
+      .from("alertas")
+      .select("*")
+      .eq("id", params.id)
       .single();
 
     if (error) {
-      console.error("❌ Error cargando PO:", error.message);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("❌ Error cargando alerta:", error.message);
+      return jsonError(error.message);
     }
 
     return NextResponse.json(data);
-  } catch (err: any) {
-    console.error("❌ Error inesperado:", err.message);
-    return NextResponse.json({ error: "Error inesperado" }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error inesperado";
+    console.error("❌ Error inesperado:", message);
+    return jsonError(message);
   }
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
-  const body = await req.json();
-
+export async function PUT(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
+    const supabase = await createClient();
+    const body = await req.json();
+
     const { error } = await supabase
-      .from("po")
+      .from("alertas")
       .update(body)
-      .eq("id", id);
+      .eq("id", params.id);
 
     if (error) {
-      console.error("❌ Error actualizando PO:", error.message);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("❌ Error actualizando alerta:", error.message);
+      return jsonError(error.message);
     }
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error("❌ Error inesperado:", err.message);
-    return NextResponse.json({ error: "Error inesperado" }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error inesperado";
+    console.error("❌ Error inesperado:", message);
+    return jsonError(message);
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
-
+export async function DELETE(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    const { error } = await supabase.from("po").delete().eq("id", id);
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from("alertas")
+      .delete()
+      .eq("id", params.id);
 
     if (error) {
-      console.error("❌ Error eliminando PO:", error.message);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("❌ Error eliminando alerta:", error.message);
+      return jsonError(error.message);
     }
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error("❌ Error inesperado:", err.message);
-    return NextResponse.json({ error: "Error inesperado" }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error inesperado";
+    console.error("❌ Error inesperado:", message);
+    return jsonError(message);
   }
 }

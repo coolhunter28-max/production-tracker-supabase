@@ -25,6 +25,53 @@ function jsonError(message: string, status = 400) {
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
+function buildLineaPayload(linea: any, poId: string) {
+  return {
+    po_id: poId,
+    reference: text(linea.reference) ?? "",
+    style: text(linea.style) ?? "",
+    color: text(linea.color) ?? "",
+    size_run: text(linea.size_run),
+    category: text(linea.category),
+    channel: text(linea.channel),
+    qty: num(linea.qty) ?? 0,
+    price: num(linea.price),
+    amount: num(linea.amount),
+    pi_number: text(linea.pi_number),
+    pi_bsg: text(linea.pi_bsg),
+    price_selling: num(linea.price_selling),
+    amount_selling: num(linea.amount_selling),
+    etd: dateOrNull(linea.etd),
+    inspection: dateOrNull(linea.inspection),
+    estado_inspeccion: text(linea.estado_inspeccion),
+    trial_upper: text(linea.trial_upper),
+    trial_lasting: text(linea.trial_lasting),
+    lasting: text(linea.lasting),
+    finish_date: dateOrNull(linea.finish_date),
+    modelo_id: text(linea.modelo_id),
+    variante_id: text(linea.variante_id),
+
+    // Snapshots: solo se rellenan al crear línea nueva.
+    master_buy_price_used: num(linea.master_buy_price_used),
+    master_sell_price_used: num(linea.master_sell_price_used),
+    master_currency_used: text(linea.master_currency_used),
+    master_valid_from_used: dateOrNull(linea.master_valid_from_used),
+    master_price_id_used: text(linea.master_price_id_used),
+    master_price_source: text(linea.master_price_source),
+  };
+}
+
+function buildMuestraPayload(muestra: any, lineaPedidoId: string) {
+  return {
+    linea_pedido_id: lineaPedidoId,
+    tipo_muestra: text(muestra.tipo_muestra),
+    round: text(muestra.round) ?? "1",
+    fecha_muestra: dateOrNull(muestra.fecha_muestra),
+    estado_muestra: text(muestra.estado_muestra) ?? "Pendiente",
+    notas: text(muestra.notas),
+  };
+}
+
 export async function POST(req: Request) {
   const supabase = await createClient();
   const access = await getCurrentUserAccess();
@@ -40,7 +87,7 @@ export async function POST(req: Request) {
   const customer = text(po.customer);
 
   if (!customer) return jsonError("Customer es obligatorio.");
-  if (!po.po) return jsonError("PO es obligatorio.");
+  if (!text(po.po)) return jsonError("PO es obligatorio.");
 
   if (!access.canSeeAllCustomers && !access.customers.includes(customer)) {
     return jsonError("No puedes crear POs para un cliente fuera de tu cartera.", 403);
@@ -70,42 +117,30 @@ export async function POST(req: Request) {
 
   if (poError) return jsonError(poError.message, 500);
 
-  if (lineas.length > 0) {
-    const payload = lineas.map((linea: any) => ({
-      po_id: createdPO.id,
-      reference: text(linea.reference) ?? "",
-      style: text(linea.style) ?? "",
-      color: text(linea.color) ?? "",
-      size_run: text(linea.size_run),
-      category: text(linea.category),
-      channel: text(linea.channel),
-      qty: num(linea.qty) ?? 0,
-      price: num(linea.price),
-      amount: num(linea.amount),
-      pi_number: text(linea.pi_number),
-      pi_bsg: text(linea.pi_bsg),
-      price_selling: num(linea.price_selling),
-      amount_selling: num(linea.amount_selling),
-      etd: dateOrNull(linea.etd),
-      inspection: dateOrNull(linea.inspection),
-      estado_inspeccion: text(linea.estado_inspeccion),
-      trial_upper: text(linea.trial_upper),
-      trial_lasting: text(linea.trial_lasting),
-      lasting: text(linea.lasting),
-      finish_date: dateOrNull(linea.finish_date),
-      modelo_id: text(linea.modelo_id),
-      variante_id: text(linea.variante_id),
-      master_buy_price_used: num(linea.master_buy_price_used),
-      master_sell_price_used: num(linea.master_sell_price_used),
-      master_currency_used: text(linea.master_currency_used),
-      master_valid_from_used: dateOrNull(linea.master_valid_from_used),
-      master_price_id_used: text(linea.master_price_id_used),
-      master_price_source: text(linea.master_price_source),
-    }));
+  for (const linea of lineas) {
+    const { data: createdLinea, error: lineaError } = await supabase
+      .from("lineas_pedido")
+      .insert(buildLineaPayload(linea, createdPO.id))
+      .select("id")
+      .single();
 
-    const { error: lineasError } = await supabase.from("lineas_pedido").insert(payload);
+    if (lineaError) return jsonError(lineaError.message, 500);
 
-    if (lineasError) return jsonError(lineasError.message, 500);
+    const muestras = Array.isArray(linea.muestras) ? linea.muestras : [];
+
+    if (muestras.length > 0) {
+      const muestrasPayload = muestras
+        .filter((muestra: any) => text(muestra.tipo_muestra))
+        .map((muestra: any) => buildMuestraPayload(muestra, createdLinea.id));
+
+      if (muestrasPayload.length > 0) {
+        const { error: muestrasError } = await supabase
+          .from("muestras")
+          .insert(muestrasPayload);
+
+        if (muestrasError) return jsonError(muestrasError.message, 500);
+      }
+    }
   }
 
   return NextResponse.json({ success: true, po: createdPO });

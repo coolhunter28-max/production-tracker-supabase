@@ -383,6 +383,7 @@ export default function DashboardPage() {
             factories={factories}
             seasons={seasons}
             styles={availableStyles}
+            estados={[]}
             filters={filters}
             onChange={(next: any) => {
               // ✅ soporta si FiltersBox llama con objeto O con updater(prev=>next)

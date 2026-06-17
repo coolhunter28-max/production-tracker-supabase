@@ -1,4 +1,4 @@
-﻿import { supabase } from "@/lib/supabase";
+﻿import { createClient } from "@/lib/supabase";
 
 interface SampleStatus {
   needed: boolean;
@@ -50,6 +50,8 @@ interface POGroup {
 }
 
 export async function syncToSupabase(poGroups: POGroup[]) {
+  const supabase = await createClient();
+
   const results = {
     total: poGroups.length,
     newPOs: 0,
@@ -64,7 +66,6 @@ export async function syncToSupabase(poGroups: POGroup[]) {
   };
 
   try {
-    // === 1️⃣ Cargar POs existentes ===
     const { data: existingPOs, error: fetchError } = await supabase
       .from("pos")
       .select(
@@ -73,36 +74,30 @@ export async function syncToSupabase(poGroups: POGroup[]) {
 
     if (fetchError) throw fetchError;
 
-    // === 2️⃣ Función de normalización ===
-    const normalizeValue = (v: any) => {
+    const normalizeValue = (v: unknown) => {
       if (v === null || v === undefined) return "";
       if (typeof v === "number") return v.toString();
       if (typeof v === "boolean") return v ? "true" : "false";
-      if (typeof v === "object" && v instanceof Date)
-        return v.toISOString().split("T")[0];
+      if (v instanceof Date) return v.toISOString().split("T")[0];
       return String(v).trim();
     };
 
-    // === 3️⃣ Normalización de código PO (sin romper formato original) ===
     const normalizePO = (v: string | undefined) => {
       if (!v) return "";
       return String(v).trim().replace(/\s+/g, "").toUpperCase();
     };
 
-    // === 4️⃣ Mapa de POs existentes ===
     const poMap = new Map<string, any>();
-    existingPOs?.forEach((po) => {
+
+    existingPOs?.forEach((po: any) => {
       const key = normalizePO(po.po);
       poMap.set(key, po);
     });
 
-    console.log("📦 POs existentes en Supabase:", existingPOs?.length);
-    console.log("Ejemplo de PO existente:", existingPOs?.[0]?.po);
-
-    // === 5️⃣ Procesar cada grupo del CSV ===
     for (const po of poGroups) {
       const { header, lines } = po;
       const poNumber = normalizePO(header.po);
+
       if (!poNumber) continue;
 
       const existing = poMap.get(poNumber);
@@ -127,19 +122,15 @@ export async function syncToSupabase(poGroups: POGroup[]) {
       };
 
       let hasChanges = false;
+
       if (existing) {
         hasChanges = Object.keys(poRecord).some((k) => {
           const newVal = normalizeValue(poRecord[k as keyof typeof poRecord]);
           const oldVal = normalizeValue(existing[k]);
           return newVal !== oldVal;
         });
-
-        if (hasChanges) {
-          console.log(`🟦 PO ${header.po} → cambios detectados`);
-        }
       }
 
-      // === 6️⃣ Insertar o actualizar ===
       let poId = existing?.id;
 
       if (!existing) {
@@ -153,6 +144,7 @@ export async function syncToSupabase(poGroups: POGroup[]) {
           results.errors.push(`PO ${header.po}: ${insertErr.message}`);
           continue;
         }
+
         poId = data.id;
         results.newPOs++;
         results.newPOList.push(header.po || "");
@@ -160,7 +152,7 @@ export async function syncToSupabase(poGroups: POGroup[]) {
         const { error: updateErr } = await supabase
           .from("pos")
           .update(poRecord)
-          .eq("po", header.po);
+          .eq("id", poId);
 
         if (updateErr) {
           results.errors.push(`PO ${header.po}: ${updateErr.message}`);
@@ -173,7 +165,6 @@ export async function syncToSupabase(poGroups: POGroup[]) {
         results.unchangedPOList.push(header.po || "");
       }
 
-      // === 7️⃣ Sincronizar líneas ===
       const { data: existingLines } = await supabase
         .from("lineas_pedido")
         .select("id, po_id, reference, color, qty, price, amount")
@@ -181,11 +172,15 @@ export async function syncToSupabase(poGroups: POGroup[]) {
 
       const lineKey = (r: any) => `${r.reference}-${r.color}`.toUpperCase();
       const lineMap = new Map<string, any>();
-      existingLines?.forEach((l) => lineMap.set(lineKey(l), l));
+
+      existingLines?.forEach((line: any) => {
+        lineMap.set(lineKey(line), line);
+      });
 
       for (const line of lines) {
         const key = lineKey(line);
         const existingLine = lineMap.get(key);
+
         const record = {
           po_id: poId,
           reference: line.reference,
@@ -197,17 +192,24 @@ export async function syncToSupabase(poGroups: POGroup[]) {
           updated_at: new Date().toISOString(),
         };
 
+        let lineId = existingLine?.id;
+
         if (!existingLine) {
-          const { error: insertLineErr } = await supabase
+          const { data: insertedLine, error: insertLineErr } = await supabase
             .from("lineas_pedido")
-            .insert(record);
+            .insert(record)
+            .select("id")
+            .single();
+
           if (insertLineErr) {
             results.errors.push(
               `PO ${header.po} - Línea ${line.reference}: ${insertLineErr.message}`
             );
-          } else {
-            results.updatedLines++;
+            continue;
           }
+
+          lineId = insertedLine.id;
+          results.updatedLines++;
         } else {
           const changed = Object.keys(record).some((k) => {
             const newVal = normalizeValue(record[k as keyof typeof record]);
@@ -220,6 +222,7 @@ export async function syncToSupabase(poGroups: POGroup[]) {
               .from("lineas_pedido")
               .update(record)
               .eq("id", existingLine.id);
+
             if (updateLineErr) {
               results.errors.push(
                 `PO ${header.po} - Línea ${line.reference}: ${updateLineErr.message}`
@@ -230,7 +233,8 @@ export async function syncToSupabase(poGroups: POGroup[]) {
           }
         }
 
-        // === 8️⃣ Sincronizar muestras ===
+        if (!lineId) continue;
+
         const sampleMap: Record<string, SampleStatus | undefined> = {
           cfm: line.cfm,
           counter_sample: line.counter_sample,
@@ -251,7 +255,7 @@ export async function syncToSupabase(poGroups: POGroup[]) {
           const { data: existingSample } = await supabase
             .from("muestras")
             .select("id, fecha_muestra, round")
-            .eq("linea_pedido_id", existingLine?.id)
+            .eq("linea_pedido_id", lineId)
             .eq("tipo_muestra", type)
             .maybeSingle();
 
@@ -259,11 +263,12 @@ export async function syncToSupabase(poGroups: POGroup[]) {
             const { error: insertSampleErr } = await supabase
               .from("muestras")
               .insert({
-                linea_pedido_id: existingLine?.id,
+                linea_pedido_id: lineId,
                 tipo_muestra: type,
                 round: sample.round,
                 fecha_muestra: sample.date,
               });
+
             if (insertSampleErr) {
               results.errors.push(
                 `PO ${header.po} - Sample ${type}: ${insertSampleErr.message}`
@@ -271,10 +276,7 @@ export async function syncToSupabase(poGroups: POGroup[]) {
             } else {
               results.updatedSamples++;
             }
-          } else if (
-            sample.date &&
-            sample.date !== existingSample.fecha_muestra
-          ) {
+          } else if (sample.date && sample.date !== existingSample.fecha_muestra) {
             const { error: updateSampleErr } = await supabase
               .from("muestras")
               .update({
@@ -282,6 +284,7 @@ export async function syncToSupabase(poGroups: POGroup[]) {
                 fecha_muestra: sample.date,
               })
               .eq("id", existingSample.id);
+
             if (updateSampleErr) {
               results.errors.push(
                 `PO ${header.po} - Sample ${type}: ${updateSampleErr.message}`
@@ -293,9 +296,10 @@ export async function syncToSupabase(poGroups: POGroup[]) {
         }
       }
     }
-  } catch (err: any) {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error desconocido";
     console.error(err);
-    results.errors.push(err.message);
+    results.errors.push(message);
   }
 
   console.log("✅ Resultados syncToSupabase:", results);

@@ -33,9 +33,7 @@ function asStringArray(value: unknown): string[] {
 
   const single = asString(value);
 
-  if (!single) {
-    return [];
-  }
+  if (!single) return [];
 
   return single
     .split(",")
@@ -70,23 +68,18 @@ function parseDimension(value: unknown): SituationDimension {
 
 function parseChart(
   value: unknown,
-  dimension: SituationDimension,
+  dimension: SituationDimension
 ): SituationChartType {
   const v = asString(value);
 
-  if (v === "line" && dimension === "season") {
-    return "line";
-  }
-
-  if (v === "bar" || v === "donut") {
-    return v;
-  }
+  if (v === "line" && dimension === "season") return "line";
+  if (v === "bar" || v === "donut") return v;
 
   return dimension === "season" ? "line" : "bar";
 }
 
 export function parseSituationSearchParams(
-  searchParams: Record<string, string | string[] | undefined>,
+  searchParams: Record<string, string | string[] | undefined>
 ): SituationFilters {
   const dimension = parseDimension(searchParams.dimension);
 
@@ -102,9 +95,9 @@ export function parseSituationSearchParams(
 }
 
 export async function getSituationChartData(
-  filters: SituationFilters,
+  filters: SituationFilters
 ): Promise<SituationChartRow[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("get_situation_pivot_v2", {
     p_metric: filters.metric,
@@ -130,7 +123,7 @@ export async function getSituationChartData(
 }
 
 export async function getSituationFilterOptions(): Promise<SituationFilterOptions> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("mv_fact_operacion_linea")
@@ -163,8 +156,8 @@ function unique(values: Array<string | null | undefined>) {
     new Set(
       values
         .map((value) => (typeof value === "string" ? value.trim() : ""))
-        .filter(Boolean),
-    ),
+        .filter(Boolean)
+    )
   ).sort((a, b) => a.localeCompare(b));
 }
 
