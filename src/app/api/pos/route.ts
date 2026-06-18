@@ -33,9 +33,19 @@ export async function GET() {
         qty,
         price,
         amount,
+        pi_number,
+        etd,
         pi_bsg,
         price_selling,
-        amount_selling
+        amount_selling,
+        muestras (
+          id,
+          tipo_muestra,
+          round,
+          estado_muestra,
+          fecha_teorica,
+          fecha_muestra
+        )
       )
     `
     )

@@ -27,6 +27,16 @@ type CatalogItem = {
   valid_from: string | null;
 };
 
+type MuestraForm = {
+  id?: string;
+  tipo_muestra: string;
+  round: string;
+  estado_muestra: string;
+  fecha_teorica: string;
+  fecha_muestra: string;
+  notas: string;
+};
+
 type LineaForm = {
   id?: string;
   reference: string;
@@ -56,6 +66,54 @@ type LineaForm = {
   master_valid_from_used: string;
   master_price_id_used: string;
   master_price_source: string;
+  muestras: MuestraForm[];
+};
+
+const SAMPLE_TYPE_OPTIONS = [
+  "CFMS",
+  "COUNTERS",
+  "FITTINGS",
+  "PPS",
+  "TESTINGS",
+  "SHIPPINGS",
+] as const;
+
+const SAMPLE_STATE_OPTIONS = [
+  "Aprobado",
+  "Enviado",
+  "Pendiente",
+  "Rechazado",
+  "N/N",
+] as const;
+
+const SAMPLE_ROUND_OPTIONS = [
+  "N/N",
+  "Round 1",
+  "Round 2",
+  "Round 3",
+  "Round 4",
+  "Round 5",
+] as const;
+
+const DEFAULT_SAMPLE_TYPE = "CFMS";
+const DEFAULT_SAMPLE_STATE = "Pendiente";
+
+const emptyMuestra: MuestraForm = {
+  tipo_muestra: DEFAULT_SAMPLE_TYPE,
+  round: "Round 1",
+  estado_muestra: DEFAULT_SAMPLE_STATE,
+  fecha_teorica: "",
+  fecha_muestra: "",
+  notas: "",
+};
+
+const nnMuestra: MuestraForm = {
+  tipo_muestra: DEFAULT_SAMPLE_TYPE,
+  round: "N/N",
+  estado_muestra: "N/N",
+  fecha_teorica: "",
+  fecha_muestra: "",
+  notas: "No Need",
 };
 
 const emptyLinea: LineaForm = {
@@ -86,6 +144,7 @@ const emptyLinea: LineaForm = {
   master_valid_from_used: "",
   master_price_id_used: "",
   master_price_source: "",
+  muestras: [],
 };
 
 function toDateInput(value?: string | null) {
@@ -104,6 +163,24 @@ function money(qty: string, price: string) {
 
 function unique(values: Array<string | null | undefined>) {
   return [...new Set(values.filter(Boolean) as string[])].sort();
+}
+
+function isBsgOperativa(value?: string | null) {
+  return String(value ?? "").toUpperCase().includes("BSG");
+}
+
+function normalizeMuestras(linea: any): MuestraForm[] {
+  const muestras = Array.isArray(linea?.muestras) ? linea.muestras : [];
+
+  return muestras.map((muestra: any) => ({
+    id: muestra.id,
+    tipo_muestra: muestra.tipo_muestra ?? DEFAULT_SAMPLE_TYPE,
+    round: muestra.round ?? "Round 1",
+    estado_muestra: muestra.estado_muestra ?? DEFAULT_SAMPLE_STATE,
+    fecha_teorica: toDateInput(muestra.fecha_teorica),
+    fecha_muestra: toDateInput(muestra.fecha_muestra),
+    notas: muestra.notas ?? "",
+  }));
 }
 
 export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
@@ -161,6 +238,7 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
       master_valid_from_used: toDateInput(linea.master_valid_from_used),
       master_price_id_used: linea.master_price_id_used ?? "",
       master_price_source: linea.master_price_source ?? "",
+      muestras: normalizeMuestras(linea),
     }))
   );
 
@@ -181,11 +259,7 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
     return catalog.filter((item) => {
       if (formData.customer && item.customer !== formData.customer) return false;
       if (formData.supplier && item.supplier !== formData.supplier) return false;
-
-      // Si el catálogo tiene factory null, no lo ocultamos.
-      // Pero el PO sí exige factory antes de guardar.
       if (formData.factory && item.factory && item.factory !== formData.factory) return false;
-
       if (formData.season && item.season !== formData.season) return false;
 
       return true;
@@ -199,6 +273,10 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
 
   function updateHeader(field: string, value: string) {
     setFormData((prev) => ({ ...prev, [field]: value }));
+
+    if (field === "channel" && !isBsgOperativa(value)) {
+      setLineas((prev) => prev.map((linea) => ({ ...linea, pi_bsg: "" })));
+    }
   }
 
   function updateLinea(index: number, field: keyof LineaForm, value: string) {
@@ -220,7 +298,43 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
         );
       }
 
+      if (field === "channel" && !isBsgOperativa(value)) {
+        row.pi_bsg = "";
+      }
+
       next[index] = row;
+      return next;
+    });
+  }
+
+  function updateMuestra(lineaIndex: number, muestraIndex: number, field: keyof MuestraForm, value: string) {
+    setLineas((prev) => {
+      const next = [...prev];
+      const linea = { ...next[lineaIndex] };
+      const muestras = [...linea.muestras];
+      muestras[muestraIndex] = { ...muestras[muestraIndex], [field]: value };
+
+      if ((field === "round" && value === "N/N") || (field === "estado_muestra" && value === "N/N")) {
+        muestras[muestraIndex] = {
+          ...muestras[muestraIndex],
+          round: "N/N",
+          estado_muestra: "N/N",
+          fecha_muestra: "",
+          notas: muestras[muestraIndex].notas || "No Need",
+        };
+      }
+
+      if (field === "round" && value !== "N/N" && muestras[muestraIndex].estado_muestra === "N/N") {
+        muestras[muestraIndex] = {
+          ...muestras[muestraIndex],
+          estado_muestra: DEFAULT_SAMPLE_STATE,
+          notas: muestras[muestraIndex].notas === "No Need" ? "" : muestras[muestraIndex].notas,
+        };
+      }
+
+      linea.muestras = muestras;
+      next[lineaIndex] = linea;
+
       return next;
     });
   }
@@ -258,6 +372,10 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
     if (item.currency) {
       setFormData((prev) => ({ ...prev, currency: item.currency ?? prev.currency }));
     }
+
+    if (item.factory && !formData.factory) {
+      setFormData((prev) => ({ ...prev, factory: item.factory ?? prev.factory }));
+    }
   }
 
   function addLinea() {
@@ -277,6 +395,36 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
     setLineas((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function addMuestra(lineaIndex: number) {
+    setLineas((prev) => {
+      const next = [...prev];
+      const linea = { ...next[lineaIndex] };
+      linea.muestras = [...linea.muestras, { ...emptyMuestra }];
+      next[lineaIndex] = linea;
+      return next;
+    });
+  }
+
+  function setNoNeedMuestra(lineaIndex: number) {
+    setLineas((prev) => {
+      const next = [...prev];
+      const linea = { ...next[lineaIndex] };
+      linea.muestras = [{ ...nnMuestra }];
+      next[lineaIndex] = linea;
+      return next;
+    });
+  }
+
+  function removeMuestra(lineaIndex: number, muestraIndex: number) {
+    setLineas((prev) => {
+      const next = [...prev];
+      const linea = { ...next[lineaIndex] };
+      linea.muestras = linea.muestras.filter((_, i) => i !== muestraIndex);
+      next[lineaIndex] = linea;
+      return next;
+    });
+  }
+
   function validateBeforeSave() {
     if (!formData.po.trim()) return "PO es obligatorio.";
     if (!formData.customer.trim()) return "Customer es obligatorio.";
@@ -292,6 +440,23 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
       if (!linea.style.trim()) return `La línea ${rowNumber} no tiene modelo/style.`;
       if (!linea.color.trim()) return `La línea ${rowNumber} no tiene color.`;
       if (!linea.qty || Number(linea.qty) <= 0) return `La línea ${rowNumber} no tiene cantidad válida.`;
+
+      const operativeChannel = linea.channel || formData.channel;
+      if (!isBsgOperativa(operativeChannel) && linea.pi_bsg.trim()) {
+        return `La línea ${rowNumber} tiene PI BSG pero no pertenece a operativa BSG.`;
+      }
+
+      for (const [muestraIndex, muestra] of linea.muestras.entries()) {
+        const muestraNumber = muestraIndex + 1;
+
+        if (!muestra.tipo_muestra.trim()) {
+          return `La muestra ${muestraNumber} de la línea ${rowNumber} no tiene tipo.`;
+        }
+
+        if (!muestra.round.trim()) {
+          return `La muestra ${muestraNumber} de la línea ${rowNumber} no tiene round.`;
+        }
+      }
     }
 
     return null;
@@ -311,7 +476,15 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
 
     const payload = {
       po: formData,
-      lineas_pedido: lineas,
+      lineas_pedido: lineas.map((linea) => {
+        const operativeChannel = linea.channel || formData.channel;
+
+        return {
+          ...linea,
+          pi_bsg: isBsgOperativa(operativeChannel) ? linea.pi_bsg : "",
+          muestras: linea.muestras,
+        };
+      }),
     };
 
     const url = po?.id ? `/api/po/${po.id}` : "/api/po";
@@ -356,6 +529,7 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
           <Field label="PO Date" type="date" value={formData.po_date} onChange={(v) => updateHeader("po_date", v)} />
           <Field label="PI general" value={formData.pi} onChange={(v) => updateHeader("pi", v)} />
           <Field label="ETD PI general" type="date" value={formData.etd_pi} onChange={(v) => updateHeader("etd_pi", v)} />
+          <DataListField label="Channel" value={formData.channel} options={channelOptions} onChange={(v) => updateHeader("channel", v)} />
           <Field label="Booking" value={formData.booking} onChange={(v) => updateHeader("booking", v)} />
           <Field label="Closing" value={formData.closing} onChange={(v) => updateHeader("closing", v)} />
           <Field label="Shipping" type="date" value={formData.shipping_date} onChange={(v) => updateHeader("shipping_date", v)} />
@@ -365,139 +539,290 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
 
       <section className="rounded-xl border bg-white p-4 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Líneas de pedido</h2>
+          <div>
+            <h2 className="text-lg font-bold">Líneas de pedido</h2>
+            <p className="text-sm text-slate-500">
+              Cada línea puede tener su propia PI, ETD PI y muestras.
+            </p>
+          </div>
 
           <button type="button" onClick={addLinea} className="rounded bg-slate-900 px-3 py-2 text-sm text-white">
             + Añadir línea
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-[2100px] text-sm">
-            <thead className="bg-slate-100">
-              <tr>
-                <Th>Modelo / Style</Th>
-                <Th>Color</Th>
-                <Th>Reference</Th>
-                <Th>Size</Th>
-                <Th>Category</Th>
-                <Th>Channel</Th>
-                <Th>Qty</Th>
-                <Th>Buy</Th>
-                <Th>Amount</Th>
-                <Th>Sell</Th>
-                <Th>Sell Amount</Th>
-                <Th>PI línea</Th>
-                <Th>PI BSG</Th>
-                <Th>ETD línea</Th>
-                <Th>Inspection</Th>
-                <Th>Trial U</Th>
-                <Th>Trial L</Th>
-                <Th>Lasting</Th>
-                <Th>Finish</Th>
-                <Th></Th>
-              </tr>
-            </thead>
+        <div className="space-y-6">
+          {lineas.map((linea, index) => {
+            const styleOptions = unique(scopedCatalog.map((x) => x.style));
+            const colorOptions = scopedCatalog.filter((x) => x.style === linea.style);
+            const operativeChannel = linea.channel || formData.channel;
+            const isBsg = isBsgOperativa(operativeChannel);
 
-            <tbody>
-              {lineas.map((linea, index) => {
-                const styleOptions = unique(scopedCatalog.map((x) => x.style));
-                const colorOptions = scopedCatalog.filter((x) => x.style === linea.style);
+            return (
+              <article key={`${linea.id ?? "new"}-${index}`} className="rounded-lg border bg-slate-50 p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="font-semibold">Línea {index + 1}</h3>
 
-                return (
-                  <tr key={`${linea.id ?? "new"}-${index}`} className="border-b">
-                    <Td>
-                      <select
-                        className="w-full rounded border px-2 py-1"
-                        value={linea.style}
-                        onChange={(e) => {
-                          updateLinea(index, "style", e.target.value);
-                          updateLinea(index, "color", "");
-                          updateLinea(index, "variante_id", "");
-                        }}
-                      >
-                        <option value="">Seleccionar</option>
-                        {styleOptions.map((style) => (
-                          <option key={style} value={style}>
-                            {style}
-                          </option>
-                        ))}
-                      </select>
-                    </Td>
+                  <button
+                    type="button"
+                    onClick={() => removeLinea(index)}
+                    className="rounded bg-red-50 px-2 py-1 text-xs text-red-700"
+                  >
+                    Eliminar línea
+                  </button>
+                </div>
 
-                    <Td>
-                      <select
-                        className="w-full rounded border px-2 py-1"
-                        value={linea.variante_id}
-                        onChange={(e) => {
-                          const item = colorOptions.find((x) => x.variante_id === e.target.value);
-                          if (item) applyCatalogItem(index, item);
-                        }}
-                      >
-                        <option value="">Seleccionar</option>
-                        {colorOptions.map((item) => (
-                          <option key={item.variante_id} value={item.variante_id}>
-                            {item.color} · {item.reference} · {item.season}
-                          </option>
-                        ))}
-                      </select>
-                    </Td>
+                <div className="overflow-x-auto">
+                  <table className="min-w-[2100px] text-sm">
+                    <thead className="bg-slate-100">
+                      <tr>
+                        <Th>Modelo / Style</Th>
+                        <Th>Color</Th>
+                        <Th>Reference</Th>
+                        <Th>Size</Th>
+                        <Th>Category</Th>
+                        <Th>Channel</Th>
+                        <Th>Qty</Th>
+                        <Th>Buy</Th>
+                        <Th>Amount</Th>
+                        <Th>Sell</Th>
+                        <Th>Sell Amount</Th>
+                        <Th>PI línea</Th>
+                        <Th>PI BSG</Th>
+                        <Th>ETD línea</Th>
+                        <Th>Inspection</Th>
+                        <Th>Trial U</Th>
+                        <Th>Trial L</Th>
+                        <Th>Lasting</Th>
+                        <Th>Finish</Th>
+                      </tr>
+                    </thead>
 
-                    <Td><SmallInput value={linea.reference} onChange={(v) => updateLinea(index, "reference", v)} /></Td>
-                    <Td><SmallInput value={linea.size_run} onChange={(v) => updateLinea(index, "size_run", v)} /></Td>
+                    <tbody>
+                      <tr className="border-b bg-white">
+                        <Td>
+                          <select
+                            className="w-full rounded border px-2 py-1"
+                            value={linea.style}
+                            onChange={(e) => {
+                              updateLinea(index, "style", e.target.value);
+                              updateLinea(index, "color", "");
+                              updateLinea(index, "variante_id", "");
+                            }}
+                          >
+                            <option value="">Seleccionar</option>
+                            {styleOptions.map((style) => (
+                              <option key={style} value={style}>
+                                {style}
+                              </option>
+                            ))}
+                          </select>
+                        </Td>
 
-                    <Td>
-                      <DataListInput
-                        value={linea.category}
-                        options={categoryOptions}
-                        onChange={(v) => updateLinea(index, "category", v)}
-                      />
-                    </Td>
+                        <Td>
+                          <select
+                            className="w-full rounded border px-2 py-1"
+                            value={linea.variante_id}
+                            onChange={(e) => {
+                              const item = colorOptions.find((x) => x.variante_id === e.target.value);
+                              if (item) applyCatalogItem(index, item);
+                            }}
+                          >
+                            <option value="">Seleccionar</option>
+                            {colorOptions.map((item) => (
+                              <option key={item.variante_id} value={item.variante_id}>
+                                {item.color} · {item.reference} · {item.season}
+                              </option>
+                            ))}
+                          </select>
+                        </Td>
 
-                    <Td>
-                      <DataListInput
-                        value={linea.channel}
-                        options={channelOptions}
-                        onChange={(v) => updateLinea(index, "channel", v)}
-                      />
-                    </Td>
+                        <Td><SmallInput value={linea.reference} onChange={(v) => updateLinea(index, "reference", v)} /></Td>
+                        <Td><SmallInput value={linea.size_run} onChange={(v) => updateLinea(index, "size_run", v)} /></Td>
 
-                    <Td><SmallInput type="number" value={linea.qty} onChange={(v) => updateLinea(index, "qty", v)} /></Td>
-                    <Td><SmallInput value={linea.price} onChange={(v) => updateLinea(index, "price", v)} /></Td>
-                    <Td><ReadOnlyValue value={linea.amount} /></Td>
-                    <Td><SmallInput value={linea.price_selling} onChange={(v) => updateLinea(index, "price_selling", v)} /></Td>
-                    <Td><ReadOnlyValue value={linea.amount_selling} /></Td>
-                    <Td><SmallInput value={linea.pi_number} onChange={(v) => updateLinea(index, "pi_number", v)} /></Td>
-                    <Td><SmallInput value={linea.pi_bsg} onChange={(v) => updateLinea(index, "pi_bsg", v)} /></Td>
-                    <Td><SmallInput type="date" value={linea.etd} onChange={(v) => updateLinea(index, "etd", v)} /></Td>
-                    <Td><SmallInput type="date" value={linea.inspection} onChange={(v) => updateLinea(index, "inspection", v)} /></Td>
-                    <Td><SmallInput value={linea.trial_upper} onChange={(v) => updateLinea(index, "trial_upper", v)} /></Td>
-                    <Td><SmallInput value={linea.trial_lasting} onChange={(v) => updateLinea(index, "trial_lasting", v)} /></Td>
-                    <Td><SmallInput value={linea.lasting} onChange={(v) => updateLinea(index, "lasting", v)} /></Td>
-                    <Td><SmallInput type="date" value={linea.finish_date} onChange={(v) => updateLinea(index, "finish_date", v)} /></Td>
+                        <Td>
+                          <DataListInput
+                            value={linea.category}
+                            options={categoryOptions}
+                            onChange={(v) => updateLinea(index, "category", v)}
+                          />
+                        </Td>
 
-                    <Td>
+                        <Td>
+                          <DataListInput
+                            value={linea.channel}
+                            options={channelOptions}
+                            onChange={(v) => updateLinea(index, "channel", v)}
+                          />
+                        </Td>
+
+                        <Td><SmallInput type="number" value={linea.qty} onChange={(v) => updateLinea(index, "qty", v)} /></Td>
+                        <Td><SmallInput value={linea.price} onChange={(v) => updateLinea(index, "price", v)} /></Td>
+                        <Td><ReadOnlyValue value={linea.amount} /></Td>
+                        <Td><SmallInput value={linea.price_selling} onChange={(v) => updateLinea(index, "price_selling", v)} /></Td>
+                        <Td><ReadOnlyValue value={linea.amount_selling} /></Td>
+                        <Td><SmallInput value={linea.pi_number} onChange={(v) => updateLinea(index, "pi_number", v)} /></Td>
+                        <Td>
+                          <SmallInput
+                            value={isBsg ? linea.pi_bsg : ""}
+                            disabled={!isBsg}
+                            placeholder={isBsg ? "" : "Solo BSG"}
+                            onChange={(v) => updateLinea(index, "pi_bsg", v)}
+                          />
+                        </Td>
+                        <Td><SmallInput type="date" value={linea.etd} onChange={(v) => updateLinea(index, "etd", v)} /></Td>
+                        <Td><SmallInput type="date" value={linea.inspection} onChange={(v) => updateLinea(index, "inspection", v)} /></Td>
+                        <Td><SmallInput value={linea.trial_upper} onChange={(v) => updateLinea(index, "trial_upper", v)} /></Td>
+                        <Td><SmallInput value={linea.trial_lasting} onChange={(v) => updateLinea(index, "trial_lasting", v)} /></Td>
+                        <Td><SmallInput value={linea.lasting} onChange={(v) => updateLinea(index, "lasting", v)} /></Td>
+                        <Td><SmallInput type="date" value={linea.finish_date} onChange={(v) => updateLinea(index, "finish_date", v)} /></Td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 rounded-lg border bg-white p-3">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-semibold">Muestras de la línea</h4>
+                      <p className="text-xs text-slate-500">
+                        N/N es No Need: neutro, no bloquea y no genera alerta.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => removeLinea(index)}
-                        className="rounded bg-red-50 px-2 py-1 text-xs text-red-700"
+                        onClick={() => addMuestra(index)}
+                        className="rounded border px-3 py-1 text-xs"
                       >
-                        Eliminar
+                        + Round 1
                       </button>
-                    </Td>
-                  </tr>
-                );
-              })}
 
-              {lineas.length === 0 ? (
-                <tr>
-                  <td colSpan={20} className="p-6 text-center text-sm text-slate-500">
-                    No hay líneas añadidas.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+                      <button
+                        type="button"
+                        onClick={() => setNoNeedMuestra(index)}
+                        className="rounded bg-slate-100 px-3 py-1 text-xs text-slate-700"
+                      >
+                        Marcar N/N
+                      </button>
+                    </div>
+                  </div>
+
+                  {linea.muestras.length === 0 ? (
+                    <div className="rounded border border-dashed p-3 text-sm text-slate-500">
+                      Sin muestras definidas para esta línea.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[900px] text-sm">
+                        <thead className="bg-slate-100">
+                          <tr>
+                            <Th>Tipo</Th>
+                            <Th>Round</Th>
+                            <Th>Estado</Th>
+                            <Th>Fecha teórica</Th>
+                            <Th>Fecha real China</Th>
+                            <Th>Notas</Th>
+                            <Th></Th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {linea.muestras.map((muestra, muestraIndex) => {
+                            const isNoNeed = muestra.round === "N/N" || muestra.estado_muestra === "N/N";
+
+                            return (
+                              <tr key={`${muestra.id ?? "new"}-${muestraIndex}`} className="border-b">
+                                <Td>
+                                  <select
+                                    className="w-full min-w-36 rounded border px-2 py-1"
+                                    value={muestra.tipo_muestra}
+                                    onChange={(e) => updateMuestra(index, muestraIndex, "tipo_muestra", e.target.value)}
+                                  >
+                                    {SAMPLE_TYPE_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </Td>
+
+                                <Td>
+                                  <select
+                                    className="w-full min-w-24 rounded border px-2 py-1"
+                                    value={muestra.round}
+                                    onChange={(e) => updateMuestra(index, muestraIndex, "round", e.target.value)}
+                                  >
+                                    {SAMPLE_ROUND_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </Td>
+
+                                <Td>
+                                  <select
+                                    className="w-full min-w-32 rounded border px-2 py-1 disabled:bg-slate-100 disabled:text-slate-500"
+                                    value={muestra.estado_muestra}
+                                    disabled={isNoNeed}
+                                    onChange={(e) => updateMuestra(index, muestraIndex, "estado_muestra", e.target.value)}
+                                  >
+                                    {SAMPLE_STATE_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </Td>
+
+                                <Td>
+                                  <ReadOnlyValue value={muestra.fecha_teorica} />
+                                </Td>
+
+                                <Td>
+                                  <SmallInput
+                                    type="date"
+                                    value={isNoNeed ? "" : muestra.fecha_muestra}
+                                    disabled={isNoNeed}
+                                    onChange={(v) => updateMuestra(index, muestraIndex, "fecha_muestra", v)}
+                                  />
+                                </Td>
+
+                                <Td>
+                                  <SmallInput
+                                    value={muestra.notas}
+                                    onChange={(v) => updateMuestra(index, muestraIndex, "notas", v)}
+                                  />
+                                </Td>
+
+                                <Td>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeMuestra(index, muestraIndex)}
+                                    className="rounded bg-red-50 px-2 py-1 text-xs text-red-700"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </Td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+
+          {lineas.length === 0 ? (
+            <div className="rounded border border-dashed p-6 text-center text-sm text-slate-500">
+              No hay líneas añadidas.
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -574,6 +899,25 @@ function SelectOrInput({
   );
 }
 
+function DataListField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="text-sm">
+      <span className="mb-1 block text-slate-500">{label}</span>
+      <DataListInput value={value} options={options} onChange={onChange} />
+    </label>
+  );
+}
+
 function DataListInput({
   value,
   options,
@@ -583,7 +927,7 @@ function DataListInput({
   options: string[];
   onChange: (value: string) => void;
 }) {
-  const listId = `list-${Math.random().toString(36).slice(2)}`;
+  const listId = useMemo(() => `list-${Math.random().toString(36).slice(2)}`, []);
 
   return (
     <>
@@ -607,17 +951,23 @@ function SmallInput({
   value,
   onChange,
   type = "text",
+  disabled = false,
+  placeholder,
 }: {
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  disabled?: boolean;
+  placeholder?: string;
 }) {
   return (
     <input
       type={type}
       value={value}
+      disabled={disabled}
+      placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full min-w-24 rounded border px-2 py-1"
+      className="w-full min-w-24 rounded border px-2 py-1 disabled:bg-slate-100 disabled:text-slate-400"
     />
   );
 }
