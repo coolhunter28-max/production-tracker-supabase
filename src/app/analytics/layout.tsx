@@ -1,13 +1,27 @@
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 
 import { AppSidebar } from "@/components/navigation/app-sidebar";
 import { CommandPalette } from "@/components/navigation/command-palette";
+import { getCurrentUserAccess } from "@/lib/ownership";
 
-export default function AnalyticsLayout({
+export default async function AnalyticsLayout({
   children,
 }: {
   children: ReactNode;
 }) {
+  const access = await getCurrentUserAccess();
+
+  const canAccessAnalytics =
+    access.isActive &&
+    (access.role === "ADMIN" ||
+      access.role === "MANAGER" ||
+      access.role === "VIEWER");
+
+  if (!canAccessAnalytics) {
+    redirect("/");
+  }
+
   return (
     <div className="flex min-h-screen bg-slate-50">
       <AppSidebar />

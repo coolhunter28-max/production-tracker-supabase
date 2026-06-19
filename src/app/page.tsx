@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import Image from "next/image";
 import type { ReactNode } from "react";
+import { getCurrentUserAccess } from "@/lib/ownership";
 import {
   AlertTriangle,
   ClipboardList,
@@ -61,6 +62,13 @@ function fichaClienteHref(group: CommandCenterCustomerGroup) {
 
 export default async function HomePage() {
   const { customers, stats } = await getCommandCenterBundle();
+
+  const access = await getCurrentUserAccess();
+
+  const canSeeAnalytics =
+    access.role === "ADMIN" ||
+    access.role === "MANAGER" ||
+    access.role === "VIEWER";
 
   const criticalCustomers = customers.filter((row) => row.critical_count > 0);
   const warningCustomers = customers.filter(
@@ -164,12 +172,14 @@ export default async function HomePage() {
               <QuickLink href="/import" label="Importar datos" />
             </Panel>
 
-            <Panel title="Analytics" icon={<ShieldCheck className="h-5 w-5" />}>
-              <QuickLink href="/analytics/executive" label="Executive Analytics" />
-              <QuickLink href="/analytics/operaciones" label="Operaciones Analytics" />
-              <QuickLink href="/analytics/quality" label="Quality Analytics" />
-              <QuickLink href="/analytics/situation" label="Situation Analytics" />
-            </Panel>
+            {canSeeAnalytics && (
+  <Panel title="Analytics" icon={<ShieldCheck className="h-5 w-5" />}>
+    <QuickLink href="/analytics/executive" label="Executive Analytics" />
+    <QuickLink href="/analytics/operaciones" label="Operaciones Analytics" />
+    <QuickLink href="/analytics/quality" label="Quality Analytics" />
+    <QuickLink href="/analytics/situation" label="Situation Analytics" />
+  </Panel>
+)}
           </div>
         </section>
       </div>
