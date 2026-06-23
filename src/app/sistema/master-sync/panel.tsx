@@ -48,8 +48,15 @@ export function MasterSyncPanel() {
         body: JSON.stringify({ mode }),
       });
 
-      const json = (await res.json()) as ApiResponse;
-      setResponse(json);
+      const json = await res.json();
+
+      setResponse({
+        ok: Boolean(json.success && json.data?.ok),
+        mode,
+        result: json.data,
+        error: json.error,
+        message: json.message,
+      });
     } catch {
       setResponse({
         ok: false,

@@ -1,6 +1,7 @@
 // src/app/api/import-china/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCurrentUserAccess } from "@/lib/ownership";
 import ExcelJS from "exceljs";
 
 const supabase = createClient(
@@ -41,6 +42,16 @@ function parseSCO(value: any): string | null {
 // -------------------------------------------------------------
 export async function POST(req: Request) {
   try {
+    const access = await getCurrentUserAccess();
+
+    const canImportChina =
+      access.isActive &&
+      (access.role === "ADMIN" || access.role === "MANAGER");
+
+    if (!canImportChina) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    
     const formData = await req.formData();
     const file = formData.get("file") as File;
 

@@ -28,34 +28,38 @@ export async function GET(req: Request) {
     if (limit > 1000) limit = 1000;
 
     const { data, error } = await supabase
-      .from("lineas_pedido")
-      .select(
-        `
-        id,
-        po_id,
-        reference,
-        style,
-        color,
-        qty,
-        price,
-        price_selling,
-        modelo_id,
-        variante_id,
-        master_price_id_used,
-        pos:pos (
-          id,
-          po,
-          season,
-          supplier,
-          customer,
-          factory,
-          po_date
-        )
+    .from("lineas_pedido")
+    .select(
       `
+      id,
+      po_id,
+      reference,
+      style,
+      color,
+      qty,
+      price,
+      price_selling,
+      modelo_id,
+      variante_id,
+      master_price_id_used,
+      estado,
+      pos:pos!inner (
+        id,
+        po,
+        season,
+        supplier,
+        customer,
+        factory,
+        po_date,
+        estado
       )
-      .is("master_price_id_used", null)
-      .order("created_at", { ascending: false })
-      .limit(limit);
+    `
+    )
+    .eq("estado", "ACTIVA")
+    .eq("pos.estado", "ACTIVO")
+    .is("master_price_id_used", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);      
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

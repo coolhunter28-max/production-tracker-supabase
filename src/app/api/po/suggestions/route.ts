@@ -1,4 +1,4 @@
-// src/app/api/po/suggestions/route.ts
+export const dynamic = "force-dynamic";// src/app/api/po/suggestions/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
