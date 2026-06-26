@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCurrentUserAccess } from "@/lib/ownership";
 import React from "react";
 import {
   Document,
@@ -25,6 +26,24 @@ function safeStr(v: any) {
 function fmtDate(d: any) {
   if (!d) return "";
   return safeStr(d);
+}
+
+
+function normalizeCustomer(value: any) {
+  return safeStr(value).toUpperCase();
+}
+
+function canReadInspectionCustomer(access: Awaited<ReturnType<typeof getCurrentUserAccess>>, customer: any) {
+  if (!access.isActive) return false;
+  if (access.role === "ADMIN" || access.role === "MANAGER") return true;
+  if (access.role !== "OPERATOR") return false;
+
+  const targetCustomer = normalizeCustomer(customer);
+  if (!targetCustomer) return false;
+
+  return access.customers.some(
+    (assignedCustomer) => normalizeCustomer(assignedCustomer) === targetCustomer
+  );
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -420,6 +439,12 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const access = await getCurrentUserAccess();
+
+    if (!access.isActive || !["ADMIN", "MANAGER", "OPERATOR"].includes(access.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const inspectionId = params.id;
 
     const { data: inspection, error } = await supabase
@@ -438,6 +463,10 @@ export async function GET(
 
     if (error || !inspection) {
       return NextResponse.json({ error: "Inspection not found" }, { status: 404 });
+    }
+
+    if (!canReadInspectionCustomer(access, inspection.customer)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { data: ppsPhotos } = await supabase

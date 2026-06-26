@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import ExcelJS from "exceljs";
 import { uploadToR2 } from "@/lib/r2";
 import { extractExcelImages } from "@/lib/extractExcelImages";
+import { getCurrentUserAccess } from "@/lib/ownership";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,18 @@ const supabase = createClient(
 
 export async function POST(req: Request) {
   try {
+    const access = await getCurrentUserAccess();
+
+    const canUploadQC =
+      access.isActive &&
+      (access.role === "ADMIN" ||
+        access.role === "MANAGER" ||
+        access.role === "OPERATOR");
+
+    if (!canUploadQC) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
@@ -72,7 +85,7 @@ export async function POST(req: Request) {
 
     const { data: po, error: poErr } = await supabase
       .from("pos")
-      .select("id, po")
+      .select("id, po, customer")
       .eq("po", poNumber)
       .maybeSingle();
 
@@ -83,6 +96,27 @@ export async function POST(req: Request) {
         { error: `PO ${poNumber} not found` },
         { status: 404 }
       );
+    }
+
+    const effectiveCustomer = normalizeCustomerForAccess(po.customer || customer);
+
+    if (!effectiveCustomer) {
+      return NextResponse.json(
+        { error: "Customer is required to validate QC permissions" },
+        { status: 400 }
+      );
+    }
+
+    if (access.role === "OPERATOR") {
+      const allowedCustomers = new Set(
+        access.customers.map((assignedCustomer) =>
+          normalizeCustomerForAccess(assignedCustomer)
+        )
+      );
+
+      if (!allowedCustomers.has(effectiveCustomer)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const { data: inspection, error: inspErr } = await supabase
@@ -379,12 +413,16 @@ function isNonDefectBlock(...values: Array<string | null | undefined>): boolean 
   const text = values.join(" ").toLowerCase();
 
   return (
-    text.includes("po quantity") ||
-    text.includes("采购订单数量") ||
-    text.includes("acceptance quality limit") ||
-    text.includes("aql") ||
-    text.includes("inspection summary")
-  );
+      text.includes("qty inspected") ||
+      text.includes("检验数量") ||
+      text.includes("inspected sizes") ||
+      text.includes("抽检鞋码") ||
+      text.includes("po quantity") ||
+      text.includes("采购订单数量") ||
+      text.includes("acceptance quality limit") ||
+      text.includes("aql") ||
+      text.includes("inspection summary")
+    );
 }
 
 function extractDefects(sheet: ExcelJS.Worksheet): DefectDraft[] {
@@ -401,6 +439,13 @@ function extractDefects(sheet: ExcelJS.Worksheet): DefectDraft[] {
     const defectCategory = cell(sheet, `D${row}`);
     const defectDescription = cell(sheet, `E${row}`);
 
+    const normalizedDefectId = defectId.trim().toUpperCase();
+
+    // Solo filas reales de defectos: D1, D2, D3...
+    if (!/^D\d+$/.test(normalizedDefectId)) {
+      continue;
+    }
+
     if (
       isNonDefectBlock(
         defectId,
@@ -412,18 +457,10 @@ function extractDefects(sheet: ExcelJS.Worksheet): DefectDraft[] {
       continue;
     }
 
-    const hasDefect =
-      defectId ||
-      defectType ||
-      defectQty > 0 ||
-      defectCategory ||
-      defectDescription;
-
-    if (!hasDefect) continue;
     if (defectQty <= 0) continue;
 
     defects.push({
-      defect_id: defectId || `D${defects.length + 1}`,
+      defect_id: normalizedDefectId,
       defect_type: defectType || null,
       defect_category: defectCategory || null,
       defect_description: defectDescription || null,
@@ -442,6 +479,13 @@ function sumDefectsByType(defects: DefectDraft[], type: string): number {
     .reduce((sum, defect) => sum + defect.defect_quantity, 0);
 }
 
+function normalizeCustomerForAccess(value: string | null | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+}
+
 async function getQtyPoFromDatabase(
   poNumber: string,
   reference: string,
@@ -450,11 +494,19 @@ async function getQtyPoFromDatabase(
 ): Promise<number> {
   const { data, error } = await supabase
     .from("lineas_pedido")
-    .select("qty")
-    .eq("po", poNumber)
+    .select(
+      `
+      qty,
+      pos!inner (
+        po
+      )
+    `
+    )
+    .eq("pos.po", poNumber)
     .eq("reference", reference)
     .eq("style", style)
-    .eq("color", color);
+    .eq("color", color)
+    .eq("estado", "ACTIVA");
 
   if (error || !data) return 0;
 

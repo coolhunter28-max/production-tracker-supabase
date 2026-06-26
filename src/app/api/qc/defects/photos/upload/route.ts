@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { uploadToR2 } from "@/lib/r2";
+import { getCurrentUserAccess } from "@/lib/ownership";
 
 export const runtime = "nodejs";
 
@@ -18,9 +19,60 @@ function safePart(input: string) {
 
 export async function POST(req: Request) {
   try {
-    const form = await req.formData();
+    const access = await getCurrentUserAccess();
 
-    const defectId = form.get("defect_id") as string;
+if (!access.isActive) {
+  return NextResponse.json(
+    { error: "Forbidden" },
+    { status: 403 }
+  );
+}
+
+const form = await req.formData();
+
+const defectId = form.get("defect_id") as string;
+
+if (!defectId) {
+  return NextResponse.json(
+    { error: "Missing defect_id" },
+    { status: 400 }
+  );
+}
+
+if (access.role === "OPERATOR") {
+  const { data: defect } = await supabase
+    .from("qc_defects")
+    .select(`
+      inspection:qc_inspections(
+        customer
+      )
+    `)
+    .eq("id", defectId)
+    .single();
+
+  const customer =
+    (defect as any)?.inspection?.customer ?? null;
+
+  if (
+    !customer ||
+    !access.customers.includes(customer)
+  ) {
+    return NextResponse.json(
+      { error: "Forbidden" },
+      { status: 403 }
+    );
+  }
+} else if (
+  access.role !== "ADMIN" &&
+  access.role !== "MANAGER"
+) {
+  return NextResponse.json(
+    { error: "Forbidden" },
+    { status: 403 }
+  );
+}
+
+    
     const po = form.get("po") as string;
     const reference = form.get("reference") as string;
     const style = form.get("style") as string;

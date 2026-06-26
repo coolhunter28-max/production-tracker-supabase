@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCurrentUserAccess } from "@/lib/ownership";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,6 +12,17 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const access = await getCurrentUserAccess();
+
+if (
+  !access.isActive ||
+  (access.role !== "ADMIN" && access.role !== "MANAGER")
+) {
+  return NextResponse.json(
+    { error: "Forbidden" },
+    { status: 403 }
+  );
+}
     const defectId = params.id;
     const body = await req.json();
 
