@@ -40,38 +40,39 @@ if (!defectId) {
 }
 
 if (access.role === "OPERATOR") {
-  const { data: defect } = await supabase
+  const { data: defect, error: defectError } = await supabase
     .from("qc_defects")
     .select(`
-      inspection:qc_inspections(
+      id,
+      inspection:qc_inspections (
+        id,
         customer
       )
     `)
     .eq("id", defectId)
     .single();
 
-  const customer =
-    (defect as any)?.inspection?.customer ?? null;
+  if (defectError || !defect) {
+    return NextResponse.json(
+      { error: "Defect not found" },
+      { status: 404 }
+    );
+  }
 
-  if (
-    !customer ||
-    !access.customers.includes(customer)
-  ) {
+  const customer = (defect as any).inspection?.customer;
+
+  if (!customer || !access.customers.includes(customer)) {
     return NextResponse.json(
       { error: "Forbidden" },
       { status: 403 }
     );
   }
-} else if (
-  access.role !== "ADMIN" &&
-  access.role !== "MANAGER"
-) {
+} else if (access.role !== "ADMIN" && access.role !== "MANAGER") {
   return NextResponse.json(
     { error: "Forbidden" },
     { status: 403 }
   );
 }
-
     
     const po = form.get("po") as string;
     const reference = form.get("reference") as string;

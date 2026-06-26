@@ -3,6 +3,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { DefectBlock } from "@/components/qc/DefectBlock";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
