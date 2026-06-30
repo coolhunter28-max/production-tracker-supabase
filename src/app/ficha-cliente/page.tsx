@@ -19,9 +19,40 @@ type PageProps = {
   };
 };
 
-const stickyHeader = "sticky top-0 z-30 bg-slate-100";
-const stickyCell = "sticky z-40 bg-white";
-const stickyHeaderCell = "sticky top-0 z-50 bg-slate-100";
+const stickyHeader = "bg-slate-100 shadow-sm";
+const stickyCell = "sticky z-30 bg-white";
+const stickyHeaderCell = "sticky z-50 bg-slate-100 shadow-sm";
+
+const TABLE_WIDTH = "min-w-[2830px]";
+
+function FichaClienteColGroup() {
+  return (
+    <colgroup>
+      <col style={{ width: 120 }} />
+      <col style={{ width: 80 }} />
+      <col style={{ width: 220 }} />
+      <col style={{ width: 190 }} />
+      <col style={{ width: 180 }} />
+      <col style={{ width: 140 }} />
+      <col style={{ width: 180 }} />
+      <col style={{ width: 140 }} />
+      <col style={{ width: 90 }} />
+      <col style={{ width: 120 }} />
+      <col style={{ width: 120 }} />
+      <col style={{ width: 120 }} />
+      <col style={{ width: 120 }} />
+      <col style={{ width: 120 }} />
+      <col style={{ width: 120 }} />
+      <col style={{ width: 110 }} />
+      <col style={{ width: 110 }} />
+      <col style={{ width: 110 }} />
+      <col style={{ width: 110 }} />
+      <col style={{ width: 110 }} />
+      <col style={{ width: 110 }} />
+      <col style={{ width: 110 }} />
+    </colgroup>
+  );
+}
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -273,7 +304,7 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
   const qcReportsCount = countQCReports(rows);
 
   return (
-    <main className="mx-auto max-w-[1800px] px-6 py-6">
+    <main className="mx-auto flex h-[calc(100vh-56px)] max-w-[1800px] flex-col overflow-hidden px-6 py-6">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-slate-500">Operativa diaria</p>
@@ -410,121 +441,129 @@ export default async function FichaClientePage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      <div className="rounded-xl border bg-white shadow-sm">
-        <div className="max-h-[68vh] overflow-auto">
-          <table className="min-w-[2100px] border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr>
-                <th className={`${stickyHeaderCell} w-[120px] min-w-[120px] border-b border-r p-2 text-left`} style={{ left: 0 }}>
-                  Cliente
-                </th>
-                <th className={`${stickyHeaderCell} w-[80px] min-w-[80px] border-b border-r p-2 text-left`} style={{ left: 120 }}>
-                  ETD PI
-                </th>
-                <th className={`${stickyHeaderCell} w-[220px] min-w-[220px] border-b border-r p-2 text-left`} style={{ left: 200 }}>
-                  Acción
-                </th>
-                <th className={`${stickyHeaderCell} w-[190px] min-w-[190px] border-b border-r p-2 text-left`} style={{ left: 420 }}>
-                  QC
-                </th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>POs</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Reference</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Style</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Color</th>
-                <th className={`${stickyHeader} border-b p-2 text-right`}>Qty</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>CFMs</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Counter</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Fitting</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>PPS</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Testing</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Shipping Sample</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Trial U</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Trial L</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Lasting</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Inspection</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Booking</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Closing</th>
-                <th className={`${stickyHeader} border-b p-2 text-left`}>Shipping</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {rows.map((row, index) => {
-                const poLinks = getPoLinks(row);
-
-                return (
-                  <tr
-                    key={`${row.customer}-${row.etd_pi}-${row.reference}-${row.style}-${row.color}-${index}`}
-                    className="group hover:bg-slate-50"
-                  >
-                    <td className={`${stickyCell} w-[120px] min-w-[120px] border-b border-r p-2 font-medium group-hover:bg-slate-50`} style={{ left: 0 }}>
-                      {row.customer}
-                    </td>
-                    <td className={`${stickyCell} w-[80px] min-w-[80px] whitespace-nowrap border-b border-r p-2 group-hover:bg-slate-50`} style={{ left: 120 }}>
-                      {formatDate(row.etd_pi)}
-                    </td>
-
-                    <ActionCell row={row} />
-                    <QCCell row={row} />
-
-                    <td className="whitespace-nowrap border-b p-2">
-                      {poLinks.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {poLinks.map(({ po, poId }) =>
-                            poId ? (
-                              <Link
-                                key={`${poId}-${po}`}
-                                href={`/po/${poId}/editar`}
-                                className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                              >
-                                {po}
-                              </Link>
-                            ) : (
-                              <span key={po} className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">
-                                {po}
-                              </span>
-                            )
-                          )}
-                        </div>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-
-                    <td className="whitespace-nowrap border-b p-2">{row.reference ?? "-"}</td>
-                    <td className="whitespace-nowrap border-b p-2">{row.style ?? "-"}</td>
-                    <td className="whitespace-nowrap border-b p-2">{row.color ?? "-"}</td>
-                    <td className="whitespace-nowrap border-b p-2 text-right font-semibold">
-                      {Number(row.qty_total ?? 0).toLocaleString("es-ES")}
-                    </td>
-
-                    <SampleCell status={row.cfms_status} />
-                    <SampleCell status={row.counters_status} />
-                    <SampleCell status={row.fittings_status} />
-                    <SampleCell status={row.pps_status} />
-                    <SampleCell status={row.testings_status} />
-                    <SampleCell status={row.shippings_status} />
-
-                    <DateCell value={row.trial_upper} />
-                    <DateCell value={row.trial_lasting} />
-                    <DateCell value={row.lasting} />
-                    <DateCell value={row.inspection} />
-                    <DateCell value={row.booking} />
-                    <DateCell value={row.closing} />
-                    <DateCell value={row.shipping_date} />
-                  </tr>
-                );
-              })}
-
-              {rows.length === 0 && (
+      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border bg-white shadow-sm">
+        <div className="h-full overflow-x-auto">
+          <div className={`${TABLE_WIDTH} flex h-full flex-col`}>
+            <table className="table-fixed border-separate border-spacing-0 text-sm">
+              <FichaClienteColGroup />
+              <thead>
                 <tr>
-                  <td colSpan={22} className="p-6 text-center text-slate-500">
-                    No hay datos para los filtros seleccionados.
-                  </td>
+                  <th className={`${stickyHeaderCell} w-[120px] min-w-[120px] border-b border-r p-2 text-left`} style={{ left: 0 }}>
+                    Cliente
+                  </th>
+                  <th className={`${stickyHeaderCell} w-[80px] min-w-[80px] border-b border-r p-2 text-left`} style={{ left: 120 }}>
+                    ETD PI
+                  </th>
+                  <th className={`${stickyHeaderCell} w-[220px] min-w-[220px] border-b border-r p-2 text-left`} style={{ left: 200 }}>
+                    Acción
+                  </th>
+                  <th className={`${stickyHeaderCell} w-[190px] min-w-[190px] border-b border-r p-2 text-left`} style={{ left: 420 }}>
+                    QC
+                  </th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>POs</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Reference</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Style</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Color</th>
+                  <th className={`${stickyHeader} border-b p-2 text-right`}>Qty</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>CFMs</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Counter</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Fitting</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>PPS</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Testing</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Shipping Sample</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Trial U</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Trial L</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Lasting</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Inspection</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Booking</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Closing</th>
+                  <th className={`${stickyHeader} border-b p-2 text-left`}>Shipping</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+            </table>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <table className="table-fixed border-separate border-spacing-0 text-sm">
+                <FichaClienteColGroup />
+                <tbody>
+                  {rows.map((row, index) => {
+                    const poLinks = getPoLinks(row);
+
+                    return (
+                      <tr
+                        key={`${row.customer}-${row.etd_pi}-${row.reference}-${row.style}-${row.color}-${index}`}
+                        className="group hover:bg-slate-50"
+                      >
+                        <td className={`${stickyCell} w-[120px] min-w-[120px] border-b border-r p-2 font-medium group-hover:bg-slate-50`} style={{ left: 0 }}>
+                          {row.customer}
+                        </td>
+                        <td className={`${stickyCell} w-[80px] min-w-[80px] whitespace-nowrap border-b border-r p-2 group-hover:bg-slate-50`} style={{ left: 120 }}>
+                          {formatDate(row.etd_pi)}
+                        </td>
+
+                        <ActionCell row={row} />
+                        <QCCell row={row} />
+
+                        <td className="whitespace-nowrap border-b p-2">
+                          {poLinks.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {poLinks.map(({ po, poId }) =>
+                                poId ? (
+                                  <Link
+                                    key={`${poId}-${po}`}
+                                    href={`/po/${poId}/editar`}
+                                    className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                                  >
+                                    {po}
+                                  </Link>
+                                ) : (
+                                  <span key={po} className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                                    {po}
+                                  </span>
+                                )
+                              )}
+                            </div>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+
+                        <td className="whitespace-nowrap border-b p-2">{row.reference ?? "-"}</td>
+                        <td className="whitespace-nowrap border-b p-2">{row.style ?? "-"}</td>
+                        <td className="whitespace-nowrap border-b p-2">{row.color ?? "-"}</td>
+                        <td className="whitespace-nowrap border-b p-2 text-right font-semibold">
+                          {Number(row.qty_total ?? 0).toLocaleString("es-ES")}
+                        </td>
+
+                        <SampleCell status={row.cfms_status} />
+                        <SampleCell status={row.counters_status} />
+                        <SampleCell status={row.fittings_status} />
+                        <SampleCell status={row.pps_status} />
+                        <SampleCell status={row.testings_status} />
+                        <SampleCell status={row.shippings_status} />
+
+                        <DateCell value={row.trial_upper} />
+                        <DateCell value={row.trial_lasting} />
+                        <DateCell value={row.lasting} />
+                        <DateCell value={row.inspection} />
+                        <DateCell value={row.booking} />
+                        <DateCell value={row.closing} />
+                        <DateCell value={row.shipping_date} />
+                      </tr>
+                    );
+                  })}
+
+                  {rows.length === 0 && (
+                    <tr>
+                      <td colSpan={22} className="p-6 text-center text-slate-500">
+                        No hay datos para los filtros seleccionados.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </main>
