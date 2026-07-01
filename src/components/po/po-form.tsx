@@ -69,6 +69,17 @@ type LineaForm = {
   muestras: MuestraForm[];
 };
 
+type SeasonActivationDialog = {
+  lineIndex: number;
+  modeloId: string;
+  style: string;
+  targetSeason: string;
+  sourceSeason: string;
+  sourceSeasons: string[];
+  variantsCount: number;
+  pricesCount: number;
+} | null;
+
 const SAMPLE_TYPE_OPTIONS = [
   "CFMS",
   "COUNTERS",
@@ -190,6 +201,9 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [channelOptions, setChannelOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [activatingSeason, setActivatingSeason] = useState(false);
+  const [activationDialog, setActivationDialog] = useState<SeasonActivationDialog>(null);
+  const [activationMessage, setActivationMessage] = useState("");
 
   const [formData, setFormData] = useState({
     po: po?.po ?? "",
@@ -242,29 +256,30 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
     }))
   );
 
+  async function reloadCatalog() {
+    const res = await fetch("/api/po-catalog", { cache: "no-store" });
+    const json = await res.json();
+
+    setCatalog(json.data ?? []);
+    setCategoryOptions(json.meta?.categories ?? []);
+    setChannelOptions(json.meta?.channels ?? []);
+
+    return (json.data ?? []) as CatalogItem[];
+  }
+
   useEffect(() => {
-    async function loadCatalog() {
-      const res = await fetch("/api/po-catalog", { cache: "no-store" });
-      const json = await res.json();
-
-      setCatalog(json.data ?? []);
-      setCategoryOptions(json.meta?.categories ?? []);
-      setChannelOptions(json.meta?.channels ?? []);
-    }
-
-    loadCatalog();
+    reloadCatalog();
   }, []);
 
-  const scopedCatalog = useMemo(() => {
+  const baseScopedCatalog = useMemo(() => {
     return catalog.filter((item) => {
       if (formData.customer && item.customer !== formData.customer) return false;
       if (formData.supplier && item.supplier !== formData.supplier) return false;
       if (formData.factory && item.factory && item.factory !== formData.factory) return false;
-      if (formData.season && item.season !== formData.season) return false;
 
       return true;
     });
-  }, [catalog, formData.customer, formData.supplier, formData.factory, formData.season]);
+  }, [catalog, formData.customer, formData.supplier, formData.factory]);
 
   const customers = unique(catalog.map((x) => x.customer));
   const suppliers = unique(catalog.map((x) => x.supplier));
@@ -425,6 +440,131 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
     });
   }
 
+  function openActivateSeasonDialog(index: number) {
+    const linea = lineas[index];
+
+    if (!linea.style.trim()) {
+      alert("Selecciona primero un modelo/style.");
+      return;
+    }
+
+    if (!formData.season.trim()) {
+      alert("Selecciona primero la temporada destino en la cabecera.");
+      return;
+    }
+
+    const candidates = baseScopedCatalog.filter((item) => item.style === linea.style);
+    const modeloId = candidates[0]?.modelo_id;
+
+    if (!modeloId) {
+      alert("No se encontró el modelo en catálogo.");
+      return;
+    }
+
+    const sourceSeasons = unique(
+      candidates
+        .map((item) => item.season)
+        .filter((season) => season && season !== formData.season)
+    );
+
+    if (sourceSeasons.length === 0) {
+      alert("Este modelo no tiene temporadas origen disponibles.");
+      return;
+    }
+
+    const defaultSourceSeason = sourceSeasons[0];
+    const sourceItems = candidates.filter((item) => item.season === defaultSourceSeason);
+
+    setActivationMessage("");
+    setActivationDialog({
+      lineIndex: index,
+      modeloId,
+      style: linea.style,
+      targetSeason: formData.season,
+      sourceSeason: defaultSourceSeason,
+      sourceSeasons,
+      variantsCount: unique(sourceItems.map((item) => item.variante_id)).length,
+      pricesCount: sourceItems.filter((item) => item.price_id).length,
+    });
+  }
+
+  function updateActivationSourceSeason(sourceSeason: string) {
+    setActivationDialog((prev) => {
+      if (!prev) return prev;
+
+      const sourceItems = baseScopedCatalog.filter(
+        (item) => item.modelo_id === prev.modeloId && item.season === sourceSeason
+      );
+
+      return {
+        ...prev,
+        sourceSeason,
+        variantsCount: unique(sourceItems.map((item) => item.variante_id)).length,
+        pricesCount: sourceItems.filter((item) => item.price_id).length,
+      };
+    });
+  }
+
+  async function confirmActivateSeason() {
+    if (!activationDialog) return;
+
+    setActivatingSeason(true);
+    setActivationMessage("");
+
+    try {
+      const res = await fetch("/api/modelos/activate-season", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modelo_id: activationDialog.modeloId,
+          source_season: activationDialog.sourceSeason,
+          target_season: activationDialog.targetSeason,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.success) {
+        setActivationMessage(json?.error ?? "Error activando temporada.");
+        return;
+      }
+
+      await reloadCatalog();
+
+      const lineIndex = activationDialog.lineIndex;
+
+      setLineas((prev) => {
+        const next = [...prev];
+
+        if (!next[lineIndex]) return next;
+
+        next[lineIndex] = {
+          ...next[lineIndex],
+          variante_id: "",
+          color: "",
+          reference: "",
+          price: "",
+          price_selling: "",
+          amount: "",
+          amount_selling: "",
+          master_buy_price_used: "",
+          master_sell_price_used: "",
+          master_currency_used: "",
+          master_valid_from_used: "",
+          master_price_id_used: "",
+          master_price_source: "",
+        };
+
+        return next;
+      });
+
+      setActivationDialog(null);
+      setActivationMessage("Temporada activada correctamente. Ya puedes seleccionar la variante.");
+    } finally {
+      setActivatingSeason(false);
+    }
+  }
+
   function validateBeforeSave() {
     if (!formData.po.trim()) return "PO es obligatorio.";
     if (!formData.customer.trim()) return "Customer es obligatorio.";
@@ -553,8 +693,19 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
 
         <div className="space-y-6">
           {lineas.map((linea, index) => {
-            const styleOptions = unique(scopedCatalog.map((x) => x.style));
-            const colorOptions = scopedCatalog.filter((x) => x.style === linea.style);
+            const styleOptions = unique(baseScopedCatalog.map((x) => x.style));
+            const styleCatalog = baseScopedCatalog.filter((x) => x.style === linea.style);
+            const colorOptions = styleCatalog.filter((x) => !formData.season || x.season === formData.season);
+            const sourceSeasonOptions = unique(
+              styleCatalog
+                .map((x) => x.season)
+                .filter((season) => season && season !== formData.season)
+            );
+            const canActivateSeason =
+              Boolean(linea.style) &&
+              Boolean(formData.season) &&
+              colorOptions.length === 0 &&
+              sourceSeasonOptions.length > 0;
             const operativeChannel = linea.channel || formData.channel;
             const isBsg = isBsgOperativa(operativeChannel);
 
@@ -617,6 +768,22 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
                               </option>
                             ))}
                           </select>
+
+                          {canActivateSeason ? (
+                            <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                              <div className="mb-1 font-medium">
+                                No hay variantes de este modelo para {formData.season}.
+                              </div>
+                              <button
+                                type="button"
+                                disabled={activatingSeason}
+                                onClick={() => openActivateSeasonDialog(index)}
+                                className="rounded bg-amber-600 px-2 py-1 text-white disabled:opacity-50"
+                              >
+                                Crear temporada para este modelo
+                              </button>
+                            </div>
+                          ) : null}
                         </Td>
 
                         <Td>
@@ -635,6 +802,12 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
                               </option>
                             ))}
                           </select>
+
+                          {linea.style && formData.season && colorOptions.length === 0 ? (
+                            <div className="mt-1 text-xs text-slate-500">
+                              Sin variantes para {formData.season}.
+                            </div>
+                          ) : null}
                         </Td>
 
                         <Td><SmallInput value={linea.reference} onChange={(v) => updateLinea(index, "reference", v)} /></Td>
@@ -825,6 +998,91 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
           ) : null}
         </div>
       </section>
+
+      {activationMessage ? (
+        <div className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {activationMessage}
+        </div>
+      ) : null}
+
+      {activationDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+          <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold">Activar temporada de modelo</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Se copiará el catálogo operativo del modelo. No se tocarán líneas de pedido.
+              </p>
+            </div>
+
+            <div className="space-y-3 rounded-lg border bg-slate-50 p-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-slate-500">Modelo</div>
+                  <div className="font-medium">{activationDialog.style}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-slate-500">Temporada destino</div>
+                  <div className="font-medium">{activationDialog.targetSeason}</div>
+                </div>
+              </div>
+
+              <label className="block">
+                <span className="mb-1 block text-xs text-slate-500">Temporada origen</span>
+                <select
+                  value={activationDialog.sourceSeason}
+                  disabled={activatingSeason}
+                  onChange={(e) => updateActivationSourceSeason(e.target.value)}
+                  className="w-full rounded border bg-white px-3 py-2"
+                >
+                  {activationDialog.sourceSeasons.map((season) => (
+                    <option key={season} value={season}>
+                      {season}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="rounded border bg-white p-3">
+                <div className="mb-2 font-medium">Se copiará:</div>
+                <ul className="space-y-1 text-slate-700">
+                  <li>✓ Variantes: {activationDialog.variantsCount}</li>
+                  <li>✓ Precios vigentes: {activationDialog.pricesCount}</li>
+                  <li>✓ Componentes asociados a variante</li>
+                  <li>✓ Imágenes asociadas a variante</li>
+                </ul>
+              </div>
+
+              {activationMessage ? (
+                <div className="rounded border border-red-200 bg-red-50 p-2 text-red-700">
+                  {activationMessage}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={activatingSeason}
+                onClick={() => setActivationDialog(null)}
+                className="rounded border px-4 py-2 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={activatingSeason}
+                onClick={confirmActivateSeason}
+                className="rounded bg-amber-600 px-4 py-2 text-white disabled:opacity-50"
+              >
+                {activatingSeason ? "Activando..." : "Activar temporada"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex justify-end gap-2">
         <button type="button" onClick={handleCancel} className="rounded border px-4 py-2">
