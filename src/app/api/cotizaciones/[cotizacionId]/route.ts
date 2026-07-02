@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCurrentUserAccess } from "@/lib/ownership";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,49 @@ function toNumberOrNull(v: any) {
 
 function todayISODate() {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function normalizeRole(value: unknown) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function getAccessRole(access: unknown) {
+  const a = access as any;
+
+  return normalizeRole(
+    a?.role ??
+      a?.userRole ??
+      a?.profile?.role ??
+      a?.profile?.user_role ??
+      a?.user_profile?.role ??
+      a?.tipo_usuario ??
+      ""
+  );
+}
+
+function getAccessEmail(access: unknown) {
+  const a = access as any;
+
+  return (
+    a?.email ??
+    a?.userEmail ??
+    a?.user_email ??
+    a?.user?.email ??
+    a?.profile?.email ??
+    a?.user_profile?.email ??
+    null
+  );
+}
+
+function canCreatePrice(role: string, varianteStatus: string | null | undefined) {
+  if (role === "ADMIN" || role === "MANAGER") return true;
+
+  if (role === "DESARROLLO") {
+    const status = String(varianteStatus ?? "").trim().toLowerCase();
+    return status === "inactivo" || status === "inactive";
+  }
+
+  return false;
 }
 
 export async function GET(
@@ -112,7 +156,7 @@ export async function PATCH(
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    // 1) actualizar (si hay cambios)
+    // 1) actualizar cotización si hay cambios
     let cot: any = null;
 
     if (Object.keys(updates).length > 0) {
@@ -139,19 +183,48 @@ export async function PATCH(
 
     // 2) promover a master si aplica
     const finalStatus = String(cot?.status || "").trim().toLowerCase();
-    if (promote_to_master && finalStatus === "aceptada") {
-      const variante_id = String(cot?.variante_id || "").trim();
-      if (!variante_id) return NextResponse.json({ error: "cotizacion missing variante_id" }, { status: 500 });
+    if (promote_to_master) {
+      if (finalStatus !== "aceptada") {
+        return NextResponse.json(
+          { error: "Solo se puede promover a master una cotización aceptada" },
+          { status: 400 }
+        );
+      }
 
-      // cargar variante para modelo_id + season
+      const access = await getCurrentUserAccess();
+      const accessAny = access as any;
+
+      if (!accessAny?.userId || !accessAny?.isActive) {
+        return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      }
+
+      const role = getAccessRole(access);
+      const userEmail = getAccessEmail(access);
+
+      const variante_id = String(cot?.variante_id || "").trim();
+      if (!variante_id) {
+        return NextResponse.json({ error: "cotizacion missing variante_id" }, { status: 500 });
+      }
+
+      // cargar variante para modelo_id + season + permisos
       const { data: variante, error: vErr } = await supabase
         .from("modelo_variantes")
-        .select("id, modelo_id, season")
+        .select("id, modelo_id, season, status")
         .eq("id", variante_id)
         .single();
 
       if (vErr || !variante) {
         return NextResponse.json({ error: "Variante no existe" }, { status: 404 });
+      }
+
+      if (!canCreatePrice(role, variante.status)) {
+        return NextResponse.json(
+          {
+            error:
+              "No tienes permisos para crear precios en esta variante. ADMIN y MANAGER pueden modificar precios siempre; DESARROLLO sólo puede hacerlo si la variante está inactiva.",
+          },
+          { status: 403 }
+        );
       }
 
       const payload = {
@@ -170,13 +243,61 @@ export async function PATCH(
           .join("\n"),
       };
 
+      // Importante: insert, no upsert.
+      // Promover una cotización a master debe crear histórico, no sobrescribir un precio existente.
       const { data: master, error: mErr } = await supabase
         .from("modelo_precios")
-        .upsert([payload], { onConflict: "variante_id,valid_from" })
+        .insert([payload])
         .select("*")
         .single();
 
-      if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
+      if (mErr) {
+        if (mErr.code === "23505") {
+          return NextResponse.json(
+            {
+              error:
+                "Ya existe un precio para esta variante en esa fecha. Elige otra fecha o revisa el histórico de precios.",
+            },
+            { status: 409 }
+          );
+        }
+
+        return NextResponse.json({ error: mErr.message }, { status: 500 });
+      }
+
+      const { error: eventError } = await supabase.from("modelo_eventos").insert([
+        {
+          modelo_id: variante.modelo_id,
+          variante_id,
+          entity_type: "precio",
+          event_type: "PRICE_CREATED",
+          user_id: accessAny.userId ?? null,
+          user_email: userEmail,
+          source: "cotizacion",
+          payload: {
+            cotizacion_id: cotizacionId,
+            price_id: master.id,
+            variante_id,
+            season: master.season,
+            currency: master.currency,
+            buy_price: master.buy_price,
+            sell_price: master.sell_price,
+            valid_from: master.valid_from,
+          },
+        },
+      ]);
+
+      if (eventError) {
+        // Simulación de rollback: si no podemos auditar el evento, eliminamos el precio recién creado.
+        await supabase.from("modelo_precios").delete().eq("id", master.id);
+
+        console.error("[COTIZACION_PROMOTE_PRICE_EVENT]", eventError);
+
+        return NextResponse.json(
+          { error: "Precio no guardado: no se pudo registrar el evento de auditoría." },
+          { status: 500 }
+        );
+      }
 
       return NextResponse.json({ status: "ok", cotizacion: cot, master });
     }

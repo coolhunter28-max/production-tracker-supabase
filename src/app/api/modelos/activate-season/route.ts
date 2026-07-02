@@ -5,6 +5,21 @@ import { getCurrentUserAccess } from "@/lib/ownership";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type ActivateSeasonResult = {
+  created_variantes?: number | null;
+  created_componentes?: number | null;
+  created_imagenes?: number | null;
+  created_precios?: number | null;
+};
+
+function firstRpcRow(data: unknown): ActivateSeasonResult {
+  if (Array.isArray(data)) {
+    return (data[0] ?? {}) as ActivateSeasonResult;
+  }
+
+  return (data ?? {}) as ActivateSeasonResult;
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -41,7 +56,47 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, data });
+    const result = firstRpcRow(data);
+
+    const { data: userData } = await supabase.auth.getUser();
+    const userEmail =
+      userData.user?.email ??
+      (access as { userEmail?: string; email?: string }).userEmail ??
+      (access as { userEmail?: string; email?: string }).email ??
+      null;
+
+    const auditPayload = {
+      source_season: sourceSeason,
+      target_season: targetSeason,
+      created_variantes: result.created_variantes ?? 0,
+      created_componentes: result.created_componentes ?? 0,
+      created_imagenes: result.created_imagenes ?? 0,
+      created_precios: result.created_precios ?? 0,
+    };
+
+    const { error: auditError } = await supabase.from("modelo_eventos").insert({
+      modelo_id: modeloId,
+      variante_id: null,
+      entity_type: "modelo",
+      event_type: "SEASON_ACTIVATED",
+      user_id: access.userId,
+      user_email: userEmail,
+      source: "nuevo_po",
+      payload: auditPayload,
+    });
+
+    if (auditError) {
+      console.error("[ACTIVATE_MODEL_SEASON_AUDIT]", auditError);
+    }
+
+    return NextResponse.json({
+      success: true,
+      data,
+      audit: {
+        success: !auditError,
+        error: auditError?.message ?? null,
+      },
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     console.error("[ACTIVATE_MODEL_SEASON_FATAL]", error);

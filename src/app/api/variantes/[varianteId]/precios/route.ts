@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCurrentUserAccess } from "@/lib/ownership";
 
 export const runtime = "nodejs";
 
@@ -8,15 +9,57 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-function toNumberOrNull(v: any) {
+function toNumberOrNull(v: unknown) {
   if (v === undefined || v === null || v === "") return null;
   const n = Number(String(v).replace(",", "."));
   return Number.isFinite(n) ? n : null;
 }
 
 function todayISODate() {
-  // YYYY-MM-DD
   return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeRole(value: unknown) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function getAccessRole(access: unknown) {
+  const a = access as any;
+
+  return normalizeRole(
+    a?.role ??
+      a?.userRole ??
+      a?.profile?.role ??
+      a?.profile?.user_role ??
+      a?.user_profile?.role ??
+      a?.tipo_usuario ??
+      ""
+  );
+}
+
+function getAccessEmail(access: unknown) {
+  const a = access as any;
+
+  return (
+    a?.email ??
+    a?.userEmail ??
+    a?.user_email ??
+    a?.user?.email ??
+    a?.profile?.email ??
+    a?.user_profile?.email ??
+    null
+  );
+}
+
+function canCreatePrice(role: string, varianteStatus: string | null | undefined) {
+  if (role === "ADMIN" || role === "MANAGER") return true;
+
+  if (role === "DESARROLLO") {
+    const status = String(varianteStatus ?? "").trim().toLowerCase();
+    return status === "inactivo" || status === "inactive";
+  }
+
+  return false;
 }
 
 export async function GET(
@@ -25,6 +68,7 @@ export async function GET(
 ) {
   try {
     const varianteId = params.varianteId;
+
     if (!varianteId) {
       return NextResponse.json({ error: "varianteId is required" }, { status: 400 });
     }
@@ -49,10 +93,14 @@ export async function GET(
       .eq("variante_id", varianteId)
       .order("valid_from", { ascending: false });
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
     return NextResponse.json(data || []);
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -62,19 +110,39 @@ export async function POST(
 ) {
   try {
     const varianteId = params.varianteId;
+
     if (!varianteId) {
       return NextResponse.json({ error: "varianteId is required" }, { status: 400 });
     }
 
-    // 1) Cargar variante para obtener modelo_id + season (por defecto)
-    const { data: variante, error: vErr } = await supabase
+    const access = await getCurrentUserAccess();
+    const accessAny = access as any;
+
+    if (!accessAny?.userId || !accessAny?.isActive) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const role = getAccessRole(access);
+    const userEmail = getAccessEmail(access);
+
+    const { data: variante, error: varianteError } = await supabase
       .from("modelo_variantes")
-      .select("id, modelo_id, season")
+      .select("id, modelo_id, season, status")
       .eq("id", varianteId)
       .single();
 
-    if (vErr || !variante) {
+    if (varianteError || !variante) {
       return NextResponse.json({ error: "Variante no existe" }, { status: 404 });
+    }
+
+    if (!canCreatePrice(role, variante.status)) {
+      return NextResponse.json(
+        {
+          error:
+            "No tienes permisos para crear precios en esta variante. ADMIN y MANAGER pueden modificar precios siempre; DESARROLLO sólo puede hacerlo si la variante está inactiva.",
+        },
+        { status: 403 }
+      );
     }
 
     const body = await req.json();
@@ -94,22 +162,12 @@ export async function POST(
       return NextResponse.json({ error: "season is required" }, { status: 400 });
     }
 
-    // ✅ Moneda por defecto: USD
     const currency = String(body?.currency || "USD").trim() || "USD";
 
-    // ✅ 1 precio por variante y día
-    // Si no mandas valid_from -> usamos HOY
     const validFromRaw = String(body?.valid_from || "").trim();
     const valid_from = validFromRaw || todayISODate();
 
-    // ✅ Registrar usuario (sin tocar BD): lo metemos en notes
-    const createdBy = String(body?.created_by || "").trim();
-
-    const notesRaw = body?.notes === "" ? null : body?.notes ?? null;
-    const notes =
-      createdBy
-        ? (notesRaw ? `${notesRaw}\ncreated_by=${createdBy}` : `created_by=${createdBy}`)
-        : notesRaw;
+    const notes = body?.notes === "" ? null : body?.notes ?? null;
 
     const payload = {
       modelo_id: variante.modelo_id,
@@ -122,19 +180,54 @@ export async function POST(
       notes,
     };
 
-    // 2) UPSERT por (variante_id, valid_from)
-    const { data, error } = await supabase
+    const { data: precio, error: insertError } = await supabase
       .from("modelo_precios")
-      .upsert([payload], { onConflict: "variante_id,valid_from" })
+      .insert([payload])
       .select("*")
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (insertError) {
+      if (insertError.code === "23505") {
+        return NextResponse.json(
+          {
+            error:
+              "Ya existe un precio para esta variante en esa fecha. Para mantener el histórico, crea el nuevo precio con otra fecha o edita explícitamente el registro existente si corresponde.",
+          },
+          { status: 409 }
+        );
+      }
+
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ status: "ok", precio: data });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });
+    const { error: eventError } = await supabase.from("modelo_eventos").insert([
+      {
+        modelo_id: variante.modelo_id,
+        variante_id: varianteId,
+        entity_type: "precio",
+        event_type: "PRICE_CREATED",
+        user_id: accessAny.userId,
+        user_email: userEmail,
+        source: "api/variantes/precios",
+        payload: {
+          price_id: precio.id,
+          variante_id: varianteId,
+          season,
+          currency,
+          buy_price: buy,
+          sell_price: sell,
+          valid_from,
+        },
+      },
+    ]);
+
+    if (eventError) {
+      console.error("[MODELO_EVENTOS_PRICE_CREATED]", eventError);
+    }
+
+    return NextResponse.json({ status: "ok", precio });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
