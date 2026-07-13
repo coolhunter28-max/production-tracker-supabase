@@ -10,6 +10,35 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+function cleanPart(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function buildLegacySco(parts: {
+  supplier?: string | null;
+  season?: string | null;
+  customer?: string | null;
+  po?: string | null;
+  reference?: string | null;
+  style?: string | null;
+  color?: string | null;
+  size?: string | null;
+  
+}) {
+  return [
+    parts.supplier,
+    parts.season,
+    parts.customer,
+    parts.po,
+    parts.reference,
+    parts.style,
+    parts.color,
+    parts.size,
+     ]
+    .map(cleanPart)
+    .join("");
+}
+
 export async function GET(req: Request) {
   try {
     const access = await getCurrentUserAccess();
@@ -32,7 +61,10 @@ export async function GET(req: Request) {
       );
     }
 
-    const seasons = seasonsRaw.split(",").map((s) => s.trim());
+    const seasons = seasonsRaw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
     const { data: pos, error: posError } = await supabase
       .from("pos")
@@ -56,9 +88,16 @@ export async function GET(req: Request) {
           style,
           color,
           size_run,
+          category,
+          channel,
           qty,
           price,
           amount,
+          factory,
+          booking,
+          closing,
+          shipping_date,
+          inspection,
           trial_upper,
           trial_lasting,
           lasting,
@@ -90,15 +129,16 @@ export async function GET(req: Request) {
     const sheet = workbook.addWorksheet("China");
 
     const exportDate = new Date();
-    const infoRow = sheet.addRow(["", "Production Tracker", "", "", exportDate]);
+    const infoRow = sheet.addRow(["", "", "Production Tracker", "", "", exportDate]);
 
-    infoRow.getCell(2).font = { bold: true, color: { argb: "FF008B8B" } };
-    infoRow.getCell(5).numFmt = "dd-mmm-yy";
+    infoRow.getCell(3).font = { bold: true, color: { argb: "FF008B8B" } };
+    infoRow.getCell(6).numFmt = "dd-mmm-yy";
 
     sheet.addRow([]);
 
     const HEADERS = [
       "SCO",
+      "SCO Legacy",
       "SUPPLIER",
       "SEASON",
       "CUSTOMER",
@@ -108,6 +148,8 @@ export async function GET(req: Request) {
       "STYLE",
       "COLOR",
       "SIZE RUN",
+      "CATEGORY",
+      "CHANNEL",
       "QTY",
       "PO Date",
       "ETD PI",
@@ -156,17 +198,33 @@ export async function GET(req: Request) {
         const testing = getByTipo("TESTINGS");
         const shipping = getByTipo("SHIPPINGS");
 
+        const lineFactory = linea.factory ?? poItem.factory ?? "";
+        const legacySco = buildLegacySco({
+          supplier: poItem.supplier,
+          season: poItem.season,
+          customer: poItem.customer,
+          po: poItem.po,
+          reference: linea.reference,
+          style: linea.style,
+          color: linea.color,
+          size: linea.size_run,
+         
+        });
+
         sheet.addRow([
           linea.id ?? "",
+          legacySco,
           poItem.supplier ?? "",
           poItem.season ?? "",
           poItem.customer ?? "",
-          poItem.factory ?? "",
+          lineFactory,
           poItem.po ?? "",
           linea.reference ?? "",
           linea.style ?? "",
           linea.color ?? "",
           linea.size_run ?? "",
+          linea.category ?? "",
+          linea.channel ?? "",
           linea.qty ?? "",
           poItem.po_date ?? "",
           poItem.etd_pi ?? "",
@@ -187,27 +245,45 @@ export async function GET(req: Request) {
           linea.lasting ?? "",
           linea.finish_date ?? "",
           "",
-          poItem.inspection ?? "",
-          poItem.booking ?? "",
-          poItem.closing ?? "",
-          poItem.shipping_date ?? "",
+          linea.inspection ?? poItem.inspection ?? "",
+          linea.booking ?? poItem.booking ?? "",
+          linea.closing ?? poItem.closing ?? "",
+          linea.shipping_date ?? poItem.shipping_date ?? "",
           "",
         ]);
       }
     }
 
+    // Columna A = UUID real de lineas_pedido. Se oculta, pero sigue siendo la clave segura de importación.
     sheet.getColumn(1).hidden = true;
 
     sheet.columns.forEach((col) => {
       if (!col.width) col.width = 15;
     });
 
-    const editableColumns = [
-      15, 17, 19, 21, 23, 25,
-      26, 27, 28, 29,
-      31, 32, 33, 34,
-      35,
-    ];
+    sheet.getColumn(2).width = 45; // SCO Legacy visible para casar con Excel histórico.
+
+    const editableHeaderNames = new Set([
+      "CFMs",
+      "Counter Sample",
+      "Fitting",
+      "PPS",
+      "Testing Samples",
+      "Shipping Samples",
+      "Trial Upper",
+      "Trial Lasting",
+      "Lasting",
+      "Finish Date",
+      "Inspection",
+      "Booking",
+      "Closing",
+      "Shipping",
+      "REMARKS",
+    ]);
+
+    const editableColumns = HEADERS
+      .map((header, index) => (editableHeaderNames.has(header) ? index + 1 : null))
+      .filter((value): value is number => value !== null);
 
     const lastRow = sheet.rowCount;
 

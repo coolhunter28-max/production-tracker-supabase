@@ -209,6 +209,7 @@ export async function POST(
         user_id: accessAny.userId,
         user_email: userEmail,
         source: "api/variantes/precios",
+        season,
         payload: {
           price_id: precio.id,
           variante_id: varianteId,

@@ -48,6 +48,23 @@ type VarianteImagen = {
   created_at?: string;
 };
 
+
+type TimelineDetail = {
+  label: string;
+  value: string;
+};
+
+type TimelineItem = {
+  id: string;
+  created_at: string;
+  icon: string;
+  title: string;
+  subtitle: string;
+  user_label: string;
+  source_label: string;
+  details: TimelineDetail[];
+};
+
 const KINDS = ["upper", "lining", "insole", "shoelace", "outsole", "packaging", "other"];
 
 function formatMB(bytes?: number | null) {
@@ -55,17 +72,34 @@ function formatMB(bytes?: number | null) {
   return (bytes / (1024 * 1024)).toFixed(2) + " MB";
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+
+  try {
+    return new Intl.DateTimeFormat("es-ES", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return String(value);
+  }
+}
+
 export default function VariantePage() {
   const params = useParams<{ varianteId: string }>();
   const varianteId = params?.varianteId || "";
   const router = useRouter();
 
-  const [tab, setTab] = useState<"componentes" | "precios" | "imagenes">("componentes");
+  const [tab, setTab] = useState<"componentes" | "precios" | "imagenes" | "historial">("componentes");
 
   const [variante, setVariante] = useState<Variante | null>(null);
   const [componentes, setComponentes] = useState<Componente[]>([]);
   const [precios, setPrecios] = useState<Precio[]>([]);
   const [imagenes, setImagenes] = useState<VarianteImagen[]>([]);
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
 
@@ -157,12 +191,22 @@ export default function VariantePage() {
       } catch {
         setImagenes([]);
       }
+
+      // Historial
+      try {
+        const tRes = await fetch(`/api/variantes/${varianteId}/timeline`, { cache: "no-store" });
+        const tJson = await tRes.json();
+        setTimeline(tRes.ok ? (Array.isArray(tJson?.data) ? tJson.data : []) : []);
+      } catch {
+        setTimeline([]);
+      }
     } catch (e: any) {
       setMsg("❌ " + (e?.message || "Error"));
       setVariante(null);
       setComponentes([]);
       setPrecios([]);
       setImagenes([]);
+      setTimeline([]);
     } finally {
       setLoading(false);
     }
@@ -620,6 +664,14 @@ export default function VariantePage() {
           }`}
         >
           Imágenes
+        </button>
+        <button
+          onClick={() => setTab("historial")}
+          className={`px-4 py-2 rounded text-sm border ${
+            tab === "historial" ? "bg-black text-white" : "bg-white hover:bg-gray-50"
+          }`}
+        >
+          Historial
         </button>
       </div>
 
@@ -1217,6 +1269,75 @@ export default function VariantePage() {
           </div>
         </div>
       ) : null}
+
+      {/* HISTORIAL */}
+      {tab === "historial" ? (
+        <div className="bg-white rounded-xl shadow p-5 border border-gray-200 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">🕘 Historial de la variante</h2>
+              <p className="text-sm text-gray-600">
+                Movimientos registrados sobre esta variante y su temporada.
+              </p>
+            </div>
+
+            <button
+              onClick={load}
+              className="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm"
+            >
+              ↻ Recargar
+            </button>
+          </div>
+
+          {timeline.length > 0 ? (
+            <div className="space-y-3">
+              {timeline.map((event) => (
+                <div key={event.id} className="rounded-lg border bg-gray-50 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="flex gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-xl shadow-sm">
+                        {event.icon}
+                      </div>
+
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-gray-900">{event.title}</h3>
+                          <span className="rounded bg-white px-2 py-0.5 text-xs text-gray-600">
+                            {event.source_label}
+                          </span>
+                        </div>
+
+                        <p className="mt-1 text-sm text-gray-700">{event.subtitle}</p>
+
+                        {event.details.length > 0 ? (
+                          <div className="mt-3 grid gap-2 md:grid-cols-2">
+                            {event.details.map((detail) => (
+                              <div key={`${event.id}-${detail.label}`} className="rounded border bg-white px-3 py-2 text-xs">
+                                <div className="text-gray-500">{detail.label}</div>
+                                <div className="font-medium text-gray-900">{detail.value || "-"}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="min-w-44 text-left md:text-right">
+                      <div className="text-sm font-medium text-gray-900">{formatDateTime(event.created_at)}</div>
+                      <div className="mt-1 text-xs text-gray-500">{event.user_label}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed p-6 text-sm text-gray-600">
+              Todavía no hay eventos registrados para esta variante.
+            </div>
+          )}
+        </div>
+      ) : null}
+
     </div>
   );
 }

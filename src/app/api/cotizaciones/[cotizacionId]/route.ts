@@ -274,6 +274,7 @@ export async function PATCH(
           user_id: accessAny.userId ?? null,
           user_email: userEmail,
           source: "cotizacion",
+          season: master.season,
           payload: {
             cotizacion_id: cotizacionId,
             price_id: master.id,

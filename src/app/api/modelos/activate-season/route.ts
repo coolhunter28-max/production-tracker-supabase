@@ -82,6 +82,7 @@ export async function POST(req: Request) {
       user_id: access.userId,
       user_email: userEmail,
       source: "nuevo_po",
+      season: targetSeason,
       payload: auditPayload,
     });
 

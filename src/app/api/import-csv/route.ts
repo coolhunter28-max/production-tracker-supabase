@@ -1,4 +1,4 @@
-// src/app/api/import-csv/route.ts
+﻿// src/app/api/import-csv/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -118,7 +118,7 @@ function parseMoney(value: any): number | null {
     .trim()
     .replace(/\s/g, "")
     .replace(/\$/g, "")
-    .replace(/€/g, "");
+    .replace(/â‚¬/g, "");
 
   if (!raw) return null;
 
@@ -151,9 +151,9 @@ function sameQty(a: any, b: any): boolean {
 }
 
 /**
- * Clave operativa real de línea.
- * El Excel permite varias líneas con mismo reference/style/color/size_run.
- * La línea se diferencia por channel, category y qty.
+ * Clave operativa real de lÃ­nea.
+ * El Excel permite varias lÃ­neas con mismo reference/style/color/size_run.
+ * La lÃ­nea se diferencia por channel, category y qty.
  */
 function lineKey(line: {
   reference?: string | null;
@@ -438,7 +438,7 @@ async function upsertSamples(
     .eq("linea_pedido_id", lineId);
 
   if (error) {
-    throw new Error(`Error leyendo muestras de línea ${lineId}: ${error.message}`);
+    throw new Error(`Error leyendo muestras de lÃ­nea ${lineId}: ${error.message}`);
   }
 
   const existingByType = new Map(
@@ -470,7 +470,7 @@ async function upsertSamples(
 
       if (insertError) {
         throw new Error(
-          `Error insertando muestra ${tipo} en línea ${lineId}: ${insertError.message}`
+          `Error insertando muestra ${tipo} en lÃ­nea ${lineId}: ${insertError.message}`
         );
       }
     }
@@ -542,7 +542,7 @@ export async function POST(req: Request) {
 
       if (!header?.po) {
         errores++;
-        avisos.push("PO sin número. Se omite.");
+        avisos.push("PO sin nÃºmero. Se omite.");
         continue;
       }
 
@@ -608,7 +608,7 @@ export async function POST(req: Request) {
       if (existingLinesError) {
         errores++;
         avisos.push(
-          `[PO ${header.po}] Error leyendo líneas existentes: ${existingLinesError.message}`
+          `[PO ${header.po}] Error leyendo lÃ­neas existentes: ${existingLinesError.message}`
         );
         continue;
       }
@@ -635,7 +635,7 @@ export async function POST(req: Request) {
         if (matches.length > 0 && !existingLine) {
           errores++;
           avisos.push(
-            `[PO ${header.po}] Línea ambigua ${lineLabel(line)}. Existen ${matches.length} coincidencias. No se actualiza.`
+            `[PO ${header.po}] LÃ­nea ambigua ${lineLabel(line)}. Existen ${matches.length} coincidencias. No se actualiza.`
           );
           continue;
         }
@@ -649,7 +649,7 @@ export async function POST(req: Request) {
           if (updateLineError) {
             errores++;
             avisos.push(
-              `[PO ${header.po}] Error actualizando línea ${lineLabel(line)}: ${updateLineError.message}`
+              `[PO ${header.po}] Error actualizando lÃ­nea ${lineLabel(line)}: ${updateLineError.message}`
             );
             continue;
           }
@@ -658,7 +658,7 @@ export async function POST(req: Request) {
           await upsertSamples(existingLine.id, line, header);
 
           lineasActualizadas++;
-          cambios.push(`[PO ${header.po}] Línea actualizada ${lineLabel(line)}`);
+          cambios.push(`[PO ${header.po}] LÃ­nea actualizada ${lineLabel(line)}`);
         } else {
           const { data: insertedLine, error: insertLineError } = await supabase
             .from("lineas_pedido")
@@ -669,7 +669,7 @@ export async function POST(req: Request) {
           if (insertLineError || !insertedLine) {
             errores++;
             avisos.push(
-              `[PO ${header.po}] Error creando línea ${lineLabel(line)}: ${
+              `[PO ${header.po}] Error creando lÃ­nea ${lineLabel(line)}: ${
                 insertLineError?.message ?? "No se pudo crear"
               }`
             );
@@ -680,87 +680,15 @@ export async function POST(req: Request) {
           await upsertSamples(insertedLine.id, line, header);
 
           lineasCreadas++;
-          cambios.push(`[PO ${header.po}] Línea creada ${lineLabel(line)}`);
+          cambios.push(`[PO ${header.po}] LÃ­nea creada ${lineLabel(line)}`);
         }
       }
 
-      for (const existingLine of (existingLines ?? []) as ExistingLine[]) {
-        if (matchedExistingLineIds.has(existingLine.id)) continue;
-
-        const { error: cancelLineError } = await supabase
-          .from("lineas_pedido")
-          .update({
-            estado: "CANCELADA",
-            cancelled_at: new Date().toISOString(),
-            cancelled_reason: `No aparece en importación Spain confirmada (${fileName ?? "archivo sin nombre"})`,
-          })
-          .eq("id", existingLine.id)
-          .neq("estado", "CANCELADA");
-
-        if (cancelLineError) {
-          errores++;
-          avisos.push(
-            `[PO ${header.po}] Error cancelando línea ${lineLabel(existingLine)}: ${cancelLineError.message}`
-          );
-        } else {
-          lineasCanceladas++;
-          cambios.push(`[PO ${header.po}] Línea cancelada ${lineLabel(existingLine)}`);
-        }
-      }
-
+      // ImportaciÃ³n incremental: las lÃ­neas ausentes del documento se conservan sin cambios.
       ok++;
     }
 
-    if (importedSeasons.size > 0) {
-      const { data: existingPOsInScope, error: existingPOsError } = await supabase
-        .from("pos")
-        .select("id, po")
-        .in("season", [...importedSeasons]);
-
-      if (existingPOsError) {
-        errores++;
-        avisos.push(
-          `No se pudieron revisar POs cancelados por temporada: ${existingPOsError.message}`
-        );
-      } else {
-        for (const existingPO of existingPOsInScope ?? []) {
-          if (incomingPONumbers.has(normalizeKey(existingPO.po))) continue;
-
-          const cancelReason = `PO no aparece en importación Spain confirmada (${fileName ?? "archivo sin nombre"})`;
-
-          const { error: cancelPOError } = await supabase
-            .from("pos")
-            .update({
-              estado: "CANCELADO",
-              cancelled_at: new Date().toISOString(),
-              cancelled_reason: cancelReason,
-            })
-            .eq("id", existingPO.id)
-            .neq("estado", "CANCELADO");
-
-          if (cancelPOError) {
-            errores++;
-            avisos.push(
-              `[PO ${existingPO.po}] Error cancelando PO: ${cancelPOError.message}`
-            );
-            continue;
-          }
-
-          await supabase
-            .from("lineas_pedido")
-            .update({
-              estado: "CANCELADA",
-              cancelled_at: new Date().toISOString(),
-              cancelled_reason: cancelReason,
-            })
-            .eq("po_id", existingPO.id)
-            .neq("estado", "CANCELADA");
-
-          posCancelados++;
-          cambios.push(`[PO ${existingPO.po}] PO cancelado`);
-        }
-      }
-    }
+    // ImportaciÃ³n incremental: los POs ausentes del documento se conservan sin cambios.
 
     await supabase.from("importaciones").insert({
       nombre_archivo: fileName,
@@ -781,7 +709,7 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({
-      mensaje: "Importación finalizada",
+      mensaje: "ImportaciÃ³n finalizada",
       ok,
       errores,
       pos_creados: posCreados,
@@ -794,7 +722,8 @@ export async function POST(req: Request) {
       detalles: { cambios },
     });
   } catch (error: any) {
-    console.error("❌ Error general en importación:", error);
+    console.error("âŒ Error general en importaciÃ³n:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

@@ -58,7 +58,7 @@ export default function ExportChina({ seasons }: ExportChinaProps) {
       <CardHeader>
         <CardTitle>Exportar datos para China</CardTitle>
         <CardDescription>
-          Selecciona las temporadas para generar el Excel de producción.
+          Selecciona las temporadas para generar el Excel de producción. Incluye SCO Legacy visible para cruzar con el Excel histórico.
         </CardDescription>
       </CardHeader>
       <CardContent>

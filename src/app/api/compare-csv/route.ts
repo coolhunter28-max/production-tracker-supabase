@@ -316,11 +316,8 @@ export async function POST(req: Request) {
 
     console.log(`🧾 Comparando archivo ${fileName} (${groupedPOs.length} POs)...`);
 
-    const incomingPOs = groupedPOs
-      .map((poGroup: any) => poGroup.header?.po)
-      .filter(Boolean);
-
-    const incomingPOSet = new Set(incomingPOs);
+    // Import Spain es incremental: sólo compara los POs y líneas presentes.
+    // La ausencia en el archivo nunca implica cancelación.
 
     const incomingSeasons = [
       ...new Set(
@@ -519,46 +516,12 @@ export async function POST(req: Request) {
         cambios.push(...sampleDiffs);
       }
 
-      for (const dbLine of dbLines) {
-        if (dbLine.estado === "CANCELADA") continue;
-
-        const key = lineKey(dbLine);
-
-        if (!incomingLineKeys.has(key)) {
-          cambios.push({
-            campo: `Línea cancelada: ${lineLabel(dbLine)}`,
-            old: "ACTIVA",
-            new: "CANCELADA si se confirma importación",
-            kind: "cancel_line",
-          });
-        }
-      }
-
       if (cambios.length > 0) {
         modificados++;
         detalles[header.po] = { status: "modificado", cambios };
       } else {
         sinCambios++;
         detalles[header.po] = { status: "sin_cambios", cambios: [] };
-      }
-    }
-
-    for (const dbPO of dbPOs ?? []) {
-      if (dbPO.estado === "CANCELADO") continue;
-
-      if (!incomingPOSet.has(dbPO.po)) {
-        cancelados++;
-        detalles[dbPO.po] = {
-          status: "cancelado",
-          cambios: [
-            {
-              campo: "PO cancelado",
-              old: "ACTIVO",
-              new: "CANCELADO si se confirma importación",
-              kind: "cancel_po",
-            },
-          ],
-        };
       }
     }
 
