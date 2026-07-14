@@ -734,6 +734,8 @@ Se calcula concatenando:
 * Style
 * Color
 * Size
+* Category
+* Channel
 
 No sustituye al UUID.
 
@@ -761,6 +763,15 @@ Flujo oficial:
 
 ---
 
+
+## Normalización de identidad
+
+Todas las comparaciones de identidad del sistema deben realizarse mediante las utilidades comunes:
+
+* `normalizeIdentity()`
+* `sameIdentity()`
+
+Queda prohibido comparar directamente mediante `===` los campos que forman parte de la identidad operativa de una línea (supplier, customer, season, PO, reference, style, color, size, category, channel o factory).
 # 16. Export China
 
 Ruta API:
@@ -792,8 +803,12 @@ Debe revisarse bajo la misma regla arquitectónica:
 * UUID como identificador interno
 * snapshots comerciales protegidos
 * validación previa antes de escrituras masivas
+* comparación de identidades mediante `sameIdentity()`
+* funcionamiento incremental por defecto (no cancelar automáticamente POs ausentes)
 
 No debe asumir que factory, booking, closing, shipping_date o inspection son necesariamente comunes a todo el PO.
+
+Las comparaciones de identidad deben ignorar diferencias de acentos, mayúsculas/minúsculas, espacios sobrantes y caracteres de sustitución.
 
 ---
 

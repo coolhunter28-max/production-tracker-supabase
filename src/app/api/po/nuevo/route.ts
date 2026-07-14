@@ -5,26 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const normalizePO = (po: any) => {
-  const dateFields = [
-    "po_date",
-    "etd_pi",
-    "booking",
-    "closing",
-    "shipping_date",
-    "inspection",
-  ];
-
-  const normalized = { ...po };
-
-  for (const field of dateFields) {
-    if (normalized[field] === "") normalized[field] = null;
-  }
-
-  return normalized;
-};
-
-function normText(value: any): string | null {
+function normText(value: unknown): string | null {
   if (value === null || value === undefined) return null;
 
   const text = String(value).trim();
@@ -32,8 +13,21 @@ function normText(value: any): string | null {
   return text === "" ? null : text;
 }
 
-function isXiamenSupplier(supplier: any): boolean {
-  return String(supplier || "").toUpperCase().includes("XIAMEN DIC");
+function dateOrNull(value: unknown): string | null {
+  const text = normText(value);
+  return text;
+}
+
+function numberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+
+  const parsed = Number(String(value).replace(",", "."));
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isXiamenSupplier(supplier: unknown): boolean {
+  return String(supplier ?? "").toUpperCase().includes("XIAMEN DIC");
 }
 
 async function ensureModeloId(
@@ -70,7 +64,7 @@ async function ensureModeloId(
       style,
       customer,
       supplier,
-      factory: factory || null,
+      factory,
       status: "activo",
       notes: "Auto-created from manual PO entry",
     })
@@ -124,7 +118,7 @@ async function ensureVarianteId(
       season,
       color,
       reference,
-      factory: factory || null,
+      factory,
       status: "activo",
       notes: "Auto-created from manual PO entry",
     })
@@ -133,7 +127,7 @@ async function ensureVarianteId(
 
   if (!createError) return created.id as string;
 
-  if (String(createError?.code || "") === "23505") {
+  if (String(createError?.code ?? "") === "23505") {
     const { data: again, error: againError } = await query.limit(1).maybeSingle();
 
     if (againError) throw againError;
@@ -198,117 +192,198 @@ async function applySnapshotAndMaybeFillPrice(
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
+    const body = await req.json();
 
-    const po = await req.json();
-    const poData = normalizePO(po);
+    /*
+     * Compatibilidad:
+     * - El formulario actual puede enviar { po, lineas_pedido }.
+     * - El endpoint antiguo recibía los campos de cabecera directamente.
+     */
+    const poData = body?.po ?? body;
+    const lineas = Array.isArray(body?.lineas_pedido)
+      ? body.lineas_pedido
+      : Array.isArray(poData?.lineas_pedido)
+        ? poData.lineas_pedido
+        : [];
 
+    const poNumber = normText(poData?.po);
+    const season = normText(poData?.season);
+    const customer = normText(poData?.customer);
+    const supplier = normText(poData?.supplier);
+
+    if (!poNumber) {
+      return NextResponse.json(
+        { success: false, message: "PO es obligatorio." },
+        { status: 400 }
+      );
+    }
+
+    if (!season) {
+      return NextResponse.json(
+        { success: false, message: "Season es obligatoria." },
+        { status: 400 }
+      );
+    }
+
+    if (!customer) {
+      return NextResponse.json(
+        { success: false, message: "Customer es obligatorio." },
+        { status: 400 }
+      );
+    }
+
+    if (!supplier) {
+      return NextResponse.json(
+        { success: false, message: "Supplier es obligatorio." },
+        { status: 400 }
+      );
+    }
+
+    if (lineas.length === 0) {
+      return NextResponse.json(
+        { success: false, message: "Debes añadir al menos una línea." },
+        { status: 400 }
+      );
+    }
+
+    for (const [index, linea] of lineas.entries()) {
+      if (!normText(linea?.factory)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `La línea ${index + 1} no tiene fábrica.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    /*
+     * Cabecera PO:
+     * sólo información realmente común a todas las líneas.
+     *
+     * Las columnas antiguas de factory/booking/closing/shipping/inspection
+     * permanecen en la tabla por compatibilidad, pero ya no son fuente operativa
+     * y este flujo no las escribe.
+     */
     const { data: poInsert, error: poError } = await supabase
       .from("pos")
       .insert({
-        season: poData.season,
-        po: poData.po,
-        customer: poData.customer,
-        supplier: poData.supplier,
-        factory: poData.factory,
-        pi: poData.proforma_invoice,
-        po_date: poData.po_date,
-        etd_pi: poData.etd_pi,
-        booking: poData.booking,
-        closing: poData.closing,
-        shipping_date: poData.shipping_date,
-        inspection: poData.inspection,
-        estado_inspeccion: poData.estado_inspeccion,
-        currency: poData.currency,
-        channel: poData.channel,
+        season,
+        po: poNumber,
+        customer,
+        supplier,
+        po_date: dateOrNull(poData?.po_date),
+        currency: normText(poData?.currency) ?? "USD",
+        channel: normText(poData?.channel),
       })
-      .select("id, season, customer, supplier, factory")
+      .select("id, season, customer, supplier")
       .single();
 
     if (poError) throw poError;
 
-    const poId = poInsert.id;
-    const poSeason = poInsert.season;
-    const poCustomer = poInsert.customer;
-    const poSupplier = poInsert.supplier;
-    const poFactory = poInsert.factory;
+    const poId = poInsert.id as string;
+    const poSeason = normText(poInsert.season);
+    const poCustomer = normText(poInsert.customer);
+    const poSupplier = normText(poInsert.supplier);
 
-    if (poData.lineas_pedido?.length) {
-      for (const linea of poData.lineas_pedido) {
-        const reference = normText(linea.reference);
-        const style = normText(linea.style);
-        const color = normText(linea.color);
+    for (const linea of lineas) {
+      const reference = normText(linea?.reference);
+      const style = normText(linea?.style);
+      const color = normText(linea?.color);
+      const lineFactory = normText(linea?.factory);
 
-        const modeloId = await ensureModeloId(supabase, {
+      const modeloId =
+        normText(linea?.modelo_id) ??
+        (await ensureModeloId(supabase, {
           style,
           customer: poCustomer,
           supplier: poSupplier,
-          factory: poFactory,
-        });
+          factory: lineFactory,
+        }));
 
-        const varianteId = await ensureVarianteId(supabase, {
+      const varianteId =
+        normText(linea?.variante_id) ??
+        (await ensureVarianteId(supabase, {
           modelo_id: modeloId,
           season: poSeason,
           color,
           reference,
-          factory: poFactory,
+          factory: lineFactory,
+        }));
+
+      const { data: lineaInsert, error: lineaError } = await supabase
+        .from("lineas_pedido")
+        .insert({
+          po_id: poId,
+
+          modelo_id: modeloId,
+          variante_id: varianteId,
+
+          reference,
+          style,
+          color,
+          size_run: normText(linea?.size_run),
+          category: normText(linea?.category),
+          channel: normText(linea?.channel) ?? normText(poData?.channel),
+
+          factory: lineFactory,
+          qty: numberOrNull(linea?.qty),
+
+          price: numberOrNull(linea?.price),
+          amount: numberOrNull(linea?.amount),
+          price_selling: numberOrNull(linea?.price_selling),
+          amount_selling: numberOrNull(linea?.amount_selling),
+
+          pi_number: normText(linea?.pi_number),
+          pi_bsg: normText(linea?.pi_bsg),
+          etd: dateOrNull(linea?.etd),
+
+          booking: dateOrNull(linea?.booking),
+          closing: dateOrNull(linea?.closing),
+          shipping_date: dateOrNull(linea?.shipping_date),
+          inspection: dateOrNull(linea?.inspection),
+
+          trial_upper: dateOrNull(linea?.trial_upper),
+          trial_lasting: dateOrNull(linea?.trial_lasting),
+          lasting: dateOrNull(linea?.lasting),
+          finish_date: dateOrNull(linea?.finish_date),
+        })
+        .select("id")
+        .single();
+
+      if (lineaError) throw lineaError;
+
+      const lineaId = lineaInsert.id as string;
+
+      if (varianteId) {
+        await applySnapshotAndMaybeFillPrice(supabase, {
+          linea_id: lineaId,
+          supplier: poSupplier,
         });
+      }
 
-        const { data: lineaInsert, error: lineaError } = await supabase
-          .from("lineas_pedido")
-          .insert({
-            po_id: poId,
-            reference,
-            style,
-            color,
-            size_run: linea.size_run,
-            category: linea.category,
-            channel: linea.channel,
-            qty: linea.qty,
-            price: linea.price ?? null,
-            amount: linea.amount ?? null,
-            modelo_id: modeloId,
-            variante_id: varianteId,
-            trial_upper: linea.trial_upper || null,
-            trial_lasting: linea.trial_lasting || null,
-            lasting: linea.lasting || null,
-            finish_date: linea.finish_date || null,
-          })
-          .select("id")
-          .single();
+      if (Array.isArray(linea?.muestras) && linea.muestras.length > 0) {
+        const muestrasInsert = linea.muestras.map((muestra: any) => ({
+          linea_pedido_id: lineaId,
+          tipo_muestra: normText(muestra?.tipo_muestra),
+          fecha_muestra: dateOrNull(muestra?.fecha_muestra),
+          estado_muestra: normText(muestra?.estado_muestra),
+          round: normText(muestra?.round),
+          notas: normText(muestra?.notas),
+          fecha_teorica: dateOrNull(muestra?.fecha_teorica),
+        }));
 
-        if (lineaError) throw lineaError;
+        const { error: muestrasError } = await supabase
+          .from("muestras")
+          .insert(muestrasInsert);
 
-        const lineaId = lineaInsert.id;
-
-        if (varianteId) {
-          await applySnapshotAndMaybeFillPrice(supabase, {
-            linea_id: lineaId,
-            supplier: poSupplier,
-          });
-        }
-
-        if (linea.muestras?.length) {
-          const muestrasInsert = linea.muestras.map((m: any) => ({
-            linea_pedido_id: lineaId,
-            tipo_muestra: m.tipo_muestra,
-            fecha_muestra: m.fecha_muestra || null,
-            estado_muestra: m.estado_muestra,
-            round: m.round,
-            notas: m.notas,
-            fecha_teorica: m.fecha_teorica || null,
-          }));
-
-          const { error: muestrasError } = await supabase
-            .from("muestras")
-            .insert(muestrasInsert);
-
-          if (muestrasError) throw muestrasError;
-        }
+        if (muestrasError) throw muestrasError;
       }
     }
 
     return NextResponse.json({ success: true, id: poId });
-  } catch (error) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error creando PO";
 
     console.error("❌ Error creando PO:", error);

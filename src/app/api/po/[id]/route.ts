@@ -176,26 +176,14 @@ function buildPOPayload(po: any) {
     season: text(po.season),
     customer: text(po.customer),
     supplier: text(po.supplier),
-    factory: text(po.factory),
     currency: text(po.currency) ?? "USD",
     po_date: dateOrNull(po.po_date),
-
-    // Campos legacy/de cabecera. La operativa nueva puede informar PI/ETD por línea.
-    etd_pi: dateOrNull(po.etd_pi),
-    pi: text(po.pi),
-
     channel: text(po.channel),
-    booking: text(po.booking),
-    closing: text(po.closing),
-    shipping_date: dateOrNull(po.shipping_date),
-    inspection: text(po.inspection),
-    estado_inspeccion: text(po.estado_inspeccion),
   };
 }
 
 function buildLineaUpdatePayload(linea: any, poChannel: unknown) {
   const lineaChannel = text(linea.channel) ?? text(poChannel);
-  const bsgLine = isBsg(lineaChannel) || isBsg(poChannel);
 
   return {
     reference: text(linea.reference) ?? "",
@@ -211,15 +199,18 @@ function buildLineaUpdatePayload(linea: any, poChannel: unknown) {
     // PI normal por línea. Válida para XIAMEN y también como PI estándar.
     pi_number: text(linea.pi_number),
 
-    // Exclusivo BSG. En XIAMEN no se persiste pi_bsg.
-    pi_bsg: bsgLine ? text(linea.pi_bsg) : null,
-
+    // Los datos BSG pertenecen a la línea y no dependen del supplier o channel.
+    // Un PO de operativa BSG puede tener supplier XIAMEN DIC y channel Retail.
+    pi_bsg: text(linea.pi_bsg),
     price_selling: num(linea.price_selling),
     amount_selling: num(linea.amount_selling),
 
-    // ETD PI por línea.
+    // Operativa y planificación a nivel de línea.
+    factory: text(linea.factory),
     etd: dateOrNull(linea.etd),
-
+    booking: dateOrNull(linea.booking),
+    closing: dateOrNull(linea.closing),
+    shipping_date: dateOrNull(linea.shipping_date),
     inspection: dateOrNull(linea.inspection),
     estado_inspeccion: text(linea.estado_inspeccion),
     trial_upper: text(linea.trial_upper),
@@ -368,6 +359,16 @@ export async function PUT(req: Request, { params }: RouteContext) {
     !accessStatus.access.customers.includes(nextCustomer)
   ) {
     return jsonError("No puedes reasignar el PO a un cliente fuera de tu cartera.", 403);
+  }
+
+  if (lineas.length === 0) {
+    return jsonError("Debes mantener al menos una línea en el PO.", 400);
+  }
+
+  for (const [index, linea] of lineas.entries()) {
+    if (!text(linea.factory)) {
+      return jsonError(`La línea ${index + 1} no tiene fábrica.`, 400);
+    }
   }
 
   const { error: poError } = await accessStatus.supabase

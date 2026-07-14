@@ -103,7 +103,11 @@ function buildLineaPayload(linea: any, poId: string) {
     pi_bsg: isBsgOperativa(channel) ? text(linea.pi_bsg) : null,
     price_selling: num(linea.price_selling),
     amount_selling: num(linea.amount_selling),
+    factory: text(linea.factory),
     etd: dateOrNull(linea.etd),
+    booking: dateOrNull(linea.booking),
+    closing: dateOrNull(linea.closing),
+    shipping_date: dateOrNull(linea.shipping_date),
     inspection: dateOrNull(linea.inspection),
     estado_inspeccion: text(linea.estado_inspeccion),
     trial_upper: text(linea.trial_upper),
@@ -160,11 +164,22 @@ export async function POST(req: Request) {
 
   if (!customer) return jsonError("Customer es obligatorio.");
   if (!text(po.po)) return jsonError("PO es obligatorio.");
+  if (!text(po.season)) return jsonError("Season es obligatoria.");
+  if (!text(po.supplier)) return jsonError("Supplier es obligatorio.");
+  if (lineas.length === 0) return jsonError("Debes añadir al menos una línea.");
+
+  for (const [index, linea] of lineas.entries()) {
+    if (!text(linea.factory)) {
+      return jsonError(`La línea ${index + 1} no tiene fábrica.`);
+    }
+  }
 
   if (!access.canSeeAllCustomers && !access.customers.includes(customer)) {
     return jsonError("No puedes crear POs para un cliente fuera de tu cartera.", 403);
   }
 
+  // La cabecera contiene únicamente datos comunes al pedido.
+  // Factory y planificación operativa se guardan exclusivamente por línea.
   const { data: createdPO, error: poError } = await supabase
     .from("pos")
     .insert({
@@ -172,17 +187,9 @@ export async function POST(req: Request) {
       season: text(po.season),
       customer,
       supplier: text(po.supplier),
-      factory: text(po.factory),
       currency: text(po.currency) ?? "USD",
       po_date: dateOrNull(po.po_date),
-      etd_pi: dateOrNull(po.etd_pi),
-      pi: text(po.pi),
       channel: text(po.channel),
-      booking: text(po.booking),
-      closing: text(po.closing),
-      shipping_date: dateOrNull(po.shipping_date),
-      inspection: text(po.inspection),
-      estado_inspeccion: text(po.estado_inspeccion),
     })
     .select("*")
     .single();

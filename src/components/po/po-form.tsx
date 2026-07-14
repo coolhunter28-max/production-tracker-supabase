@@ -45,6 +45,10 @@ type LineaForm = {
   size_run: string;
   category: string;
   channel: string;
+  factory: string;
+  booking: string;
+  closing: string;
+  shipping_date: string;
   qty: string;
   price: string;
   amount: string;
@@ -134,6 +138,10 @@ const emptyLinea: LineaForm = {
   size_run: "",
   category: "",
   channel: "",
+  factory: "",
+  booking: "",
+  closing: "",
+  shipping_date: "",
   qty: "",
   price: "",
   amount: "",
@@ -210,16 +218,9 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
     season: po?.season ?? "",
     customer: po?.customer ?? "",
     supplier: po?.supplier ?? "",
-    factory: po?.factory ?? "",
     currency: po?.currency ?? "USD",
     po_date: toDateInput(po?.po_date),
-    etd_pi: toDateInput(po?.etd_pi),
-    pi: po?.pi ?? "",
     channel: po?.channel ?? "",
-    booking: po?.booking ?? "",
-    closing: po?.closing ?? "",
-    shipping_date: toDateInput(po?.shipping_date),
-    inspection: po?.inspection ?? "",
   });
 
   const [lineas, setLineas] = useState<LineaForm[]>(
@@ -231,6 +232,10 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
       size_run: linea.size_run ?? "",
       category: linea.category ?? "",
       channel: linea.channel ?? po?.channel ?? "",
+      factory: linea.factory ?? po?.factory ?? "",
+      booking: toDateInput(linea.booking ?? po?.booking),
+      closing: toDateInput(linea.closing ?? po?.closing),
+      shipping_date: toDateInput(linea.shipping_date ?? po?.shipping_date),
       qty: String(linea.qty ?? ""),
       price: String(linea.price ?? ""),
       amount: String(linea.amount ?? ""),
@@ -275,15 +280,12 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
     return catalog.filter((item) => {
       if (formData.customer && item.customer !== formData.customer) return false;
       if (formData.supplier && item.supplier !== formData.supplier) return false;
-      if (formData.factory && item.factory && item.factory !== formData.factory) return false;
-
       return true;
     });
-  }, [catalog, formData.customer, formData.supplier, formData.factory]);
+  }, [catalog, formData.customer, formData.supplier]);
 
   const customers = unique(catalog.map((x) => x.customer));
   const suppliers = unique(catalog.map((x) => x.supplier));
-  const factories = unique(catalog.map((x) => x.factory));
   const seasons = unique(catalog.map((x) => x.season));
 
   function updateHeader(field: string, value: string) {
@@ -369,6 +371,7 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
         style: item.style ?? "",
         color: item.color ?? "",
         size_run: item.size_range ?? "",
+        factory: item.factory ?? next[index].factory,
         price: buyPrice,
         price_selling: sellPrice,
         amount: money(qty, buyPrice),
@@ -387,10 +390,6 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
     if (item.currency) {
       setFormData((prev) => ({ ...prev, currency: item.currency ?? prev.currency }));
     }
-
-    if (item.factory && !formData.factory) {
-      setFormData((prev) => ({ ...prev, factory: item.factory ?? prev.factory }));
-    }
   }
 
   function addLinea() {
@@ -399,9 +398,6 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
       {
         ...emptyLinea,
         channel: formData.channel,
-        pi_number: formData.pi,
-        etd: formData.etd_pi,
-        inspection: toDateInput(formData.inspection),
       },
     ]);
   }
@@ -569,7 +565,6 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
     if (!formData.po.trim()) return "PO es obligatorio.";
     if (!formData.customer.trim()) return "Customer es obligatorio.";
     if (!formData.supplier.trim()) return "Supplier es obligatorio.";
-    if (!formData.factory.trim()) return "Factory es obligatorio.";
     if (!formData.season.trim()) return "Season es obligatorio.";
 
     if (lineas.length === 0) return "Debes añadir al menos una línea.";
@@ -579,6 +574,7 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
 
       if (!linea.style.trim()) return `La línea ${rowNumber} no tiene modelo/style.`;
       if (!linea.color.trim()) return `La línea ${rowNumber} no tiene color.`;
+      if (!linea.factory.trim()) return `La línea ${rowNumber} no tiene factory.`;
       if (!linea.qty || Number(linea.qty) <= 0) return `La línea ${rowNumber} no tiene cantidad válida.`;
 
       const operativeChannel = linea.channel || formData.channel;
@@ -663,17 +659,10 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
           <SelectOrInput label="Season" value={formData.season} options={seasons} onChange={(v) => updateHeader("season", v)} />
           <SelectOrInput label="Customer" value={formData.customer} options={customers} onChange={(v) => updateHeader("customer", v)} />
           <SelectOrInput label="Supplier" value={formData.supplier} options={suppliers} onChange={(v) => updateHeader("supplier", v)} />
-          <SelectOrInput label="Factory" value={formData.factory} options={factories} onChange={(v) => updateHeader("factory", v)} />
 
           <Field label="Currency" value={formData.currency} onChange={(v) => updateHeader("currency", v)} />
           <Field label="PO Date" type="date" value={formData.po_date} onChange={(v) => updateHeader("po_date", v)} />
-          <Field label="PI general" value={formData.pi} onChange={(v) => updateHeader("pi", v)} />
-          <Field label="ETD PI general" type="date" value={formData.etd_pi} onChange={(v) => updateHeader("etd_pi", v)} />
-          <DataListField label="Channel" value={formData.channel} options={channelOptions} onChange={(v) => updateHeader("channel", v)} />
-          <Field label="Booking" value={formData.booking} onChange={(v) => updateHeader("booking", v)} />
-          <Field label="Closing" value={formData.closing} onChange={(v) => updateHeader("closing", v)} />
-          <Field label="Shipping" type="date" value={formData.shipping_date} onChange={(v) => updateHeader("shipping_date", v)} />
-          <Field label="Inspection general" value={formData.inspection} onChange={(v) => updateHeader("inspection", v)} />
+          <DataListField label="Channel general" value={formData.channel} options={channelOptions} onChange={(v) => updateHeader("channel", v)} />
         </div>
       </section>
 
@@ -682,7 +671,7 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
           <div>
             <h2 className="text-lg font-bold">Líneas de pedido</h2>
             <p className="text-sm text-slate-500">
-              Cada línea puede tener su propia PI, ETD PI y muestras.
+              Cada línea tiene su propia fábrica, PI, planificación y muestras.
             </p>
           </div>
 
@@ -723,135 +712,159 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
                   </button>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="min-w-[2100px] text-sm">
-                    <thead className="bg-slate-100">
-                      <tr>
-                        <Th>Modelo / Style</Th>
-                        <Th>Color</Th>
-                        <Th>Reference</Th>
-                        <Th>Size</Th>
-                        <Th>Category</Th>
-                        <Th>Channel</Th>
-                        <Th>Qty</Th>
-                        <Th>Buy</Th>
-                        <Th>Amount</Th>
-                        <Th>Sell</Th>
-                        <Th>Sell Amount</Th>
-                        <Th>PI línea</Th>
-                        <Th>PI BSG</Th>
-                        <Th>ETD línea</Th>
-                        <Th>Inspection</Th>
-                        <Th>Trial U</Th>
-                        <Th>Trial L</Th>
-                        <Th>Lasting</Th>
-                        <Th>Finish</Th>
-                      </tr>
-                    </thead>
+                <div className="space-y-3">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[1500px] text-sm">
+                      <thead className="bg-slate-100">
+                        <tr>
+                          <Th>Modelo / Style</Th>
+                          <Th>Color</Th>
+                          <Th>Reference</Th>
+                          <Th>Size</Th>
+                          <Th>Category</Th>
+                          <Th>Channel</Th>
+                          <Th>Qty</Th>
+                          <Th>Buy</Th>
+                          <Th>Amount</Th>
+                          <Th>Sell</Th>
+                          <Th>Sell Amount</Th>
+                        </tr>
+                      </thead>
 
-                    <tbody>
-                      <tr className="border-b bg-white">
-                        <Td>
-                          <select
-                            className="w-full rounded border px-2 py-1"
-                            value={linea.style}
-                            onChange={(e) => {
-                              updateLinea(index, "style", e.target.value);
-                              updateLinea(index, "color", "");
-                              updateLinea(index, "variante_id", "");
-                            }}
-                          >
-                            <option value="">Seleccionar</option>
-                            {styleOptions.map((style) => (
-                              <option key={style} value={style}>
-                                {style}
-                              </option>
-                            ))}
-                          </select>
+                      <tbody>
+                        <tr className="border-b bg-white">
+                          <Td>
+                            <select
+                              className="w-full rounded border px-2 py-1"
+                              value={linea.style}
+                              onChange={(e) => {
+                                updateLinea(index, "style", e.target.value);
+                                updateLinea(index, "color", "");
+                                updateLinea(index, "variante_id", "");
+                              }}
+                            >
+                              <option value="">Seleccionar</option>
+                              {styleOptions.map((style) => (
+                                <option key={style} value={style}>
+                                  {style}
+                                </option>
+                              ))}
+                            </select>
 
-                          {canActivateSeason ? (
-                            <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
-                              <div className="mb-1 font-medium">
-                                No hay variantes de este modelo para {formData.season}.
+                            {canActivateSeason ? (
+                              <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                                <div className="mb-1 font-medium">
+                                  No hay variantes de este modelo para {formData.season}.
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={activatingSeason}
+                                  onClick={() => openActivateSeasonDialog(index)}
+                                  className="rounded bg-amber-600 px-2 py-1 text-white disabled:opacity-50"
+                                >
+                                  Crear temporada para este modelo
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                disabled={activatingSeason}
-                                onClick={() => openActivateSeasonDialog(index)}
-                                className="rounded bg-amber-600 px-2 py-1 text-white disabled:opacity-50"
-                              >
-                                Crear temporada para este modelo
-                              </button>
-                            </div>
-                          ) : null}
-                        </Td>
+                            ) : null}
+                          </Td>
 
-                        <Td>
-                          <select
-                            className="w-full rounded border px-2 py-1"
-                            value={linea.variante_id}
-                            onChange={(e) => {
-                              const item = colorOptions.find((x) => x.variante_id === e.target.value);
-                              if (item) applyCatalogItem(index, item);
-                            }}
-                          >
-                            <option value="">Seleccionar</option>
-                            {colorOptions.map((item) => (
-                              <option key={item.variante_id} value={item.variante_id}>
-                                {item.color} · {item.reference} · {item.season}
-                              </option>
-                            ))}
-                          </select>
+                          <Td>
+                            <select
+                              className="w-full rounded border px-2 py-1"
+                              value={linea.variante_id}
+                              onChange={(e) => {
+                                const item = colorOptions.find((x) => x.variante_id === e.target.value);
+                                if (item) applyCatalogItem(index, item);
+                              }}
+                            >
+                              <option value="">Seleccionar</option>
+                              {colorOptions.map((item) => (
+                                <option key={item.variante_id} value={item.variante_id}>
+                                  {item.color} · {item.reference} · {item.season}
+                                </option>
+                              ))}
+                            </select>
 
-                          {linea.style && formData.season && colorOptions.length === 0 ? (
-                            <div className="mt-1 text-xs text-slate-500">
-                              Sin variantes para {formData.season}.
-                            </div>
-                          ) : null}
-                        </Td>
+                            {linea.style && formData.season && colorOptions.length === 0 ? (
+                              <div className="mt-1 text-xs text-slate-500">
+                                Sin variantes para {formData.season}.
+                              </div>
+                            ) : null}
+                          </Td>
 
-                        <Td><SmallInput value={linea.reference} onChange={(v) => updateLinea(index, "reference", v)} /></Td>
-                        <Td><SmallInput value={linea.size_run} onChange={(v) => updateLinea(index, "size_run", v)} /></Td>
+                          <Td><SmallInput value={linea.reference} onChange={(v) => updateLinea(index, "reference", v)} /></Td>
+                          <Td><SmallInput value={linea.size_run} onChange={(v) => updateLinea(index, "size_run", v)} /></Td>
 
-                        <Td>
-                          <DataListInput
-                            value={linea.category}
-                            options={categoryOptions}
-                            onChange={(v) => updateLinea(index, "category", v)}
-                          />
-                        </Td>
+                          <Td>
+                            <DataListInput
+                              value={linea.category}
+                              options={categoryOptions}
+                              onChange={(v) => updateLinea(index, "category", v)}
+                            />
+                          </Td>
 
-                        <Td>
-                          <DataListInput
-                            value={linea.channel}
-                            options={channelOptions}
-                            onChange={(v) => updateLinea(index, "channel", v)}
-                          />
-                        </Td>
+                          <Td>
+                            <DataListInput
+                              value={linea.channel}
+                              options={channelOptions}
+                              onChange={(v) => updateLinea(index, "channel", v)}
+                            />
+                          </Td>
 
-                        <Td><SmallInput type="number" value={linea.qty} onChange={(v) => updateLinea(index, "qty", v)} /></Td>
-                        <Td><SmallInput value={linea.price} onChange={(v) => updateLinea(index, "price", v)} /></Td>
-                        <Td><ReadOnlyValue value={linea.amount} /></Td>
-                        <Td><SmallInput value={linea.price_selling} onChange={(v) => updateLinea(index, "price_selling", v)} /></Td>
-                        <Td><ReadOnlyValue value={linea.amount_selling} /></Td>
-                        <Td><SmallInput value={linea.pi_number} onChange={(v) => updateLinea(index, "pi_number", v)} /></Td>
-                        <Td>
-                          <SmallInput
-                            value={isBsg ? linea.pi_bsg : ""}
-                            disabled={!isBsg}
-                            placeholder={isBsg ? "" : "Solo BSG"}
-                            onChange={(v) => updateLinea(index, "pi_bsg", v)}
-                          />
-                        </Td>
-                        <Td><SmallInput type="date" value={linea.etd} onChange={(v) => updateLinea(index, "etd", v)} /></Td>
-                        <Td><SmallInput type="date" value={linea.inspection} onChange={(v) => updateLinea(index, "inspection", v)} /></Td>
-                        <Td><SmallInput value={linea.trial_upper} onChange={(v) => updateLinea(index, "trial_upper", v)} /></Td>
-                        <Td><SmallInput value={linea.trial_lasting} onChange={(v) => updateLinea(index, "trial_lasting", v)} /></Td>
-                        <Td><SmallInput value={linea.lasting} onChange={(v) => updateLinea(index, "lasting", v)} /></Td>
-                        <Td><SmallInput type="date" value={linea.finish_date} onChange={(v) => updateLinea(index, "finish_date", v)} /></Td>
-                      </tr>
-                    </tbody>
-                  </table>
+                          <Td><SmallInput type="number" value={linea.qty} onChange={(v) => updateLinea(index, "qty", v)} /></Td>
+                          <Td><SmallInput value={linea.price} onChange={(v) => updateLinea(index, "price", v)} /></Td>
+                          <Td><ReadOnlyValue value={linea.amount} /></Td>
+                          <Td><SmallInput value={linea.price_selling} onChange={(v) => updateLinea(index, "price_selling", v)} /></Td>
+                          <Td><ReadOnlyValue value={linea.amount_selling} /></Td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[1650px] text-sm">
+                      <thead className="bg-slate-100">
+                        <tr>
+                          <Th>Factory</Th>
+                          <Th>PI línea</Th>
+                          <Th>PI BSG</Th>
+                          <Th>ETD línea</Th>
+                          <Th>Booking</Th>
+                          <Th>Closing</Th>
+                          <Th>Shipping</Th>
+                          <Th>Inspection</Th>
+                          <Th>Trial U</Th>
+                          <Th>Trial L</Th>
+                          <Th>Lasting</Th>
+                          <Th>Finish</Th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        <tr className="border-b bg-white">
+                          <Td><SmallInput value={linea.factory} onChange={(v) => updateLinea(index, "factory", v)} /></Td>
+                          <Td><SmallInput value={linea.pi_number} onChange={(v) => updateLinea(index, "pi_number", v)} /></Td>
+                          <Td>
+                            <SmallInput
+                              value={isBsg ? linea.pi_bsg : ""}
+                              disabled={!isBsg}
+                              placeholder={isBsg ? "" : "Solo BSG"}
+                              onChange={(v) => updateLinea(index, "pi_bsg", v)}
+                            />
+                          </Td>
+                          <Td><SmallInput type="date" value={linea.etd} onChange={(v) => updateLinea(index, "etd", v)} /></Td>
+                          <Td><SmallInput type="date" value={linea.booking} onChange={(v) => updateLinea(index, "booking", v)} /></Td>
+                          <Td><SmallInput type="date" value={linea.closing} onChange={(v) => updateLinea(index, "closing", v)} /></Td>
+                          <Td><SmallInput type="date" value={linea.shipping_date} onChange={(v) => updateLinea(index, "shipping_date", v)} /></Td>
+                          <Td><SmallInput type="date" value={linea.inspection} onChange={(v) => updateLinea(index, "inspection", v)} /></Td>
+                          <Td><SmallInput type="date" value={linea.trial_upper} onChange={(v) => updateLinea(index, "trial_upper", v)} /></Td>
+                          <Td><SmallInput type="date" value={linea.trial_lasting} onChange={(v) => updateLinea(index, "trial_lasting", v)} /></Td>
+                          <Td><SmallInput type="date" value={linea.lasting} onChange={(v) => updateLinea(index, "lasting", v)} /></Td>
+                          <Td><SmallInput type="date" value={linea.finish_date} onChange={(v) => updateLinea(index, "finish_date", v)} /></Td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 <div className="mt-4 rounded-lg border bg-white p-3">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { getEstadoColor, getEstadoIcon } from "@/utils/getEstadoColor";
@@ -63,36 +63,6 @@ function formatSampleDate(m: any) {
     label: "",
     className: "text-gray-400",
   };
-}
-
-function getLinePiSummary(lineas: any[] | undefined) {
-  const values = Array.from(
-    new Set(
-      (lineas ?? [])
-        .map((l) => String(l?.pi_number ?? "").trim())
-        .filter(Boolean)
-    )
-  ).sort((a, b) => a.localeCompare(b, "es"));
-
-  if (values.length === 0) return "-";
-  if (values.length <= 3) return values.join(" / ");
-
-  return `${values.length} PI: ${values.slice(0, 3).join(" / ")}…`;
-}
-
-function getLineEtdSummary(lineas: any[] | undefined) {
-  const values = Array.from(
-    new Set(
-      (lineas ?? [])
-        .map((l) => String(l?.etd ?? "").trim())
-        .filter(Boolean)
-    )
-  ).sort((a, b) => a.localeCompare(b, "es"));
-
-  if (values.length === 0) return "-";
-  if (values.length === 1) return values[0];
-
-  return `Próxima ${values[0]} (+${values.length - 1})`;
 }
 
 function getSampleSortIndex(value: any) {
@@ -186,17 +156,17 @@ export default function VerPO() {
   }, [id]);
 
   const supplierNorm = String(po?.supplier ?? "").trim().toUpperCase();
-  const isBSG = supplierNorm === "BSG";
+  const isBSG =
+    supplierNorm === "BSG" ||
+    (po?.lineas_pedido ?? []).some((linea: any) => {
+      const hasPiBsg = String(linea?.pi_bsg ?? "").trim() !== "";
+      const hasSellingPrice =
+        linea?.price_selling !== null && linea?.price_selling !== undefined;
+      const hasSellingAmount =
+        linea?.amount_selling !== null && linea?.amount_selling !== undefined;
 
-  const piSummary = useMemo(
-    () => getLinePiSummary(po?.lineas_pedido),
-    [po?.lineas_pedido]
-  );
-
-  const etdSummary = useMemo(
-    () => getLineEtdSummary(po?.lineas_pedido),
-    [po?.lineas_pedido]
-  );
+      return hasPiBsg || hasSellingPrice || hasSellingAmount;
+    });
 
   if (loading) {
     return <div className="p-6 text-gray-600">Cargando pedido...</div>;
@@ -280,18 +250,11 @@ export default function VerPO() {
       <div className="grid md:grid-cols-3 gap-4 bg-white rounded-xl shadow p-5 border border-gray-200">
         {[
           ["Season", po.season],
-          ["Factory", po.factory],
-          ["ETD PI", etdSummary],
-          ["Shipping", po.shipping_date],
-          ["Moneda", po.currency],
           ["Customer", po.customer],
-          ["P.I", piSummary],
-          ["Booking", po.booking],
-          ["Inspection", po.inspection],
           ["Supplier", po.supplier],
           ["PO Date", po.po_date],
-          ["Closing", po.closing],
-          ["Estado Insp.", po.estado_inspeccion],
+          ["Moneda", po.currency],
+          ["Channel", po.channel],
         ].map(([label, value]) => (
           <div key={label as string} className="text-sm">
             <span className="font-semibold text-gray-700">{label}:</span>{" "}
@@ -316,6 +279,11 @@ export default function VerPO() {
                   "Size",
                   "Category",
                   "Channel",
+                  "Factory",
+                  "Booking",
+                  "Closing",
+                  "Shipping",
+                  "Inspection",
                   "Qty",
                   "Price",
                   "Total",
@@ -345,6 +313,15 @@ export default function VerPO() {
                   <td className="px-2 py-1">{l.size_run || "-"}</td>
                   <td className="px-2 py-1">{l.category || "-"}</td>
                   <td className="px-2 py-1">{l.channel || "-"}</td>
+                  <td className="px-2 py-1">{l.factory || "-"}</td>
+                  <td className="px-2 py-1 text-center">{l.booking || "-"}</td>
+                  <td className="px-2 py-1 text-center">{l.closing || "-"}</td>
+                  <td className="px-2 py-1 text-center">
+                    {l.shipping_date || "-"}
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    {l.inspection || "-"}
+                  </td>
 
                   <td className="px-2 py-1 text-center font-medium">
                     {formatNumber(l.qty)}

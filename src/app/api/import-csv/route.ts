@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 import { getCurrentUserAccess } from "@/lib/ownership";
+import { sameIdentity } from "@/lib/normalize-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -726,4 +727,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-

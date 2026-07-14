@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentUserAccess } from "@/lib/ownership";
+import { sameIdentity } from "@/lib/normalize-identity";
 import ExcelJS from "exceljs";
 
 const supabase = createClient(
@@ -68,7 +69,11 @@ function isEmptyExportValue(value: any) {
 
 function sameExportValue(excelValue: any, dbValue: any) {
   if (isEmptyExportValue(excelValue) && isEmptyExportValue(dbValue)) return true;
-  return norm(excelValue) === norm(dbValue);
+
+  return sameIdentity(
+    parseCell(excelValue) ?? String(excelValue ?? ""),
+    parseCell(dbValue) ?? String(dbValue ?? "")
+  );
 }
 
 function sameDateValue(excelDate: string | null, dbDate: any) {
@@ -353,6 +358,8 @@ export async function POST(req: Request) {
     // CRÍTICO:
     // - El UUID de columna SCO sigue siendo la única clave real de escritura.
     // - Las columnas visibles se validan para evitar SCO desalineados.
+    // - Las comparaciones de identidad ignoran mayúsculas, acentos,
+    //   espacios repetidos y caracteres de sustitución heredados.
     // - La lectura se hace por nombre de columna, no por posición, para que
     //   SCO Legacy u otras columnas auxiliares no desplacen el importador.
     // -------------------------------------------------------------
