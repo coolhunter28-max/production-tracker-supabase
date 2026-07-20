@@ -94,6 +94,7 @@ export async function getCurrentUserAccess(): Promise<CurrentUserAccess> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  console.log("USER =", user);
 
   if (!user) {
     return {

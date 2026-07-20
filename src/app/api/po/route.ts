@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
+import { syncAnalytics } from "@/lib/analytics/sync";
 import { createClient } from "@/lib/supabase";
 import { getCurrentUserAccess } from "@/lib/ownership";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 function text(value: unknown) {
   if (value === undefined || value === null) return null;
+
   const v = String(value).trim();
+
   return v === "" ? null : v;
 }
 
@@ -17,12 +21,20 @@ function dateOrNull(value: unknown) {
 
 function num(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
+
   const n = Number(String(value).replace(",", "."));
+
   return Number.isFinite(n) ? n : null;
 }
 
 function jsonError(message: string, status = 400) {
-  return NextResponse.json({ success: false, error: message }, { status });
+  return NextResponse.json(
+    {
+      success: false,
+      error: message,
+    },
+    { status }
+  );
 }
 
 function isBsgOperativa(value: unknown) {
@@ -31,12 +43,15 @@ function isBsgOperativa(value: unknown) {
 
 function addDays(dateValue: unknown, days: number) {
   const value = dateOrNull(dateValue);
+
   if (!value) return null;
 
   const [year, month, day] = value.split("-").map(Number);
+
   if (!year || !month || !day) return null;
 
   const date = new Date(Date.UTC(year, month - 1, day));
+
   date.setUTCDate(date.getUTCDate() + days);
 
   return date.toISOString().slice(0, 10);
@@ -44,12 +59,25 @@ function addDays(dateValue: unknown, days: number) {
 
 function normalizeSampleType(value: unknown) {
   const v = String(value ?? "").trim().toUpperCase();
+
   if (v === "DEVELOPMENT") return "CFMS";
-  if (v === "COUNTER" || v === "COUNTER SAMPLE") return "COUNTERS";
-  if (v === "FITTING" || v === "FITTING SAMPLE") return "FITTINGS";
-  if (v === "SHIPPING" || v === "SHIPPING SAMPLE" || v === "SHIPPING SAMPLES") {
+
+  if (v === "COUNTER" || v === "COUNTER SAMPLE") {
+    return "COUNTERS";
+  }
+
+  if (v === "FITTING" || v === "FITTING SAMPLE") {
+    return "FITTINGS";
+  }
+
+  if (
+    v === "SHIPPING" ||
+    v === "SHIPPING SAMPLE" ||
+    v === "SHIPPING SAMPLES"
+  ) {
     return "SHIPPINGS";
   }
+
   return v || null;
 }
 
@@ -60,7 +88,11 @@ function isNoNeedSample(round: unknown, estado: unknown) {
   );
 }
 
-function calculateFechaTeoricaMuestra(muestra: any, linea: any, poDate: unknown) {
+function calculateFechaTeoricaMuestra(
+  muestra: any,
+  linea: any,
+  poDate: unknown
+) {
   const round = text(muestra.round) ?? "Round 1";
 
   if (isNoNeedSample(round, muestra.estado_muestra)) {
@@ -72,13 +104,17 @@ function calculateFechaTeoricaMuestra(muestra: any, linea: any, poDate: unknown)
   switch (tipoMuestra) {
     case "COUNTERS":
       return addDays(poDate, 10);
+
     case "CFMS":
     case "FITTINGS":
       return addDays(poDate, 25);
+
     case "PPS":
       return addDays(poDate, 45);
+
     case "SHIPPINGS":
       return addDays(linea.finish_date, -7);
+
     case "TESTINGS":
     default:
       return null;
@@ -90,19 +126,24 @@ function buildLineaPayload(linea: any, poId: string) {
 
   return {
     po_id: poId,
+
     reference: text(linea.reference) ?? "",
     style: text(linea.style) ?? "",
     color: text(linea.color) ?? "",
     size_run: text(linea.size_run),
     category: text(linea.category),
     channel,
+
     qty: num(linea.qty) ?? 0,
     price: num(linea.price),
     amount: num(linea.amount),
+
     pi_number: text(linea.pi_number),
     pi_bsg: isBsgOperativa(channel) ? text(linea.pi_bsg) : null,
+
     price_selling: num(linea.price_selling),
     amount_selling: num(linea.amount_selling),
+
     factory: text(linea.factory),
     etd: dateOrNull(linea.etd),
     booking: dateOrNull(linea.booking),
@@ -110,15 +151,20 @@ function buildLineaPayload(linea: any, poId: string) {
     shipping_date: dateOrNull(linea.shipping_date),
     inspection: dateOrNull(linea.inspection),
     estado_inspeccion: text(linea.estado_inspeccion),
+
     trial_upper: text(linea.trial_upper),
     trial_lasting: text(linea.trial_lasting),
     lasting: text(linea.lasting),
     finish_date: dateOrNull(linea.finish_date),
+
     modelo_id: text(linea.modelo_id),
     variante_id: text(linea.variante_id),
 
-    // Snapshot histórico: se captura al crear la línea.
-    // No debe recalcularse por cambios posteriores en Master.
+    /*
+     * Snapshot histórico:
+     * se captura al crear la línea y no debe recalcularse
+     * por cambios posteriores en Master.
+     */
     master_buy_price_used: num(linea.master_buy_price_used),
     master_sell_price_used: num(linea.master_sell_price_used),
     master_currency_used: text(linea.master_currency_used),
@@ -132,7 +178,7 @@ function buildMuestraPayload(
   muestra: any,
   lineaPedidoId: string,
   linea: any,
-  poDate: unknown,
+  poDate: unknown
 ) {
   const round = text(muestra.round) ?? "Round 1";
   const isNoNeed = isNoNeedSample(round, muestra.estado_muestra);
@@ -141,10 +187,22 @@ function buildMuestraPayload(
     linea_pedido_id: lineaPedidoId,
     tipo_muestra: normalizeSampleType(muestra.tipo_muestra),
     round,
-    fecha_teorica: isNoNeed ? null : calculateFechaTeoricaMuestra(muestra, linea, poDate),
-    fecha_muestra: isNoNeed ? null : dateOrNull(muestra.fecha_muestra),
-    estado_muestra: isNoNeed ? "N/N" : text(muestra.estado_muestra) ?? "Pendiente",
-    notas: isNoNeed ? text(muestra.notas) ?? "No Need" : text(muestra.notas),
+
+    fecha_teorica: isNoNeed
+      ? null
+      : calculateFechaTeoricaMuestra(muestra, linea, poDate),
+
+    fecha_muestra: isNoNeed
+      ? null
+      : dateOrNull(muestra.fecha_muestra),
+
+    estado_muestra: isNoNeed
+      ? "N/N"
+      : text(muestra.estado_muestra) ?? "Pendiente",
+
+    notas: isNoNeed
+      ? text(muestra.notas) ?? "No Need"
+      : text(muestra.notas),
   };
 }
 
@@ -157,16 +215,34 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
+
   const po = body.po ?? {};
-  const lineas = Array.isArray(body.lineas_pedido) ? body.lineas_pedido : [];
+
+  const lineas = Array.isArray(body.lineas_pedido)
+    ? body.lineas_pedido
+    : [];
 
   const customer = text(po.customer);
 
-  if (!customer) return jsonError("Customer es obligatorio.");
-  if (!text(po.po)) return jsonError("PO es obligatorio.");
-  if (!text(po.season)) return jsonError("Season es obligatoria.");
-  if (!text(po.supplier)) return jsonError("Supplier es obligatorio.");
-  if (lineas.length === 0) return jsonError("Debes añadir al menos una línea.");
+  if (!customer) {
+    return jsonError("Customer es obligatorio.");
+  }
+
+  if (!text(po.po)) {
+    return jsonError("PO es obligatorio.");
+  }
+
+  if (!text(po.season)) {
+    return jsonError("Season es obligatoria.");
+  }
+
+  if (!text(po.supplier)) {
+    return jsonError("Supplier es obligatorio.");
+  }
+
+  if (lineas.length === 0) {
+    return jsonError("Debes añadir al menos una línea.");
+  }
 
   for (const [index, linea] of lineas.entries()) {
     if (!text(linea.factory)) {
@@ -174,12 +250,20 @@ export async function POST(req: Request) {
     }
   }
 
-  if (!access.canSeeAllCustomers && !access.customers.includes(customer)) {
-    return jsonError("No puedes crear POs para un cliente fuera de tu cartera.", 403);
+  if (
+    !access.canSeeAllCustomers &&
+    !access.customers.includes(customer)
+  ) {
+    return jsonError(
+      "No puedes crear POs para un cliente fuera de tu cartera.",
+      403
+    );
   }
 
-  // La cabecera contiene únicamente datos comunes al pedido.
-  // Factory y planificación operativa se guardan exclusivamente por línea.
+  /*
+   * La cabecera contiene únicamente datos realmente comunes al pedido.
+   * Factory y planificación operativa se guardan exclusivamente por línea.
+   */
   const { data: createdPO, error: poError } = await supabase
     .from("pos")
     .insert({
@@ -194,7 +278,9 @@ export async function POST(req: Request) {
     .select("*")
     .single();
 
-  if (poError) return jsonError(poError.message, 500);
+  if (poError) {
+    return jsonError(poError.message, 500);
+  }
 
   for (const linea of lineas) {
     const lineaPayload = buildLineaPayload(
@@ -211,24 +297,65 @@ export async function POST(req: Request) {
       .select("id")
       .single();
 
-    if (lineaError) return jsonError(lineaError.message, 500);
+    if (lineaError) {
+      return jsonError(lineaError.message, 500);
+    }
 
-    const muestras = Array.isArray(linea.muestras) ? linea.muestras : [];
+    const muestras = Array.isArray(linea.muestras)
+      ? linea.muestras
+      : [];
 
     if (muestras.length > 0) {
       const muestrasPayload = muestras
         .filter((muestra: any) => text(muestra.tipo_muestra))
-        .map((muestra: any) => buildMuestraPayload(muestra, createdLinea.id, linea, po.po_date));
+        .map((muestra: any) =>
+          buildMuestraPayload(
+            muestra,
+            createdLinea.id,
+            linea,
+            po.po_date
+          )
+        );
 
       if (muestrasPayload.length > 0) {
         const { error: muestrasError } = await supabase
           .from("muestras")
           .insert(muestrasPayload);
 
-        if (muestrasError) return jsonError(muestrasError.message, 500);
+        if (muestrasError) {
+          return jsonError(muestrasError.message, 500);
+        }
       }
     }
   }
 
-  return NextResponse.json({ success: true, po: createdPO });
+  /*
+   * La sincronización se ejecuta una sola vez después de completar
+   * correctamente toda la escritura operativa.
+   *
+   * Un fallo de Analytics no invalida la PO creada.
+   */
+  const analyticsSync = await syncAnalytics({
+    source: "po.create",
+  });
+
+  if (!analyticsSync.ok) {
+    console.warn(
+      "[PO_CREATED_ANALYTICS_PENDING]",
+      {
+        poId: createdPO.id,
+        po: createdPO.po,
+        error: analyticsSync.errorMessage,
+      }
+    );
+  }
+
+  return NextResponse.json({
+    success: true,
+    po: createdPO,
+    analytics_sync: {
+      ok: analyticsSync.ok,
+      status: analyticsSync.status,
+    },
+  });
 }

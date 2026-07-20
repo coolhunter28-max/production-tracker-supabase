@@ -1,5 +1,6 @@
 ﻿// src/app/api/import-csv/route.ts
 import { NextResponse } from "next/server";
+import { syncAnalytics } from "@/lib/analytics/sync";
 import { createClient } from "@supabase/supabase-js";
 
 import { getCurrentUserAccess } from "@/lib/ownership";
@@ -709,6 +710,44 @@ export async function POST(req: Request) {
       },
     });
 
+    // Import Spain admite resultados parciales. Si alguna escritura operativa
+    // se completó, Analytics debe reflejarla aunque otras filas hayan fallado.
+    // Un fallo de Analytics no invalida la importación operativa.
+    const huboCambios =
+      posCreados > 0 ||
+      posActualizados > 0 ||
+      lineasCreadas > 0 ||
+      lineasActualizadas > 0;
+
+    let analyticsSync:
+      | {
+          ok: boolean;
+          status: "SUCCESS" | "FAILED";
+        }
+      | null = null;
+
+    if (huboCambios) {
+      const syncResult = await syncAnalytics({
+        source: "import.spain",
+      });
+
+      analyticsSync = {
+        ok: syncResult.ok,
+        status: syncResult.status,
+      };
+
+      if (!syncResult.ok) {
+        console.warn("[IMPORT_SPAIN_ANALYTICS_PENDING]", {
+          posCreados,
+          posActualizados,
+          lineasCreadas,
+          lineasActualizadas,
+          errores,
+          error: syncResult.errorMessage,
+        });
+      }
+    }
+
     return NextResponse.json({
       mensaje: "ImportaciÃ³n finalizada",
       ok,
@@ -720,6 +759,7 @@ export async function POST(req: Request) {
       lineas_actualizadas: lineasActualizadas,
       lineas_canceladas: lineasCanceladas,
       avisos,
+      analytics_sync: analyticsSync,
       detalles: { cambios },
     });
   } catch (error: any) {

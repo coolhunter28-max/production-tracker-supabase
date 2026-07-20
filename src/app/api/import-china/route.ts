@@ -1,5 +1,6 @@
 // src/app/api/import-china/route.ts
 import { NextResponse } from "next/server";
+import { syncAnalytics } from "@/lib/analytics/sync";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentUserAccess } from "@/lib/ownership";
 import { sameIdentity } from "@/lib/normalize-identity";
@@ -639,6 +640,42 @@ export async function POST(req: Request) {
     }
 
     // -------------------------------------------------------------
+    // SINCRONIZACIÓN ANALYTICS
+    //
+    // Se ejecuta una sola vez después de completar todas las escrituras.
+    // Si no hubo cambios reales, no es necesario refrescar Analytics.
+    // Un fallo de Analytics no invalida la importación operativa.
+    // -------------------------------------------------------------
+    let analyticsSync:
+      | {
+          ok: boolean;
+          status: "SUCCESS" | "FAILED";
+        }
+      | null = null;
+
+    const huboCambios =
+      lineasActualizadas > 0 || muestrasActualizadas > 0;
+
+    if (errores.length === 0 && huboCambios) {
+      const syncResult = await syncAnalytics({
+        source: "import.china",
+      });
+
+      analyticsSync = {
+        ok: syncResult.ok,
+        status: syncResult.status,
+      };
+
+      if (!syncResult.ok) {
+        console.warn("[IMPORT_CHINA_ANALYTICS_PENDING]", {
+          lineasActualizadas,
+          muestrasActualizadas,
+          error: syncResult.errorMessage,
+        });
+      }
+    }
+
+    // -------------------------------------------------------------
     // RESPUESTA FINAL
     // -------------------------------------------------------------
     return NextResponse.json({
@@ -648,6 +685,7 @@ export async function POST(req: Request) {
       muestras_actualizadas: muestrasActualizadas,
       avisos,
       errores,
+      analytics_sync: analyticsSync,
       detalles: { cambios },
     });
   } catch (error: any) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
 import { getCurrentUserAccess } from "@/lib/ownership";
+import { syncAnalytics } from "@/lib/analytics/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -490,7 +491,24 @@ export async function PUT(req: Request, { params }: RouteContext) {
     }
   }
 
-  return NextResponse.json({ success: true });
+  const analyticsSync = await syncAnalytics({
+    source: "po.update",
+  });
+  
+  if (!analyticsSync.ok) {
+    console.warn("[PO_UPDATED_ANALYTICS_PENDING]", {
+      poId,
+      error: analyticsSync.errorMessage,
+    });
+  }
+  
+  return NextResponse.json({
+    success: true,
+    analytics_sync: {
+      ok: analyticsSync.ok,
+      status: analyticsSync.status,
+    },
+  });
 }
 
 export async function DELETE(_req: Request, { params }: RouteContext) {
@@ -525,5 +543,22 @@ export async function DELETE(_req: Request, { params }: RouteContext) {
 
   if (error) return jsonError(error.message, 500);
 
-  return NextResponse.json({ success: true });
+  const analyticsSync = await syncAnalytics({
+    source: "po.delete",
+  });
+
+  if (!analyticsSync.ok) {
+    console.warn("[PO_DELETED_ANALYTICS_PENDING]", {
+      poId,
+      error: analyticsSync.errorMessage,
+    });
+  }
+
+  return NextResponse.json({
+    success: true,
+    analytics_sync: {
+      ok: analyticsSync.ok,
+      status: analyticsSync.status,
+    },
+  });
 }

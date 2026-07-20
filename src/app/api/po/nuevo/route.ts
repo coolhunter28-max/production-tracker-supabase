@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { syncAnalytics } from "@/lib/analytics/sync";
 import { createClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -382,7 +383,37 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, id: poId });
+    /*
+     * Analytics se sincroniza una sola vez, cuando la operación completa
+     * ya ha finalizado correctamente.
+     *
+     * Un fallo de Analytics no invalida ni elimina la PO creada.
+     * syncAnalytics() devuelve el fallo como resultado y lo registra
+     * para que pueda consultarse y reintentarse desde administración.
+     */
+    const analyticsSync = await syncAnalytics({
+      source: "po.create",
+    });
+
+    if (!analyticsSync.ok) {
+      console.warn(
+        "⚠️ PO creada, pero Analytics queda pendiente de sincronización:",
+        {
+          poId,
+          po: poNumber,
+          error: analyticsSync.errorMessage,
+        }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      id: poId,
+      analytics_sync: {
+        ok: analyticsSync.ok,
+        status: analyticsSync.status,
+      },
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error creando PO";
 
