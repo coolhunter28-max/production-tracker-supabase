@@ -938,3 +938,19 @@ Resultado esperado:
 Compilación completa sin errores de TypeScript.
 
 Esta versión sustituye a v7.1 como referencia principal del proyecto.
+
+# 22. Sincronización automática de Analytics
+
+Toda escritura operativa relevante ejecuta `syncAnalytics()` al finalizar.
+
+Reglas:
+- nunca bloquear la operativa;
+- una sincronización por operación;
+- registro en analytics_sync_status.
+
+Flujos:
+- po.create
+- po.update
+- po.delete
+- import.china
+- import.spain

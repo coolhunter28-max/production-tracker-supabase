@@ -126,9 +126,9 @@ export async function getSituationFilterOptions(): Promise<SituationFilterOption
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("mv_fact_operacion_linea")
-    .select("season, customer, factory, operativa_code")
-    .limit(10000);
+  .from("mv_fact_operacion_linea_v2")
+  .select("season, customer, factory, operativa_code")
+  .limit(10000);
 
   if (error) {
     console.error("[situation] filter options error", error);

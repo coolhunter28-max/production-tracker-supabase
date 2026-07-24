@@ -9,6 +9,7 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  Compass,
   Factory,
   GitBranch,
   Home,
@@ -41,6 +42,11 @@ const sections: NavSection[] = [
     title: "Executive",
     icon: <Zap className="h-4 w-4" />,
     items: [{ label: "Overview", href: "/analytics/executive" }],
+  },
+  {
+    title: "Explorador Analítico",
+    icon: <Compass className="h-4 w-4" />,
+    items: [{ label: "Explorador", href: "/analytics/explorer" }],
   },
   {
     title: "Visual Analytics",
