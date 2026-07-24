@@ -1,19 +1,19 @@
 import Link from "next/link";
 import {
-    ArrowRight,
-    BarChart3,
-    Boxes,
-    Briefcase,
-    Factory,
-    FlaskConical,
-    FolderOpen,
-    Globe2,
-    PackageSearch,
-    RotateCcw,
-    ShieldCheck,
-    Truck,
-    type LucideIcon,
-  } from "lucide-react";
+  ArrowRight,
+  BarChart3,
+  Boxes,
+  Briefcase,
+  Factory,
+  FlaskConical,
+  FolderOpen,
+  Globe2,
+  PackageSearch,
+  RotateCcw,
+  ShieldCheck,
+  Truck,
+  type LucideIcon,
+} from "lucide-react";
 
 type PageProps = {
   searchParams: Record<string, string | string[] | undefined>;
@@ -32,7 +32,8 @@ type AreaKey =
 type AnalysisArea = {
   key: AreaKey;
   label: string;
-  description: string;
+  keywords: [string, string, string];
+  summary: string;
   icon: LucideIcon;
 };
 
@@ -40,60 +41,63 @@ const areas: AnalysisArea[] = [
   {
     key: "operations",
     label: "Operaciones",
-    description:
-      "Comprende la situación general de pedidos, producción y entregas.",
+    keywords: ["Pedidos", "Producción", "Entregas"],
+    summary: "Comprender la situación general del negocio.",
     icon: Boxes,
   },
   {
     key: "commercial",
     label: "Comercial",
-    description:
-      "Analiza ventas, clientes, temporadas y comportamiento comercial.",
-      icon: Briefcase,
+    keywords: ["Clientes", "Ventas", "Margen"],
+    summary: "Comprender el rendimiento comercial.",
+    icon: Briefcase,
   },
   {
     key: "product",
     label: "Producto",
-    description:
-      "Explora modelos, categorías, variantes y comportamiento del producto.",
+    keywords: ["Modelos", "Categorías", "Variantes"],
+    summary: "Comprender el comportamiento del producto.",
     icon: PackageSearch,
   },
   {
     key: "production",
     label: "Producción",
-    description:
-      "Estudia cantidades, fábricas, estados y evolución de la producción.",
+    keywords: ["Pedidos", "Fábricas", "Estados"],
+    summary: "Comprender la ejecución de la producción.",
     icon: Factory,
   },
   {
     key: "quality",
     label: "Calidad",
-    description:
-      "Investiga inspecciones, defectos, clientes, modelos y fábricas.",
+    keywords: ["Inspecciones", "Defectos", "Fábricas"],
+    summary: "Comprender el comportamiento de la calidad.",
     icon: ShieldCheck,
   },
   {
     key: "logistics",
     label: "Logística",
-    description:
-      "Analiza fechas, retrasos, entregas y cumplimiento logístico.",
+    keywords: ["Fechas", "Retrasos", "Entregas"],
+    summary: "Comprender el cumplimiento logístico.",
     icon: Truck,
   },
   {
     key: "development",
     label: "Desarrollo",
-    description:
-      "Comprende modelos, cotizaciones y conversión hacia producción.",
+    keywords: ["Modelos", "Cotizaciones", "Conversión"],
+    summary: "Comprender la evolución del desarrollo.",
     icon: FlaskConical,
   },
   {
     key: "all",
     label: "Explorar todo",
-    description:
-      "Empieza sin limitar el análisis a un área concreta del negocio.",
+    keywords: ["Todas las áreas", "Todas las preguntas", "Sin contexto inicial"],
+    summary: "Explorar todo el conocimiento disponible.",
     icon: Globe2,
   },
 ];
+
+const standardAreas = areas.filter((area) => area.key !== "all");
+const allAreasOption = areas.find((area) => area.key === "all");
 
 export default function AnalyticsExplorerPage({
   searchParams,
@@ -103,26 +107,7 @@ export default function AnalyticsExplorerPage({
 
   return (
     <main className="space-y-6">
-      <section className="rounded-2xl border bg-card p-5 shadow-sm md:p-7">
-        <div className="max-w-3xl">
-          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
-            <BarChart3 className="h-5 w-5" />
-          </div>
-
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Explorador Analítico
-          </p>
-
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">
-            ¿Qué quieres comprender?
-          </h1>
-
-          <p className="mt-2 text-sm leading-6 text-muted-foreground md:text-base">
-            Empieza por un área del negocio. Después construiremos la pregunta
-            paso a paso, sin necesidad de preparar previamente un informe.
-          </p>
-        </div>
-      </section>
+      <ExplorerHeader selectedArea={selectedArea} />
 
       {selectedArea ? (
         <SelectedAreaState area={selectedArea} />
@@ -130,50 +115,194 @@ export default function AnalyticsExplorerPage({
         <NewAnalysisSection />
       )}
 
-      <ExistingAnalysesSection />
+      {!selectedArea && <ExistingAnalysesSection />}
     </main>
+  );
+}
+
+function ExplorerHeader({
+  selectedArea,
+}: {
+  selectedArea: AnalysisArea | undefined;
+}) {
+  return (
+    <section className="rounded-2xl border bg-card p-5 shadow-sm md:p-7">
+      <div className="max-w-3xl">
+        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
+          <BarChart3 className="h-5 w-5" />
+        </div>
+
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Explorador Analítico
+        </p>
+
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">
+          ¿Qué quieres comprender hoy?
+        </h1>
+
+        <p className="mt-2 text-sm leading-6 text-muted-foreground md:text-base">
+          Construiremos el análisis paso a paso. Empieza eligiendo desde qué
+          área del negocio quieres explorar.
+        </p>
+
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <StepBadge
+            step="1"
+            label="Elegir área"
+            completed={Boolean(selectedArea)}
+          />
+
+          <div className="h-px w-8 bg-slate-200" />
+
+          <StepBadge
+            step="2"
+            label="Elegir pregunta"
+            active={Boolean(selectedArea)}
+          />
+
+          <div className="h-px w-8 bg-slate-200" />
+
+          <StepBadge step="3" label="Elegir desglose" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StepBadge({
+  step,
+  label,
+  active = false,
+  completed = false,
+}: {
+  step: string;
+  label: string;
+  active?: boolean;
+  completed?: boolean;
+}) {
+  const emphasized = active || completed;
+
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={`flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold ${
+          emphasized
+            ? "border-slate-900 bg-slate-900 text-white"
+            : "border-slate-200 bg-white text-slate-500"
+        }`}
+      >
+        {completed ? "✓" : step}
+      </span>
+
+      <span
+        className={`text-sm font-medium ${
+          emphasized ? "text-slate-900" : "text-slate-400"
+        }`}
+      >
+        {label}
+      </span>
+    </div>
   );
 }
 
 function NewAnalysisSection() {
   return (
-    <section className="space-y-4">
+    <section className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold">Nuevo análisis</h2>
-        <p className="text-sm text-muted-foreground">
-          Selecciona el contexto inicial de tu pregunta.
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Paso 1
+        </p>
+
+        <h2 className="mt-1 text-xl font-semibold">
+          Elige el punto de partida
+        </h2>
+
+        <p className="mt-1 text-sm text-muted-foreground">
+          No estás eligiendo un informe. Estás eligiendo desde qué parte del
+          negocio quieres empezar a explorar.
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {areas.map((area) => {
-          const Icon = area.icon;
-
-          return (
-            <Link
-              key={area.key}
-              href={`/analytics/explorer?area=${area.key}`}
-              className="group flex min-h-48 flex-col rounded-2xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-md"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-background text-slate-700">
-                <Icon className="h-5 w-5" />
-              </div>
-
-              <h3 className="mt-5 font-semibold">{area.label}</h3>
-
-              <p className="mt-2 flex-1 text-sm leading-6 text-muted-foreground">
-                {area.description}
-              </p>
-
-              <div className="mt-4 flex items-center gap-2 text-sm font-medium text-slate-900">
-                Empezar
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </div>
-            </Link>
-          );
-        })}
+        {standardAreas.map((area) => (
+          <AreaCard key={area.key} area={area} />
+        ))}
       </div>
+
+      {allAreasOption && <ExploreAllOption area={allAreasOption} />}
     </section>
+  );
+}
+
+function AreaCard({ area }: { area: AnalysisArea }) {
+  const Icon = area.icon;
+
+  return (
+    <Link
+      href={`/analytics/explorer?area=${area.key}`}
+      className="group flex min-h-52 flex-col rounded-2xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-md"
+    >
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-background text-slate-700">
+        <Icon className="h-5 w-5" />
+      </div>
+
+      <h3 className="mt-5 text-base font-semibold">{area.label}</h3>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {area.keywords.map((keyword) => (
+          <span
+            key={keyword}
+            className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+          >
+            {keyword}
+          </span>
+        ))}
+      </div>
+
+      <p className="mt-4 flex-1 text-sm leading-6 text-muted-foreground">
+        {area.summary}
+      </p>
+
+      <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-slate-900">
+        Elegir área
+        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+      </div>
+    </Link>
+  );
+}
+
+function ExploreAllOption({ area }: { area: AnalysisArea }) {
+  const Icon = area.icon;
+
+  return (
+    <div className="rounded-2xl border border-dashed bg-card p-5 md:p-6">
+      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border bg-background text-slate-700">
+            <Icon className="h-5 w-5" />
+          </div>
+
+          <div>
+            <h3 className="font-semibold">
+              ¿Prefieres empezar sin un contexto?
+            </h3>
+
+            <p className="mt-1 text-sm text-muted-foreground">
+              Explora todas las áreas del negocio sin limitar la pregunta
+              inicial.
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href={`/analytics/explorer?area=${area.key}`}
+          className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border bg-background px-4 text-sm font-semibold transition hover:bg-slate-50"
+        >
+          Explorar todo
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -190,14 +319,21 @@ function SelectedAreaState({ area }: { area: AnalysisArea }) {
 
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Análisis nuevo
+              Área seleccionada
             </p>
 
             <h2 className="mt-1 text-2xl font-semibold">{area.label}</h2>
 
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {area.description}
-            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {area.keywords.map((keyword) => (
+                <span
+                  key={keyword}
+                  className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+                >
+                  {keyword}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -212,7 +348,7 @@ function SelectedAreaState({ area }: { area: AnalysisArea }) {
 
       <div className="mt-7 rounded-xl border border-dashed bg-background p-6">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Siguiente paso
+          Paso 2
         </p>
 
         <h3 className="mt-2 text-lg font-semibold">
@@ -220,8 +356,8 @@ function SelectedAreaState({ area }: { area: AnalysisArea }) {
         </h3>
 
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          El área ya está definida. En el siguiente incremento incorporaremos
-          las primeras preguntas de negocio compatibles con este contexto.
+          Ya tenemos el punto de partida. El siguiente incremento incorporará
+          las preguntas de negocio disponibles para esta área.
         </p>
       </div>
 
@@ -247,6 +383,7 @@ function AnalysisState({
       <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </dt>
+
       <dd className="mt-1 text-sm font-semibold">{value}</dd>
     </div>
   );
@@ -264,13 +401,13 @@ function ExistingAnalysesSection() {
           <div>
             <h2 className="font-semibold">Continuar análisis reciente</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Todavía no hay análisis recientes.
+              Sin análisis recientes.
             </p>
           </div>
         </div>
 
         <div className="mt-5 rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
-          Los análisis utilizados recientemente aparecerán aquí.
+          Tus últimos análisis aparecerán aquí.
         </div>
       </div>
 
@@ -283,13 +420,13 @@ function ExistingAnalysesSection() {
           <div>
             <h2 className="font-semibold">Abrir análisis guardado</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Todavía no hay análisis guardados.
+              Sin análisis guardados.
             </p>
           </div>
         </div>
 
         <div className="mt-5 rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
-          Los análisis personales y compartidos aparecerán aquí.
+          Tus análisis guardados aparecerán aquí.
         </div>
       </div>
     </section>
