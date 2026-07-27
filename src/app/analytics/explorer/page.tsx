@@ -29,12 +29,27 @@ type AreaKey =
   | "development"
   | "all";
 
+type ConceptKey =
+  | "sales"
+  | "margin"
+  | "customers"
+  | "seasons"
+  | "markets"
+  | "commercial-activity";
+
 type AnalysisArea = {
   key: AreaKey;
   label: string;
   keywords: [string, string, string];
   summary: string;
   icon: LucideIcon;
+};
+
+type AnalyticalConcept = {
+  key: ConceptKey;
+  label: string;
+  description: string;
+  context?: string;
 };
 
 const areas: AnalysisArea[] = [
@@ -90,9 +105,50 @@ const areas: AnalysisArea[] = [
   {
     key: "all",
     label: "Explorar todo",
-    keywords: ["Todas las áreas", "Todas las preguntas", "Sin contexto inicial"],
+    keywords: ["Todas las áreas", "Todos los conceptos", "Sin contexto inicial"],
     summary: "Explorar todo el conocimiento disponible.",
     icon: Globe2,
+  },
+];
+
+const commercialConcepts: AnalyticalConcept[] = [
+  {
+    key: "sales",
+    label: "Ventas",
+    description:
+      "Comprende el volumen económico generado por la actividad comercial.",
+  },
+  {
+    key: "margin",
+    label: "Margen",
+    description:
+      "Comprende el resultado económico obtenido dentro de la actividad comercial.",
+    context:
+      "El margen debe interpretarse junto con el volumen económico, la evolución temporal y el modelo operativo.",
+  },
+  {
+    key: "customers",
+    label: "Clientes",
+    description:
+      "Comprende cómo se distribuye y evoluciona la actividad entre los clientes.",
+  },
+  {
+    key: "seasons",
+    label: "Temporadas",
+    description:
+      "Comprende cómo cambia el comportamiento comercial entre campañas y temporadas.",
+  },
+  {
+    key: "markets",
+    label: "Mercados",
+    description:
+      "Comprende cómo se distribuye y evoluciona la actividad entre mercados.",
+  },
+  {
+    key: "commercial-activity",
+    label: "Actividad comercial",
+    description:
+      "Comprende la evolución general de la actividad comercial del negocio.",
   },
 ];
 
@@ -103,14 +159,32 @@ export default function AnalyticsExplorerPage({
   searchParams,
 }: PageProps) {
   const selectedAreaKey = getSelectedArea(searchParams.area);
-  const selectedArea = areas.find((area) => area.key === selectedAreaKey);
+
+  const selectedArea = areas.find(
+    (area) => area.key === selectedAreaKey,
+  );
+
+  const selectedConceptKey = getSelectedConcept(
+    selectedAreaKey,
+    searchParams.concept,
+  );
+
+  const selectedConcept = commercialConcepts.find(
+    (concept) => concept.key === selectedConceptKey,
+  );
 
   return (
     <main className="space-y-6">
-      <ExplorerHeader selectedArea={selectedArea} />
+      <ExplorerHeader
+        selectedArea={selectedArea}
+        selectedConcept={selectedConcept}
+      />
 
       {selectedArea ? (
-        <SelectedAreaState area={selectedArea} />
+        <SelectedAreaState
+          area={selectedArea}
+          selectedConcept={selectedConcept}
+        />
       ) : (
         <NewAnalysisSection />
       )}
@@ -122,12 +196,14 @@ export default function AnalyticsExplorerPage({
 
 function ExplorerHeader({
   selectedArea,
+  selectedConcept,
 }: {
   selectedArea: AnalysisArea | undefined;
+  selectedConcept: AnalyticalConcept | undefined;
 }) {
   return (
     <section className="rounded-2xl border bg-card p-5 shadow-sm md:p-7">
-      <div className="max-w-3xl">
+      <div className="max-w-4xl">
         <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
           <BarChart3 className="h-5 w-5" />
         </div>
@@ -141,8 +217,8 @@ function ExplorerHeader({
         </h1>
 
         <p className="mt-2 text-sm leading-6 text-muted-foreground md:text-base">
-          Construiremos el análisis paso a paso. Empieza eligiendo desde qué
-          área del negocio quieres explorar.
+          Construiremos el análisis paso a paso. En cada momento solo tendrás
+          que tomar una decisión.
         </p>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -156,13 +232,18 @@ function ExplorerHeader({
 
           <StepBadge
             step="2"
-            label="Elegir pregunta"
-            active={Boolean(selectedArea)}
+            label="Elegir concepto"
+            active={Boolean(selectedArea) && !selectedConcept}
+            completed={Boolean(selectedConcept)}
           />
 
           <div className="h-px w-8 bg-slate-200" />
 
-          <StepBadge step="3" label="Elegir desglose" />
+          <StepBadge
+            step="3"
+            label="Elegir perspectiva"
+            active={Boolean(selectedConcept)}
+          />
         </div>
       </div>
     </section>
@@ -288,7 +369,7 @@ function ExploreAllOption({ area }: { area: AnalysisArea }) {
             </h3>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              Explora todas las áreas del negocio sin limitar la pregunta
+              Explora todas las áreas del negocio sin limitar el concepto
               inicial.
             </p>
           </div>
@@ -306,7 +387,13 @@ function ExploreAllOption({ area }: { area: AnalysisArea }) {
   );
 }
 
-function SelectedAreaState({ area }: { area: AnalysisArea }) {
+function SelectedAreaState({
+  area,
+  selectedConcept,
+}: {
+  area: AnalysisArea;
+  selectedConcept: AnalyticalConcept | undefined;
+}) {
   const Icon = area.icon;
 
   return (
@@ -346,28 +433,175 @@ function SelectedAreaState({ area }: { area: AnalysisArea }) {
         </Link>
       </div>
 
-      <div className="mt-7 rounded-xl border border-dashed bg-background p-6">
+      {area.key === "commercial" ? (
+        selectedConcept ? (
+          <SelectedConceptState
+            area={area}
+            concept={selectedConcept}
+          />
+        ) : (
+          <CommercialConceptSelector />
+        )
+      ) : (
+        <PendingAreaState area={area} />
+      )}
+
+      <AnalysisSummary
+        area={area}
+        selectedConcept={selectedConcept}
+      />
+    </section>
+  );
+}
+
+function CommercialConceptSelector() {
+  return (
+    <div className="mt-7">
+      <div>
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Paso 2
         </p>
 
-        <h3 className="mt-2 text-lg font-semibold">
+        <h3 className="mt-1 text-xl font-semibold">
           ¿Qué quieres analizar?
         </h3>
 
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Ya tenemos el punto de partida. El siguiente incremento incorporará
-          las preguntas de negocio disponibles para esta área.
+        <p className="mt-1 text-sm text-muted-foreground">
+          Elige el concepto que necesitas comprender.
         </p>
       </div>
 
-      <dl className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <AnalysisState label="Área" value={area.label} />
-        <AnalysisState label="Pregunta" value="Sin definir" />
-        <AnalysisState label="Desglose" value="Sin definir" />
-        <AnalysisState label="Representación" value="Automática" />
-      </dl>
-    </section>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {commercialConcepts.map((concept) => (
+          <Link
+            key={concept.key}
+            href={`/analytics/explorer?area=commercial&concept=${concept.key}`}
+            className="group flex min-h-40 flex-col rounded-xl border bg-background p-5 transition hover:border-slate-400 hover:shadow-sm"
+          >
+            <h4 className="text-lg font-semibold">
+              {concept.label}
+            </h4>
+
+            <p className="mt-3 flex-1 text-sm leading-6 text-muted-foreground">
+              {concept.description}
+            </p>
+
+            <div className="mt-5 flex items-center gap-2 text-sm font-semibold">
+              Elegir concepto
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SelectedConceptState({
+  area,
+  concept,
+}: {
+  area: AnalysisArea;
+  concept: AnalyticalConcept;
+}) {
+  return (
+    <div className="mt-7 space-y-4">
+      <div className="rounded-xl border bg-background p-5 md:p-6">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Concepto seleccionado
+            </p>
+
+            <h3 className="mt-2 text-2xl font-semibold">
+              {concept.label}
+            </h3>
+
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+              {concept.description}
+            </p>
+          </div>
+
+          <Link
+            href={`/analytics/explorer?area=${area.key}`}
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border bg-white px-4 text-sm font-medium transition hover:bg-slate-50"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Cambiar concepto
+          </Link>
+        </div>
+
+        {concept.context && (
+          <div className="mt-5 rounded-lg border-l-4 border-slate-900 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">
+              Contexto necesario
+            </p>
+
+            <p className="mt-1 text-sm leading-6 text-slate-700">
+              {concept.context}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-dashed bg-background p-5 md:p-6">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Paso 3
+        </p>
+
+        <h3 className="mt-2 text-lg font-semibold">
+          ¿Desde qué perspectiva quieres observarlo?
+        </h3>
+
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+          En el siguiente incremento incorporaremos las perspectivas válidas
+          para este concepto.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PendingAreaState({ area }: { area: AnalysisArea }) {
+  return (
+    <div className="mt-7 rounded-xl border border-dashed bg-background p-6">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Paso 2
+      </p>
+
+      <h3 className="mt-2 text-lg font-semibold">
+        Conceptos de {area.label}
+      </h3>
+
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+        En este sprint estamos validando el modelo de interacción con el área
+        Comercial. Los conceptos de esta área se incorporarán después de
+        confirmar el patrón.
+      </p>
+    </div>
+  );
+}
+
+function AnalysisSummary({
+  area,
+  selectedConcept,
+}: {
+  area: AnalysisArea;
+  selectedConcept: AnalyticalConcept | undefined;
+}) {
+  return (
+    <dl className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <AnalysisState label="Área" value={area.label} />
+
+      <AnalysisState
+        label="Concepto"
+        value={selectedConcept?.label ?? "Sin definir"}
+      />
+
+      <AnalysisState label="Perspectiva" value="Sin definir" />
+
+      <AnalysisState label="Representación" value="Automática" />
+    </dl>
   );
 }
 
@@ -384,7 +618,9 @@ function AnalysisState({
         {label}
       </dt>
 
-      <dd className="mt-1 text-sm font-semibold">{value}</dd>
+      <dd className="mt-1 text-sm font-semibold leading-5">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -440,5 +676,22 @@ function getSelectedArea(
 
   return areas.some((area) => area.key === normalizedValue)
     ? (normalizedValue as AreaKey)
+    : undefined;
+}
+
+function getSelectedConcept(
+  area: AreaKey | undefined,
+  value: string | string[] | undefined,
+): ConceptKey | undefined {
+  if (area !== "commercial") {
+    return undefined;
+  }
+
+  const normalizedValue = Array.isArray(value) ? value[0] : value;
+
+  return commercialConcepts.some(
+    (concept) => concept.key === normalizedValue,
+  )
+    ? (normalizedValue as ConceptKey)
     : undefined;
 }
