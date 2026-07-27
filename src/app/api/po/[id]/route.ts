@@ -330,6 +330,7 @@ export async function GET(_req: Request, { params }: RouteContext) {
     .from("pos")
     .select("*, lineas_pedido(*, muestras(*))")
     .eq("id", poId)
+    .eq("lineas_pedido.estado", "ACTIVA")
     .single();
 
   if (error) return jsonError(error.message, 500);
@@ -382,7 +383,8 @@ export async function PUT(req: Request, { params }: RouteContext) {
   const { data: existingLineas, error: existingLineasError } = await accessStatus.supabase
     .from("lineas_pedido")
     .select("id")
-    .eq("po_id", poId);
+    .eq("po_id", poId)
+    .eq("estado", "ACTIVA");
 
   if (existingLineasError) return jsonError(existingLineasError.message, 500);
 

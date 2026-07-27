@@ -1,10 +1,16 @@
 import Link from "next/link";
+import { AnalyticsBarChart } from "@/components/analytics/charts/AnalyticsBarChart";
+import { AnalyticsRankingTable } from "@/components/analytics/tables/AnalyticsRankingTable";
 import {
   getCommercialSeasons,
   resolveAnalysisContext,
   type AnalysisContext,
   type CommercialSeasonOption,
 } from "@/lib/analytics/context/analysis-context";
+import {
+  getExplorerBsgMarginByCustomer,
+  type ExplorerBsgMarginByCustomerRow,
+} from "@/lib/analytics/explorer/bsg-margin";
 import {
   EXPLORER_CONCEPTS,
   type ExplorerConcept,
@@ -201,6 +207,13 @@ export default async function AnalyticsExplorerPage({
     selectedSeason,
   );
 
+  const explorerResult =
+    selectedConceptKey === "bsg-margin" &&
+    selectedPerspectiveKey === "customer" &&
+    analysisContext
+      ? await getExplorerBsgMarginByCustomer(analysisContext)
+      : undefined;
+
   return (
     <main className="space-y-6">
       <ExplorerHeader
@@ -223,6 +236,16 @@ export default async function AnalyticsExplorerPage({
       ) : (
         <NewAnalysisSection />
       )}
+
+      {analysisContext &&
+      selectedConceptKey === "bsg-margin" &&
+      selectedPerspectiveKey === "customer" &&
+      explorerResult ? (
+        <BsgMarginByCustomerResult
+          context={analysisContext}
+          rows={explorerResult}
+        />
+      ) : null}
 
       {!selectedArea && <ExistingAnalysesSection />}
     </main>
@@ -1028,6 +1051,89 @@ async function resolveSelectedAnalysisContext(
   }
 
   return resolveAnalysisContext({ season });
+}
+
+function BsgMarginByCustomerResult({
+  context,
+  rows,
+}: {
+  context: AnalysisContext;
+  rows: ExplorerBsgMarginByCustomerRow[];
+}) {
+  const tableRows = rows.map((row) => ({
+    ranking: row.ranking,
+    customer: row.customer,
+    current_value: row.current_value,
+    comparison_value: row.comparison_value,
+    delta_value: row.delta_value,
+    delta_pct: row.delta_pct,
+  }));
+
+  return (
+    <section className="space-y-5">
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Resultado automático
+        </p>
+        <h2 className="mt-1 text-xl font-semibold">
+          Margen BSG por cliente
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {context.label}. Datos agregados desde líneas de PO.
+        </p>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <AnalyticsBarChart
+          title="Ranking visual"
+          rows={tableRows}
+          labelKeys={["customer"]}
+          valueKeys={["current_value"]}
+          maxItems={10}
+        />
+
+<AnalyticsRankingTable
+  title={
+    context.type === "COMPARATIVE_SEASONS"
+      ? "Ranking y variación frente a campaña hermana"
+      : "Ranking de margen BSG"
+  }
+  rows={tableRows}
+  preferredColumns={
+    context.type === "COMPARATIVE_SEASONS"
+      ? [
+          "ranking",
+          "customer",
+          "current_value",
+          "comparison_value",
+          "delta_value",
+          "delta_pct",
+        ]
+      : ["ranking", "customer", "current_value"]
+  }
+  columnLabels={{
+    ranking: "Ranking",
+    customer: "Cliente",
+    current_value:
+      context.type === "COMPARATIVE_SEASONS"
+        ? "Margen campaña analizada"
+        : "Margen BSG",
+    comparison_value: "Margen campaña anterior",
+    delta_value: "Diferencia",
+    delta_pct: "Variación",
+  }}
+  columnFormats={{
+    ranking: "number",
+    current_value: "currency",
+    comparison_value: "currency",
+    delta_value: "currency",
+    delta_pct: "percentage",
+  }}
+  maxHeightClassName="max-h-[520px]"
+/>
+      </div>
+    </section>
+  );
 }
 
 function ExistingAnalysesSection() {
