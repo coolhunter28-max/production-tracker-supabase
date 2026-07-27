@@ -8,22 +8,8 @@ export type AnalysisContextType =
 
 export type AnalysisContext = {
   type: AnalysisContextType;
-
-  /**
-   * Temporadas principales incluidas en el análisis.
-   *
-   * En HISTORICAL permanece vacío porque el contexto
-   * incluye todo el histórico disponible.
-   */
   seasons: string[];
-
-  /**
-   * Temporadas utilizadas como referencia comparativa.
-   *
-   * Solo contiene valores en COMPARATIVE_SEASONS.
-   */
   comparisonSeasons: string[];
-
   label: string;
   isHistorical: boolean;
 };
@@ -31,14 +17,14 @@ export type AnalysisContext = {
 export type ResolveAnalysisContextOptions = {
   season?: string;
   historical?: boolean;
-
-  /**
-   * Compara la temporada indicada con su campaña hermana
-   * del mismo tipo comercial y del año anterior.
-   *
-   * Requiere una temporada explícita.
-   */
   compareWithPreviousSister?: boolean;
+};
+
+export type CommercialSeasonOption = {
+  season: string;
+  displayName: string;
+  previousSisterSeason: string | null;
+  isActive: boolean;
 };
 
 type ActiveSeasonRow = {
@@ -50,6 +36,8 @@ type CommercialSeasonRow = {
   season: string | null;
   previous_sister_season: string | null;
   display_name: string | null;
+  sequence_prefix: number | null;
+  is_active: boolean | null;
 };
 
 function cleanValue(value?: string): string | null {
@@ -63,8 +51,8 @@ function uniqueSeasons(seasons: string[]): string[] {
     new Set(
       seasons
         .map((season) => season.trim())
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   );
 }
 
@@ -91,7 +79,7 @@ async function getActiveSeasons(): Promise<string[]> {
 
   if (error) {
     throw new Error(
-      `[getActiveSeasons] No se pudieron cargar las temporadas activas: ${error.message}`
+      `[getActiveSeasons] No se pudieron cargar las temporadas activas: ${error.message}`,
     );
   }
 
@@ -100,24 +88,66 @@ async function getActiveSeasons(): Promise<string[]> {
   return uniqueSeasons(
     rows
       .map((row) => row.season?.trim() || "")
-      .filter(Boolean)
+      .filter(Boolean),
   );
 }
 
+export async function getCommercialSeasons(): Promise<
+  CommercialSeasonOption[]
+> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("vw_commercial_seasons_v1")
+    .select(
+      "season,display_name,previous_sister_season,sequence_prefix,is_active",
+    )
+    .not("season_type", "is", null)
+    .order("sequence_prefix", { ascending: false });
+
+  if (error) {
+    throw new Error(
+      `[getCommercialSeasons] No se pudieron cargar las campañas comerciales: ${error.message}`,
+    );
+  }
+
+  const rows = (data ?? []) as unknown as CommercialSeasonRow[];
+
+  return rows.flatMap((row) => {
+    const season = row.season?.trim();
+
+    if (!season) {
+      return [];
+    }
+
+    return [
+      {
+        season,
+        displayName: row.display_name?.trim() || season,
+        previousSisterSeason:
+          row.previous_sister_season?.trim() || null,
+        isActive: row.is_active === true,
+      },
+    ];
+  });
+}
+
 async function getCommercialSeason(
-  season: string
+  season: string,
 ): Promise<CommercialSeasonRow | null> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("vw_commercial_seasons_v1")
-    .select("season,previous_sister_season,display_name")
+    .select(
+      "season,previous_sister_season,display_name,sequence_prefix,is_active",
+    )
     .eq("season", season)
     .maybeSingle();
 
   if (error) {
     throw new Error(
-      `[getCommercialSeason] No se pudo resolver la campaña ${season}: ${error.message}`
+      `[getCommercialSeason] No se pudo resolver la campaña ${season}: ${error.message}`,
     );
   }
 
@@ -125,13 +155,13 @@ async function getCommercialSeason(
 }
 
 async function resolveComparativeContext(
-  season: string
+  season: string,
 ): Promise<AnalysisContext> {
   const currentSeason = await getCommercialSeason(season);
 
   if (!currentSeason?.season) {
     throw new Error(
-      `[resolveAnalysisContext] La campaña ${season} no existe en vw_commercial_seasons_v1`
+      `[resolveAnalysisContext] La campaña ${season} no existe en vw_commercial_seasons_v1`,
     );
   }
 
@@ -140,20 +170,19 @@ async function resolveComparativeContext(
 
   if (!previousSisterSeason) {
     throw new Error(
-      `[resolveAnalysisContext] La campaña ${season} no tiene campaña hermana anterior disponible`
+      `[resolveAnalysisContext] La campaña ${season} no tiene campaña hermana anterior disponible`,
     );
   }
 
-  const previousSeason =
-    await getCommercialSeason(previousSisterSeason);
+  const previousSeason = await getCommercialSeason(
+    previousSisterSeason,
+  );
 
   const currentLabel =
-    currentSeason.display_name?.trim() ||
-    currentSeason.season;
+    currentSeason.display_name?.trim() || currentSeason.season;
 
   const previousLabel =
-    previousSeason?.display_name?.trim() ||
-    previousSisterSeason;
+    previousSeason?.display_name?.trim() || previousSisterSeason;
 
   return {
     type: "COMPARATIVE_SEASONS",
@@ -164,18 +193,8 @@ async function resolveComparativeContext(
   };
 }
 
-/**
- * Resuelve el contexto temporal compartido por Analytics.
- *
- * Prioridad:
- *
- * 1. Histórico explícito.
- * 2. Comparación explícita con campaña hermana.
- * 3. Temporada concreta.
- * 4. Temporadas activas por defecto.
- */
 export async function resolveAnalysisContext(
-  options: ResolveAnalysisContextOptions = {}
+  options: ResolveAnalysisContextOptions = {},
 ): Promise<AnalysisContext> {
   if (options.historical === true) {
     return {
@@ -192,7 +211,7 @@ export async function resolveAnalysisContext(
   if (options.compareWithPreviousSister === true) {
     if (!explicitSeason) {
       throw new Error(
-        "[resolveAnalysisContext] La comparación con campaña hermana requiere una temporada explícita"
+        "[resolveAnalysisContext] La comparación con campaña hermana requiere una temporada explícita",
       );
     }
 
@@ -220,15 +239,8 @@ export async function resolveAnalysisContext(
   };
 }
 
-/**
- * Alias de compatibilidad con Executive.
- */
-export type ExecutiveAnalysisContextType =
-  AnalysisContextType;
-
-export type ExecutiveAnalysisContext =
-  AnalysisContext;
-
+export type ExecutiveAnalysisContextType = AnalysisContextType;
+export type ExecutiveAnalysisContext = AnalysisContext;
 export type ResolveExecutiveAnalysisContextOptions =
   ResolveAnalysisContextOptions;
 

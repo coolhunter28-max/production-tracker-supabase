@@ -1,5 +1,11 @@
 import Link from "next/link";
 import {
+  getCommercialSeasons,
+  resolveAnalysisContext,
+  type AnalysisContext,
+  type CommercialSeasonOption,
+} from "@/lib/analytics/context/analysis-context";
+import {
   EXPLORER_CONCEPTS,
   type ExplorerConcept,
   type ExplorerConceptId,
@@ -41,6 +47,12 @@ type PerspectiveKey =
   | "factory"
   | "season"
   | "operativa";
+
+type ContextKey =
+  | "active"
+  | "single"
+  | "comparative"
+  | "historical";
 
 type AnalysisArea = {
   key: AreaKey;
@@ -145,7 +157,7 @@ const marginPerspectives: AnalyticalPerspective[] = [
 const standardAreas = areas.filter((area) => area.key !== "all");
 const allAreasOption = areas.find((area) => area.key === "all");
 
-export default function AnalyticsExplorerPage({
+export default async function AnalyticsExplorerPage({
   searchParams,
 }: PageProps) {
   const selectedAreaKey = getSelectedArea(searchParams.area);
@@ -173,12 +185,29 @@ export default function AnalyticsExplorerPage({
     (perspective) => perspective.key === selectedPerspectiveKey,
   );
 
+  const selectedContextKey = getSelectedContext(
+    selectedPerspectiveKey,
+    searchParams.context,
+  );
+
+  const selectedSeason = getSearchParam(searchParams.season);
+
+  const commercialSeasons = selectedPerspective
+    ? await getCommercialSeasons()
+    : [];
+
+  const analysisContext = await resolveSelectedAnalysisContext(
+    selectedContextKey,
+    selectedSeason,
+  );
+
   return (
     <main className="space-y-6">
       <ExplorerHeader
         selectedArea={selectedArea}
         selectedConcept={selectedConcept}
         selectedPerspective={selectedPerspective}
+        analysisContext={analysisContext}
       />
 
       {selectedArea ? (
@@ -186,6 +215,10 @@ export default function AnalyticsExplorerPage({
           area={selectedArea}
           selectedConcept={selectedConcept}
           selectedPerspective={selectedPerspective}
+          selectedContextKey={selectedContextKey}
+          selectedSeason={selectedSeason}
+          commercialSeasons={commercialSeasons}
+          analysisContext={analysisContext}
         />
       ) : (
         <NewAnalysisSection />
@@ -200,10 +233,12 @@ function ExplorerHeader({
   selectedArea,
   selectedConcept,
   selectedPerspective,
+  analysisContext,
 }: {
   selectedArea: AnalysisArea | undefined;
   selectedConcept: ExplorerConcept | undefined;
   selectedPerspective: AnalyticalPerspective | undefined;
+  analysisContext: AnalysisContext | undefined;
 }) {
   return (
     <section className="rounded-2xl border bg-card p-5 shadow-sm md:p-7">
@@ -248,6 +283,15 @@ function ExplorerHeader({
             label="Elegir perspectiva"
             active={Boolean(selectedConcept) && !selectedPerspective}
             completed={Boolean(selectedPerspective)}
+          />
+
+          <div className="h-px w-8 bg-slate-200" />
+
+          <StepBadge
+            step="4"
+            label="Elegir contexto"
+            active={Boolean(selectedPerspective) && !analysisContext}
+            completed={Boolean(analysisContext)}
           />
         </div>
       </div>
@@ -396,10 +440,18 @@ function SelectedAreaState({
   area,
   selectedConcept,
   selectedPerspective,
+  selectedContextKey,
+  selectedSeason,
+  commercialSeasons,
+  analysisContext,
 }: {
   area: AnalysisArea;
   selectedConcept: ExplorerConcept | undefined;
   selectedPerspective: AnalyticalPerspective | undefined;
+  selectedContextKey: ContextKey | undefined;
+  selectedSeason: string | undefined;
+  commercialSeasons: CommercialSeasonOption[];
+  analysisContext: AnalysisContext | undefined;
 }) {
   const Icon = area.icon;
 
@@ -446,6 +498,10 @@ function SelectedAreaState({
             area={area}
             concept={selectedConcept}
             selectedPerspective={selectedPerspective}
+            selectedContextKey={selectedContextKey}
+            selectedSeason={selectedSeason}
+            commercialSeasons={commercialSeasons}
+            analysisContext={analysisContext}
           />
         ) : (
           <CommercialConceptSelector />
@@ -458,6 +514,7 @@ function SelectedAreaState({
         area={area}
         selectedConcept={selectedConcept}
         selectedPerspective={selectedPerspective}
+        analysisContext={analysisContext}
       />
     </section>
   );
@@ -508,10 +565,18 @@ function SelectedConceptState({
   area,
   concept,
   selectedPerspective,
+  selectedContextKey,
+  selectedSeason,
+  commercialSeasons,
+  analysisContext,
 }: {
   area: AnalysisArea;
   concept: ExplorerConcept;
   selectedPerspective: AnalyticalPerspective | undefined;
+  selectedContextKey: ContextKey | undefined;
+  selectedSeason: string | undefined;
+  commercialSeasons: CommercialSeasonOption[];
+  analysisContext: AnalysisContext | undefined;
 }) {
   return (
     <div className="mt-7 space-y-4">
@@ -557,6 +622,10 @@ function SelectedConceptState({
             area={area}
             concept={concept}
             perspective={selectedPerspective}
+            selectedContextKey={selectedContextKey}
+            selectedSeason={selectedSeason}
+            commercialSeasons={commercialSeasons}
+            analysisContext={analysisContext}
           />
         ) : (
           <MarginPerspectiveSelector />
@@ -613,10 +682,18 @@ function SelectedPerspectiveState({
   area,
   concept,
   perspective,
+  selectedContextKey,
+  selectedSeason,
+  commercialSeasons,
+  analysisContext,
 }: {
   area: AnalysisArea;
   concept: ExplorerConcept;
   perspective: AnalyticalPerspective;
+  selectedContextKey: ContextKey | undefined;
+  selectedSeason: string | undefined;
+  commercialSeasons: CommercialSeasonOption[];
+  analysisContext: AnalysisContext | undefined;
 }) {
   return (
     <div className="rounded-xl border bg-background p-5 md:p-6">
@@ -644,17 +721,14 @@ function SelectedPerspectiveState({
         </Link>
       </div>
 
-      <div className="mt-5 rounded-lg border border-dashed bg-slate-50 px-4 py-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">
-          Análisis preparado
-        </p>
-
-        <p className="mt-1 text-sm leading-6 text-slate-700">
-          Ya está definida la pregunta analítica: {concept.label} por{" "}
-          {perspective.label}. El siguiente incremento conectará esta selección
-          con la capa de datos.
-        </p>
-      </div>
+      <AnalysisContextSelector
+        concept={concept}
+        perspective={perspective}
+        selectedContextKey={selectedContextKey}
+        selectedSeason={selectedSeason}
+        commercialSeasons={commercialSeasons}
+        analysisContext={analysisContext}
+      />
     </div>
   );
 }
@@ -707,13 +781,15 @@ function AnalysisSummary({
   area,
   selectedConcept,
   selectedPerspective,
+  analysisContext,
 }: {
   area: AnalysisArea;
   selectedConcept: ExplorerConcept | undefined;
   selectedPerspective: AnalyticalPerspective | undefined;
+  analysisContext: AnalysisContext | undefined;
 }) {
   return (
-    <dl className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <dl className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       <AnalysisState label="Área" value={area.label} />
 
       <AnalysisState
@@ -724,6 +800,11 @@ function AnalysisSummary({
       <AnalysisState
         label="Perspectiva"
         value={selectedPerspective?.label ?? "Sin definir"}
+      />
+
+      <AnalysisState
+        label="Contexto"
+        value={analysisContext?.label ?? "Sin definir"}
       />
 
       <AnalysisState label="Representación" value="Automática" />
@@ -747,6 +828,206 @@ function AnalysisState({
       <dd className="mt-1 text-sm font-semibold leading-5">{value}</dd>
     </div>
   );
+}
+
+
+function AnalysisContextSelector({
+  concept,
+  perspective,
+  selectedContextKey,
+  selectedSeason,
+  commercialSeasons,
+  analysisContext,
+}: {
+  concept: ExplorerConcept;
+  perspective: AnalyticalPerspective;
+  selectedContextKey: ContextKey | undefined;
+  selectedSeason: string | undefined;
+  commercialSeasons: CommercialSeasonOption[];
+  analysisContext: AnalysisContext | undefined;
+}) {
+  const basePath = `/analytics/explorer?area=commercial&concept=${concept.id}&perspective=${perspective.key}`;
+
+  const options: Array<{
+    key: ContextKey;
+    label: string;
+    description: string;
+  }> = [
+    {
+      key: "active",
+      label: "Campañas activas",
+      description:
+        "Analiza conjuntamente las campañas que están activas en este momento.",
+    },
+    {
+      key: "single",
+      label: "Una campaña",
+      description:
+        "Centra el análisis en una campaña comercial concreta.",
+    },
+    {
+      key: "comparative",
+      label: "Campaña vs hermana",
+      description:
+        "Compara una campaña con la campaña del mismo tipo del año anterior.",
+    },
+    {
+      key: "historical",
+      label: "Histórico completo",
+      description:
+        "Observa toda la información histórica disponible.",
+    },
+  ];
+
+  return (
+    <div className="mt-5 rounded-xl border border-dashed bg-slate-50 p-5">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Paso 4
+      </p>
+
+      <h4 className="mt-2 text-lg font-semibold">
+        ¿En qué periodo quieres analizarlo?
+      </h4>
+
+      {!selectedContextKey ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {options.map((option) => (
+            <Link
+              key={option.key}
+              href={`${basePath}&context=${option.key}`}
+              className="group rounded-xl border bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"
+            >
+              <p className="font-semibold">{option.label}</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {option.description}
+              </p>
+            </Link>
+          ))}
+        </div>
+      ) : selectedContextKey === "single" ||
+        selectedContextKey === "comparative" ? (
+        selectedSeason && analysisContext ? (
+          <ResolvedContext
+            label={analysisContext.label}
+            changeHref={basePath}
+          />
+        ) : (
+          <div className="mt-4">
+            <p className="text-sm text-muted-foreground">
+              Selecciona la campaña de referencia.
+            </p>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {commercialSeasons.map((season) => {
+                const disabled =
+                  selectedContextKey === "comparative" &&
+                  !season.previousSisterSeason;
+
+                if (disabled) {
+                  return (
+                    <div
+                      key={season.season}
+                      className="rounded-lg border bg-slate-100 px-4 py-3 opacity-60"
+                    >
+                      <p className="font-semibold">{season.displayName}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Sin campaña hermana anterior
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={season.season}
+                    href={`${basePath}&context=${selectedContextKey}&season=${encodeURIComponent(season.season)}`}
+                    className="rounded-lg border bg-white px-4 py-3 transition hover:border-slate-400"
+                  >
+                    <p className="font-semibold">{season.displayName}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {season.season}
+                      {selectedContextKey === "comparative" &&
+                      season.previousSisterSeason
+                        ? ` vs ${season.previousSisterSeason}`
+                        : ""}
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+
+            <Link
+              href={basePath}
+              className="mt-4 inline-flex text-sm font-medium underline underline-offset-4"
+            >
+              Cambiar tipo de contexto
+            </Link>
+          </div>
+        )
+      ) : analysisContext ? (
+        <ResolvedContext
+          label={analysisContext.label}
+          changeHref={basePath}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ResolvedContext({
+  label,
+  changeHref,
+}: {
+  label: string;
+  changeHref: string;
+}) {
+  return (
+    <div className="mt-4 flex flex-col gap-4 rounded-lg border bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Contexto seleccionado
+        </p>
+        <p className="mt-1 font-semibold">{label}</p>
+      </div>
+
+      <Link
+        href={changeHref}
+        className="inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition hover:bg-slate-50"
+      >
+        Cambiar contexto
+      </Link>
+    </div>
+  );
+}
+
+async function resolveSelectedAnalysisContext(
+  contextKey: ContextKey | undefined,
+  season: string | undefined,
+): Promise<AnalysisContext | undefined> {
+  if (!contextKey) {
+    return undefined;
+  }
+
+  if (contextKey === "active") {
+    return resolveAnalysisContext();
+  }
+
+  if (contextKey === "historical") {
+    return resolveAnalysisContext({ historical: true });
+  }
+
+  if (!season) {
+    return undefined;
+  }
+
+  if (contextKey === "comparative") {
+    return resolveAnalysisContext({
+      season,
+      compareWithPreviousSister: true,
+    });
+  }
+
+  return resolveAnalysisContext({ season });
 }
 
 function ExistingAnalysesSection() {
@@ -791,6 +1072,33 @@ function ExistingAnalysesSection() {
       </div>
     </section>
   );
+}
+
+
+function getSelectedContext(
+  perspective: PerspectiveKey | undefined,
+  value: string | string[] | undefined,
+): ContextKey | undefined {
+  if (!perspective) {
+    return undefined;
+  }
+
+  const normalizedValue = getSearchParam(value);
+
+  return ["active", "single", "comparative", "historical"].includes(
+    normalizedValue ?? "",
+  )
+    ? (normalizedValue as ContextKey)
+    : undefined;
+}
+
+function getSearchParam(
+  value: string | string[] | undefined,
+): string | undefined {
+  const normalizedValue = Array.isArray(value) ? value[0] : value;
+  const cleanedValue = normalizedValue?.trim();
+
+  return cleanedValue || undefined;
 }
 
 function getSelectedArea(
