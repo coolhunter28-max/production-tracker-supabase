@@ -75,6 +75,53 @@ function formatCell(
   return String(value);
 }
 
+function getColumnWidth(column: string) {
+  switch (column) {
+    case "ranking":
+      return "6%";
+
+    case "customer":
+      return "19%";
+
+    case "current_value":
+    case "comparison_value":
+    case "delta_value":
+      return "15%";
+
+    case "current_margin_pct":
+    case "comparison_margin_pct":
+    case "delta_pct":
+      return "10%";
+
+    default:
+      return undefined;
+  }
+}
+
+function getCellClassName(column: string) {
+  if (column === "ranking") {
+    return "whitespace-nowrap px-1 py-2 text-center align-middle text-[10px] leading-tight";
+  }
+
+  if (column === "customer") {
+    return "px-2 py-2 align-middle text-[10px] font-medium leading-tight";
+  }
+
+  return "whitespace-nowrap px-1.5 py-2 text-right align-middle text-[10px] leading-tight";
+}
+
+function getHeaderClassName(column: string) {
+  if (column === "ranking") {
+    return "px-1 py-2 text-center text-[9px] font-medium uppercase leading-tight tracking-tight text-muted-foreground";
+  }
+
+  if (column === "customer") {
+    return "px-2 py-2 text-left text-[9px] font-medium uppercase leading-tight tracking-tight text-muted-foreground";
+  }
+
+  return "px-1.5 py-2 text-right text-[9px] font-medium uppercase leading-tight tracking-tight text-muted-foreground";
+}
+
 export function AnalyticsRankingTable({
   title,
   rows,
@@ -94,8 +141,8 @@ export function AnalyticsRankingTable({
 
   return (
     <section className="rounded-2xl border bg-card shadow-sm">
-      <div className="border-b px-4 py-3">
-        <h3 className="text-base font-medium">{title}</h3>
+      <div className="border-b px-3 py-2.5">
+        <h3 className="text-sm font-medium">{title}</h3>
       </div>
 
       {rows.length === 0 ? (
@@ -104,11 +151,11 @@ export function AnalyticsRankingTable({
             Sin resultados
           </div>
 
-          <div className="mt-3 text-sm font-medium">
+          <div className="mt-3 text-xs font-medium">
             No hay filas para mostrar
           </div>
 
-          <div className="mt-1 max-w-sm text-sm text-muted-foreground">
+          <div className="mt-1 max-w-sm text-xs text-muted-foreground">
             Prueba a cambiar o limpiar los filtros para ver datos
             en esta tabla.
           </div>
@@ -117,13 +164,24 @@ export function AnalyticsRankingTable({
         <div
           className={`overflow-auto px-0 ${maxHeightClassName}`}
         >
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full table-fixed border-collapse">
+            <colgroup>
+              {columns.map((column) => (
+                <col
+                  key={column}
+                  style={{
+                    width: getColumnWidth(column),
+                  }}
+                />
+              ))}
+            </colgroup>
+
             <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b">
                 {columns.map((column) => (
                   <th
                     key={column}
-                    className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                    className={getHeaderClassName(column)}
                   >
                     {columnLabels[column] ??
                       humanizeKey(column)}
@@ -141,12 +199,20 @@ export function AnalyticsRankingTable({
                   {columns.map((column) => (
                     <td
                       key={column}
-                      className="px-4 py-3 align-top"
+                      className={getCellClassName(column)}
                     >
-                      {formatCell(
-                        row[column],
-                        columnFormats[column],
-                      )}
+                      <span
+                        className={
+                          column === "customer"
+                            ? "block break-words"
+                            : "block"
+                        }
+                      >
+                        {formatCell(
+                          row[column],
+                          columnFormats[column],
+                        )}
+                      </span>
                     </td>
                   ))}
                 </tr>

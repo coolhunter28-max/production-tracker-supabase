@@ -1060,11 +1060,16 @@ function BsgMarginByCustomerResult({
   context: AnalysisContext;
   rows: ExplorerBsgMarginByCustomerRow[];
 }) {
+  const [currentPeriodLabel, comparisonPeriodLabel] =
+    context.label.split(" vs ");
+
   const tableRows = rows.map((row) => ({
     ranking: row.ranking,
     customer: row.customer,
     current_value: row.current_value,
+    current_margin_pct: row.current_margin_pct,
     comparison_value: row.comparison_value,
+    comparison_margin_pct: row.comparison_margin_pct,
     delta_value: row.delta_value,
     delta_pct: row.delta_pct,
   }));
@@ -1075,9 +1080,11 @@ function BsgMarginByCustomerResult({
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Resultado automático
         </p>
+
         <h2 className="mt-1 text-xl font-semibold">
           Margen BSG por cliente
         </h2>
+
         <p className="mt-1 text-sm text-muted-foreground">
           {context.label}. Datos agregados desde líneas de PO.
         </p>
@@ -1089,48 +1096,74 @@ function BsgMarginByCustomerResult({
           rows={tableRows}
           labelKeys={["customer"]}
           valueKeys={["current_value"]}
+          valueLabel={
+            context.type === "COMPARATIVE_SEASONS"
+              ? `Margen ${currentPeriodLabel}`
+              : "Margen BSG"
+          }
+          valueFormat="currency"
           maxItems={10}
         />
 
-<AnalyticsRankingTable
-  title={
-    context.type === "COMPARATIVE_SEASONS"
-      ? "Ranking y variación frente a campaña hermana"
-      : "Ranking de margen BSG"
-  }
-  rows={tableRows}
-  preferredColumns={
-    context.type === "COMPARATIVE_SEASONS"
-      ? [
-          "ranking",
-          "customer",
-          "current_value",
-          "comparison_value",
-          "delta_value",
-          "delta_pct",
-        ]
-      : ["ranking", "customer", "current_value"]
-  }
-  columnLabels={{
-    ranking: "Ranking",
-    customer: "Cliente",
-    current_value:
-      context.type === "COMPARATIVE_SEASONS"
-        ? "Margen campaña analizada"
-        : "Margen BSG",
-    comparison_value: "Margen campaña anterior",
-    delta_value: "Diferencia",
-    delta_pct: "Variación",
-  }}
-  columnFormats={{
-    ranking: "number",
-    current_value: "currency",
-    comparison_value: "currency",
-    delta_value: "currency",
-    delta_pct: "percentage",
-  }}
-  maxHeightClassName="max-h-[520px]"
-/>
+        <AnalyticsRankingTable
+          title={
+            context.type === "COMPARATIVE_SEASONS"
+              ? "Ranking y variación frente a campaña hermana"
+              : "Ranking de margen BSG"
+          }
+          rows={tableRows}
+          preferredColumns={
+            context.type === "COMPARATIVE_SEASONS"
+              ? [
+                  "ranking",
+                  "customer",
+                  "current_value",
+                  "current_margin_pct",
+                  "comparison_value",
+                  "comparison_margin_pct",
+                  "delta_value",
+                  "delta_pct",
+                ]
+              : [
+                  "ranking",
+                  "customer",
+                  "current_value",
+                  "current_margin_pct",
+                ]
+          }
+          columnLabels={{
+            ranking: "Ranking",
+            customer: "Cliente",
+            current_value:
+              context.type === "COMPARATIVE_SEASONS"
+                ? `Margen ${currentPeriodLabel}`
+                : "Margen BSG",
+            current_margin_pct:
+              context.type === "COMPARATIVE_SEASONS"
+                ? `Margen % ${currentPeriodLabel}`
+                : "Margen %",
+            comparison_value:
+              context.type === "COMPARATIVE_SEASONS"
+                ? `Margen ${comparisonPeriodLabel}`
+                : "Margen campaña anterior",
+            comparison_margin_pct:
+              context.type === "COMPARATIVE_SEASONS"
+                ? `Margen % ${comparisonPeriodLabel}`
+                : "Margen % campaña anterior",
+            delta_value: "Diferencia",
+            delta_pct: "Variación",
+          }}
+          columnFormats={{
+            ranking: "number",
+            current_value: "currency",
+            current_margin_pct: "percentage",
+            comparison_value: "currency",
+            comparison_margin_pct: "percentage",
+            delta_value: "currency",
+            delta_pct: "percentage",
+          }}
+          maxHeightClassName="max-h-[520px]"
+        />
       </div>
     </section>
   );

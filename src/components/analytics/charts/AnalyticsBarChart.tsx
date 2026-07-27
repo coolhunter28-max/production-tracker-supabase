@@ -1,8 +1,21 @@
+type AnalyticsBarChartValue =
+  | string
+  | number
+  | boolean
+  | null;
+
+export type AnalyticsBarChartValueFormat =
+  | "number"
+  | "currency"
+  | "percentage";
+
 type AnalyticsBarChartProps = {
   title: string;
-  rows: Array<Record<string, string | number | boolean | null>>;
+  rows: Array<Record<string, AnalyticsBarChartValue>>;
   labelKeys?: string[];
   valueKeys?: string[];
+  valueLabel?: string;
+  valueFormat?: AnalyticsBarChartValueFormat;
   maxItems?: number;
 };
 
@@ -13,46 +26,83 @@ function humanizeKey(key: string) {
 }
 
 function detectStringKey(
-  rows: Array<Record<string, string | number | boolean | null>>,
-  keys?: string[]
+  rows: Array<Record<string, AnalyticsBarChartValue>>,
+  keys?: string[],
 ) {
   const sample = rows[0];
-  if (!sample) return null;
+
+  if (!sample) {
+    return null;
+  }
 
   if (keys && keys.length > 0) {
     for (const key of keys) {
-      if (key in sample) return key;
+      if (key in sample) {
+        return key;
+      }
     }
   }
 
   for (const [key, value] of Object.entries(sample)) {
-    if (typeof value === "string") return key;
+    if (typeof value === "string") {
+      return key;
+    }
   }
 
   return null;
 }
 
 function detectNumericKey(
-  rows: Array<Record<string, string | number | boolean | null>>,
-  keys?: string[]
+  rows: Array<Record<string, AnalyticsBarChartValue>>,
+  keys?: string[],
 ) {
   const sample = rows[0];
-  if (!sample) return null;
+
+  if (!sample) {
+    return null;
+  }
 
   if (keys && keys.length > 0) {
     for (const key of keys) {
-      if (key in sample && typeof sample[key] === "number") return key;
+      if (
+        key in sample &&
+        typeof sample[key] === "number"
+      ) {
+        return key;
+      }
     }
   }
 
   for (const [key, value] of Object.entries(sample)) {
-    if (typeof value === "number") return key;
+    if (typeof value === "number") {
+      return key;
+    }
   }
 
   return null;
 }
 
-function formatNumber(value: number) {
+function formatValue(
+  value: number,
+  format: AnalyticsBarChartValueFormat,
+) {
+  if (format === "currency") {
+    return new Intl.NumberFormat("es-ES", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+
+  if (format === "percentage") {
+    return new Intl.NumberFormat("es-ES", {
+      style: "percent",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value / 100);
+  }
+
   return new Intl.NumberFormat("es-ES", {
     maximumFractionDigits: 2,
   }).format(value);
@@ -63,6 +113,8 @@ export function AnalyticsBarChart({
   rows,
   labelKeys,
   valueKeys,
+  valueLabel,
+  valueFormat = "number",
   maxItems = 10,
 }: AnalyticsBarChartProps) {
   const labelKey = detectStringKey(rows, labelKeys);
@@ -76,21 +128,26 @@ export function AnalyticsBarChart({
             value:
               typeof row[valueKey] === "number"
                 ? (row[valueKey] as number)
-                : Number(row[valueKey] ?? NaN),
+                : Number(row[valueKey] ?? Number.NaN),
           }))
           .filter((item) => Number.isFinite(item.value))
           .slice(0, maxItems)
       : [];
 
-  const maxValue = Math.max(...bars.map((bar) => bar.value), 1);
+  const maxValue = Math.max(
+    ...bars.map((bar) => Math.max(bar.value, 0)),
+    1,
+  );
 
   return (
     <section className="rounded-2xl border bg-card shadow-sm">
       <div className="border-b px-4 py-3">
         <h3 className="text-base font-medium">{title}</h3>
+
         {valueKey ? (
           <p className="mt-1 text-xs text-muted-foreground">
-            Métrica: {humanizeKey(valueKey)}
+            {valueLabel ??
+              `Métrica: ${humanizeKey(valueKey)}`}
           </p>
         ) : null}
       </div>
@@ -102,18 +159,31 @@ export function AnalyticsBarChart({
       ) : (
         <div className="space-y-2 px-4 py-4">
           {bars.map((bar) => {
-            const width = `${(bar.value / maxValue) * 100}%`;
+            const width = `${Math.max(
+              0,
+              (bar.value / maxValue) * 100,
+            )}%`;
 
             return (
               <div key={bar.label} className="space-y-1">
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="truncate">{bar.label}</span>
+                  <span className="truncate">
+                    {bar.label}
+                  </span>
+
                   <span className="shrink-0 text-muted-foreground">
-                    {formatNumber(bar.value)}
+                    {formatValue(
+                      bar.value,
+                      valueFormat,
+                    )}
                   </span>
                 </div>
+
                 <div className="h-2 rounded-full bg-muted">
-                  <div className="h-2 rounded-full bg-foreground/80" style={{ width }} />
+                  <div
+                    className="h-2 rounded-full bg-foreground/80"
+                    style={{ width }}
+                  />
                 </div>
               </div>
             );

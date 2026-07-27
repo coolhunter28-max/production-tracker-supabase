@@ -1,11 +1,13 @@
-import { createClient } from "@/lib/supabase";
 import type { AnalysisContext } from "@/lib/analytics/context/analysis-context";
+import { createClient } from "@/lib/supabase";
 
 export type ExplorerBsgMarginByCustomerRow = {
   ranking: number;
   customer: string;
   current_value: number;
+  current_margin_pct: number | null;
   comparison_value: number | null;
+  comparison_margin_pct: number | null;
   delta_value: number | null;
   delta_pct: number | null;
 };
@@ -14,7 +16,9 @@ type ExplorerBsgMarginByCustomerRpcRow = {
   ranking: number | string | null;
   customer: string | null;
   current_value: number | string | null;
+  current_margin_pct: number | string | null;
   comparison_value: number | string | null;
+  comparison_margin_pct: number | string | null;
   delta_value: number | string | null;
   delta_pct: number | string | null;
 };
@@ -82,8 +86,14 @@ export async function getExplorerBsgMarginByCustomer(
         ranking: toNumber(row.ranking),
         customer,
         current_value: toNumber(row.current_value),
+        current_margin_pct: toNullableNumber(
+          row.current_margin_pct,
+        ),
         comparison_value: toNullableNumber(
           row.comparison_value,
+        ),
+        comparison_margin_pct: toNullableNumber(
+          row.comparison_margin_pct,
         ),
         delta_value: toNullableNumber(row.delta_value),
         delta_pct: toNullableNumber(row.delta_pct),
