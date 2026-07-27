@@ -1,5 +1,10 @@
 import Link from "next/link";
 import {
+  EXPLORER_CONCEPTS,
+  type ExplorerConcept,
+  type ExplorerConceptId,
+} from "@/lib/analytics/explorer/catalog";
+import {
   ArrowRight,
   BarChart3,
   Boxes,
@@ -29,13 +34,7 @@ type AreaKey =
   | "development"
   | "all";
 
-type ConceptKey =
-  | "sales"
-  | "margin"
-  | "customers"
-  | "seasons"
-  | "markets"
-  | "commercial-activity";
+type ConceptKey = ExplorerConceptId;
 
 type PerspectiveKey =
   | "customer"
@@ -49,13 +48,6 @@ type AnalysisArea = {
   keywords: [string, string, string];
   summary: string;
   icon: LucideIcon;
-};
-
-type AnalyticalConcept = {
-  key: ConceptKey;
-  label: string;
-  description: string;
-  context?: string;
 };
 
 type AnalyticalPerspective = {
@@ -123,47 +115,6 @@ const areas: AnalysisArea[] = [
   },
 ];
 
-const commercialConcepts: AnalyticalConcept[] = [
-  {
-    key: "sales",
-    label: "Ventas",
-    description:
-      "Comprende el volumen económico generado por la actividad comercial.",
-  },
-  {
-    key: "margin",
-    label: "Margen",
-    description:
-      "Comprende el resultado económico obtenido dentro de la actividad comercial.",
-    context:
-      "El margen debe interpretarse junto con el volumen económico, la evolución temporal y el modelo operativo.",
-  },
-  {
-    key: "customers",
-    label: "Clientes",
-    description:
-      "Comprende cómo se distribuye y evoluciona la actividad entre los clientes.",
-  },
-  {
-    key: "seasons",
-    label: "Temporadas",
-    description:
-      "Comprende cómo cambia el comportamiento comercial entre campañas y temporadas.",
-  },
-  {
-    key: "markets",
-    label: "Mercados",
-    description:
-      "Comprende cómo se distribuye y evoluciona la actividad entre mercados.",
-  },
-  {
-    key: "commercial-activity",
-    label: "Actividad comercial",
-    description:
-      "Comprende la evolución general de la actividad comercial del negocio.",
-  },
-];
-
 const marginPerspectives: AnalyticalPerspective[] = [
   {
     key: "customer",
@@ -208,8 +159,8 @@ export default function AnalyticsExplorerPage({
     searchParams.concept,
   );
 
-  const selectedConcept = commercialConcepts.find(
-    (concept) => concept.key === selectedConceptKey,
+  const selectedConcept = EXPLORER_CONCEPTS.find(
+    (concept) => concept.id === selectedConceptKey,
   );
 
   const selectedPerspectiveKey = getSelectedPerspective(
@@ -251,7 +202,7 @@ function ExplorerHeader({
   selectedPerspective,
 }: {
   selectedArea: AnalysisArea | undefined;
-  selectedConcept: AnalyticalConcept | undefined;
+  selectedConcept: ExplorerConcept | undefined;
   selectedPerspective: AnalyticalPerspective | undefined;
 }) {
   return (
@@ -447,7 +398,7 @@ function SelectedAreaState({
   selectedPerspective,
 }: {
   area: AnalysisArea;
-  selectedConcept: AnalyticalConcept | undefined;
+  selectedConcept: ExplorerConcept | undefined;
   selectedPerspective: AnalyticalPerspective | undefined;
 }) {
   const Icon = area.icon;
@@ -530,16 +481,16 @@ function CommercialConceptSelector() {
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {commercialConcepts.map((concept) => (
+        {EXPLORER_CONCEPTS.map((concept) => (
           <Link
-            key={concept.key}
-            href={`/analytics/explorer?area=commercial&concept=${concept.key}`}
+            key={concept.id}
+            href={`/analytics/explorer?area=commercial&concept=${concept.id}`}
             className="group flex min-h-40 flex-col rounded-xl border bg-background p-5 transition hover:border-slate-400 hover:shadow-sm"
           >
             <h4 className="text-lg font-semibold">{concept.label}</h4>
 
             <p className="mt-3 flex-1 text-sm leading-6 text-muted-foreground">
-              {concept.description}
+              {concept.shortDescription}
             </p>
 
             <div className="mt-5 flex items-center gap-2 text-sm font-semibold">
@@ -559,7 +510,7 @@ function SelectedConceptState({
   selectedPerspective,
 }: {
   area: AnalysisArea;
-  concept: AnalyticalConcept;
+  concept: ExplorerConcept;
   selectedPerspective: AnalyticalPerspective | undefined;
 }) {
   return (
@@ -574,7 +525,7 @@ function SelectedConceptState({
             <h3 className="mt-2 text-2xl font-semibold">{concept.label}</h3>
 
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              {concept.description}
+              {concept.shortDescription}
             </p>
           </div>
 
@@ -587,20 +538,20 @@ function SelectedConceptState({
           </Link>
         </div>
 
-        {concept.context && (
+        {concept.caution && (
           <div className="mt-5 rounded-lg border-l-4 border-slate-900 bg-slate-50 px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">
               Contexto necesario
             </p>
 
             <p className="mt-1 text-sm leading-6 text-slate-700">
-              {concept.context}
+              {concept.caution}
             </p>
           </div>
         )}
       </div>
 
-      {concept.key === "margin" ? (
+      {concept.id === "bsg-margin" ? (
         selectedPerspective ? (
           <SelectedPerspectiveState
             area={area}
@@ -636,7 +587,7 @@ function MarginPerspectiveSelector() {
         {marginPerspectives.map((perspective) => (
           <Link
             key={perspective.key}
-            href={`/analytics/explorer?area=commercial&concept=margin&perspective=${perspective.key}`}
+            href={`/analytics/explorer?area=commercial&concept=bsg-margin&perspective=${perspective.key}`}
             className="group flex min-h-40 flex-col rounded-xl border bg-white p-5 transition hover:border-slate-400 hover:shadow-sm"
           >
             <h4 className="text-lg font-semibold">
@@ -664,7 +615,7 @@ function SelectedPerspectiveState({
   perspective,
 }: {
   area: AnalysisArea;
-  concept: AnalyticalConcept;
+  concept: ExplorerConcept;
   perspective: AnalyticalPerspective;
 }) {
   return (
@@ -685,7 +636,7 @@ function SelectedPerspectiveState({
         </div>
 
         <Link
-          href={`/analytics/explorer?area=${area.key}&concept=${concept.key}`}
+          href={`/analytics/explorer?area=${area.key}&concept=${concept.id}`}
           className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border bg-white px-4 text-sm font-medium transition hover:bg-slate-50"
         >
           <RotateCcw className="h-4 w-4" />
@@ -711,7 +662,7 @@ function SelectedPerspectiveState({
 function PendingConceptPerspectives({
   concept,
 }: {
-  concept: AnalyticalConcept;
+  concept: ExplorerConcept;
 }) {
   return (
     <div className="rounded-xl border border-dashed bg-background p-5 md:p-6">
@@ -758,7 +709,7 @@ function AnalysisSummary({
   selectedPerspective,
 }: {
   area: AnalysisArea;
-  selectedConcept: AnalyticalConcept | undefined;
+  selectedConcept: ExplorerConcept | undefined;
   selectedPerspective: AnalyticalPerspective | undefined;
 }) {
   return (
@@ -862,8 +813,8 @@ function getSelectedConcept(
 
   const normalizedValue = Array.isArray(value) ? value[0] : value;
 
-  return commercialConcepts.some(
-    (concept) => concept.key === normalizedValue,
+  return EXPLORER_CONCEPTS.some(
+    (concept) => concept.id === normalizedValue,
   )
     ? (normalizedValue as ConceptKey)
     : undefined;
@@ -874,7 +825,7 @@ function getSelectedPerspective(
   concept: ConceptKey | undefined,
   value: string | string[] | undefined,
 ): PerspectiveKey | undefined {
-  if (area !== "commercial" || concept !== "margin") {
+  if (area !== "commercial" || concept !== "bsg-margin") {
     return undefined;
   }
 
