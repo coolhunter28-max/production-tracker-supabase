@@ -37,6 +37,12 @@ type ConceptKey =
   | "markets"
   | "commercial-activity";
 
+type PerspectiveKey =
+  | "customer"
+  | "factory"
+  | "season"
+  | "operativa";
+
 type AnalysisArea = {
   key: AreaKey;
   label: string;
@@ -50,6 +56,12 @@ type AnalyticalConcept = {
   label: string;
   description: string;
   context?: string;
+};
+
+type AnalyticalPerspective = {
+  key: PerspectiveKey;
+  label: string;
+  description: string;
 };
 
 const areas: AnalysisArea[] = [
@@ -152,6 +164,33 @@ const commercialConcepts: AnalyticalConcept[] = [
   },
 ];
 
+const marginPerspectives: AnalyticalPerspective[] = [
+  {
+    key: "customer",
+    label: "Cliente",
+    description:
+      "Compara cómo se distribuye el margen entre los distintos clientes.",
+  },
+  {
+    key: "factory",
+    label: "Fábrica",
+    description:
+      "Compara cómo se distribuye el margen entre las distintas fábricas.",
+  },
+  {
+    key: "season",
+    label: "Temporada",
+    description:
+      "Observa cómo cambia el margen entre campañas y temporadas.",
+  },
+  {
+    key: "operativa",
+    label: "Operativa",
+    description:
+      "Compara el margen según el modelo operativo utilizado.",
+  },
+];
+
 const standardAreas = areas.filter((area) => area.key !== "all");
 const allAreasOption = areas.find((area) => area.key === "all");
 
@@ -173,17 +212,29 @@ export default function AnalyticsExplorerPage({
     (concept) => concept.key === selectedConceptKey,
   );
 
+  const selectedPerspectiveKey = getSelectedPerspective(
+    selectedAreaKey,
+    selectedConceptKey,
+    searchParams.perspective,
+  );
+
+  const selectedPerspective = marginPerspectives.find(
+    (perspective) => perspective.key === selectedPerspectiveKey,
+  );
+
   return (
     <main className="space-y-6">
       <ExplorerHeader
         selectedArea={selectedArea}
         selectedConcept={selectedConcept}
+        selectedPerspective={selectedPerspective}
       />
 
       {selectedArea ? (
         <SelectedAreaState
           area={selectedArea}
           selectedConcept={selectedConcept}
+          selectedPerspective={selectedPerspective}
         />
       ) : (
         <NewAnalysisSection />
@@ -197,9 +248,11 @@ export default function AnalyticsExplorerPage({
 function ExplorerHeader({
   selectedArea,
   selectedConcept,
+  selectedPerspective,
 }: {
   selectedArea: AnalysisArea | undefined;
   selectedConcept: AnalyticalConcept | undefined;
+  selectedPerspective: AnalyticalPerspective | undefined;
 }) {
   return (
     <section className="rounded-2xl border bg-card p-5 shadow-sm md:p-7">
@@ -242,7 +295,8 @@ function ExplorerHeader({
           <StepBadge
             step="3"
             label="Elegir perspectiva"
-            active={Boolean(selectedConcept)}
+            active={Boolean(selectedConcept) && !selectedPerspective}
+            completed={Boolean(selectedPerspective)}
           />
         </div>
       </div>
@@ -390,9 +444,11 @@ function ExploreAllOption({ area }: { area: AnalysisArea }) {
 function SelectedAreaState({
   area,
   selectedConcept,
+  selectedPerspective,
 }: {
   area: AnalysisArea;
   selectedConcept: AnalyticalConcept | undefined;
+  selectedPerspective: AnalyticalPerspective | undefined;
 }) {
   const Icon = area.icon;
 
@@ -438,6 +494,7 @@ function SelectedAreaState({
           <SelectedConceptState
             area={area}
             concept={selectedConcept}
+            selectedPerspective={selectedPerspective}
           />
         ) : (
           <CommercialConceptSelector />
@@ -449,6 +506,7 @@ function SelectedAreaState({
       <AnalysisSummary
         area={area}
         selectedConcept={selectedConcept}
+        selectedPerspective={selectedPerspective}
       />
     </section>
   );
@@ -478,9 +536,7 @@ function CommercialConceptSelector() {
             href={`/analytics/explorer?area=commercial&concept=${concept.key}`}
             className="group flex min-h-40 flex-col rounded-xl border bg-background p-5 transition hover:border-slate-400 hover:shadow-sm"
           >
-            <h4 className="text-lg font-semibold">
-              {concept.label}
-            </h4>
+            <h4 className="text-lg font-semibold">{concept.label}</h4>
 
             <p className="mt-3 flex-1 text-sm leading-6 text-muted-foreground">
               {concept.description}
@@ -500,9 +556,11 @@ function CommercialConceptSelector() {
 function SelectedConceptState({
   area,
   concept,
+  selectedPerspective,
 }: {
   area: AnalysisArea;
   concept: AnalyticalConcept;
+  selectedPerspective: AnalyticalPerspective | undefined;
 }) {
   return (
     <div className="mt-7 space-y-4">
@@ -513,9 +571,7 @@ function SelectedConceptState({
               Concepto seleccionado
             </p>
 
-            <h3 className="mt-2 text-2xl font-semibold">
-              {concept.label}
-            </h3>
+            <h3 className="mt-2 text-2xl font-semibold">{concept.label}</h3>
 
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
               {concept.description}
@@ -544,20 +600,134 @@ function SelectedConceptState({
         )}
       </div>
 
-      <div className="rounded-xl border border-dashed bg-background p-5 md:p-6">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Paso 3
+      {concept.key === "margin" ? (
+        selectedPerspective ? (
+          <SelectedPerspectiveState
+            area={area}
+            concept={concept}
+            perspective={selectedPerspective}
+          />
+        ) : (
+          <MarginPerspectiveSelector />
+        )
+      ) : (
+        <PendingConceptPerspectives concept={concept} />
+      )}
+    </div>
+  );
+}
+
+function MarginPerspectiveSelector() {
+  return (
+    <div className="rounded-xl border border-dashed bg-background p-5 md:p-6">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Paso 3
+      </p>
+
+      <h3 className="mt-2 text-xl font-semibold">
+        ¿Desde qué perspectiva quieres observarlo?
+      </h3>
+
+      <p className="mt-1 text-sm text-muted-foreground">
+        Elige cómo quieres desglosar el margen.
+      </p>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {marginPerspectives.map((perspective) => (
+          <Link
+            key={perspective.key}
+            href={`/analytics/explorer?area=commercial&concept=margin&perspective=${perspective.key}`}
+            className="group flex min-h-40 flex-col rounded-xl border bg-white p-5 transition hover:border-slate-400 hover:shadow-sm"
+          >
+            <h4 className="text-lg font-semibold">
+              {perspective.label}
+            </h4>
+
+            <p className="mt-3 flex-1 text-sm leading-6 text-muted-foreground">
+              {perspective.description}
+            </p>
+
+            <div className="mt-5 flex items-center gap-2 text-sm font-semibold">
+              Elegir perspectiva
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SelectedPerspectiveState({
+  area,
+  concept,
+  perspective,
+}: {
+  area: AnalysisArea;
+  concept: AnalyticalConcept;
+  perspective: AnalyticalPerspective;
+}) {
+  return (
+    <div className="rounded-xl border bg-background p-5 md:p-6">
+      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Perspectiva seleccionada
+          </p>
+
+          <h3 className="mt-2 text-xl font-semibold">
+            {concept.label} por {perspective.label}
+          </h3>
+
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+            {perspective.description}
+          </p>
+        </div>
+
+        <Link
+          href={`/analytics/explorer?area=${area.key}&concept=${concept.key}`}
+          className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border bg-white px-4 text-sm font-medium transition hover:bg-slate-50"
+        >
+          <RotateCcw className="h-4 w-4" />
+          Cambiar perspectiva
+        </Link>
+      </div>
+
+      <div className="mt-5 rounded-lg border border-dashed bg-slate-50 px-4 py-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">
+          Análisis preparado
         </p>
 
-        <h3 className="mt-2 text-lg font-semibold">
-          ¿Desde qué perspectiva quieres observarlo?
-        </h3>
-
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          En el siguiente incremento incorporaremos las perspectivas válidas
-          para este concepto.
+        <p className="mt-1 text-sm leading-6 text-slate-700">
+          Ya está definida la pregunta analítica: {concept.label} por{" "}
+          {perspective.label}. El siguiente incremento conectará esta selección
+          con la capa de datos.
         </p>
       </div>
+    </div>
+  );
+}
+
+function PendingConceptPerspectives({
+  concept,
+}: {
+  concept: AnalyticalConcept;
+}) {
+  return (
+    <div className="rounded-xl border border-dashed bg-background p-5 md:p-6">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Paso 3
+      </p>
+
+      <h3 className="mt-2 text-lg font-semibold">
+        Perspectivas de {concept.label}
+      </h3>
+
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+        En este sprint estamos validando las perspectivas del concepto Margen.
+        Las perspectivas de este concepto se incorporarán después de confirmar
+        el patrón.
+      </p>
     </div>
   );
 }
@@ -585,9 +755,11 @@ function PendingAreaState({ area }: { area: AnalysisArea }) {
 function AnalysisSummary({
   area,
   selectedConcept,
+  selectedPerspective,
 }: {
   area: AnalysisArea;
   selectedConcept: AnalyticalConcept | undefined;
+  selectedPerspective: AnalyticalPerspective | undefined;
 }) {
   return (
     <dl className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -598,7 +770,10 @@ function AnalysisSummary({
         value={selectedConcept?.label ?? "Sin definir"}
       />
 
-      <AnalysisState label="Perspectiva" value="Sin definir" />
+      <AnalysisState
+        label="Perspectiva"
+        value={selectedPerspective?.label ?? "Sin definir"}
+      />
 
       <AnalysisState label="Representación" value="Automática" />
     </dl>
@@ -618,9 +793,7 @@ function AnalysisState({
         {label}
       </dt>
 
-      <dd className="mt-1 text-sm font-semibold leading-5">
-        {value}
-      </dd>
+      <dd className="mt-1 text-sm font-semibold leading-5">{value}</dd>
     </div>
   );
 }
@@ -693,5 +866,23 @@ function getSelectedConcept(
     (concept) => concept.key === normalizedValue,
   )
     ? (normalizedValue as ConceptKey)
+    : undefined;
+}
+
+function getSelectedPerspective(
+  area: AreaKey | undefined,
+  concept: ConceptKey | undefined,
+  value: string | string[] | undefined,
+): PerspectiveKey | undefined {
+  if (area !== "commercial" || concept !== "margin") {
+    return undefined;
+  }
+
+  const normalizedValue = Array.isArray(value) ? value[0] : value;
+
+  return marginPerspectives.some(
+    (perspective) => perspective.key === normalizedValue,
+  )
+    ? (normalizedValue as PerspectiveKey)
     : undefined;
 }
