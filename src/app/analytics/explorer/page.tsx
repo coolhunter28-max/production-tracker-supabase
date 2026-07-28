@@ -7,10 +7,9 @@ import {
   type AnalysisContext,
   type CommercialSeasonOption,
 } from "@/lib/analytics/context/analysis-context";
-import {
-  getExplorerBsgMarginByCustomer,
-  type ExplorerBsgMarginByCustomerRow,
-} from "@/lib/analytics/explorer/bsg-margin";
+import { getExplorerBsgMarginByCustomer } from "@/lib/analytics/explorer/bsg-margin";
+import { getExplorerContributionByCustomer } from "@/lib/analytics/explorer/contribution";
+import { getExplorerSalesByCustomer } from "@/lib/analytics/explorer/sales";
 import {
   EXPLORER_CONCEPTS,
   type ExplorerConcept,
@@ -74,6 +73,17 @@ type AnalyticalPerspective = {
   description: string;
 };
 
+type ExplorerCustomerMetricRow = {
+  ranking: number;
+  customer: string;
+  current_value: number;
+  current_percentage: number | null;
+  comparison_value: number | null;
+  comparison_percentage: number | null;
+  delta_value: number | null;
+  delta_pct: number | null;
+};
+
 const areas: AnalysisArea[] = [
   {
     key: "operations",
@@ -133,30 +143,30 @@ const areas: AnalysisArea[] = [
   },
 ];
 
-const marginPerspectives: AnalyticalPerspective[] = [
+const commercialPerspectives: AnalyticalPerspective[] = [
   {
     key: "customer",
     label: "Cliente",
     description:
-      "Compara cómo se distribuye el margen entre los distintos clientes.",
+      "Compara cómo se distribuye el concepto entre los distintos clientes.",
   },
   {
     key: "factory",
     label: "Fábrica",
     description:
-      "Compara cómo se distribuye el margen entre las distintas fábricas.",
+      "Compara cómo se distribuye el concepto entre las distintas fábricas.",
   },
   {
     key: "season",
     label: "Temporada",
     description:
-      "Observa cómo cambia el margen entre campañas y temporadas.",
+      "Observa cómo cambia el concepto entre campañas y temporadas.",
   },
   {
     key: "operativa",
     label: "Operativa",
     description:
-      "Compara el margen según el modelo operativo utilizado.",
+      "Compara el concepto según el modelo operativo utilizado.",
   },
 ];
 
@@ -187,7 +197,7 @@ export default async function AnalyticsExplorerPage({
     searchParams.perspective,
   );
 
-  const selectedPerspective = marginPerspectives.find(
+  const selectedPerspective = commercialPerspectives.find(
     (perspective) => perspective.key === selectedPerspectiveKey,
   );
 
@@ -207,11 +217,14 @@ export default async function AnalyticsExplorerPage({
     selectedSeason,
   );
 
-  const explorerResult =
-    selectedConceptKey === "bsg-margin" &&
+  const customerMetricResult =
+    selectedConceptKey &&
     selectedPerspectiveKey === "customer" &&
     analysisContext
-      ? await getExplorerBsgMarginByCustomer(analysisContext)
+      ? await getExplorerCustomerMetricRows(
+          selectedConceptKey,
+          analysisContext,
+        )
       : undefined;
 
   return (
@@ -238,12 +251,13 @@ export default async function AnalyticsExplorerPage({
       )}
 
       {analysisContext &&
-      selectedConceptKey === "bsg-margin" &&
+      selectedConcept &&
       selectedPerspectiveKey === "customer" &&
-      explorerResult ? (
-        <BsgMarginByCustomerResult
+      customerMetricResult ? (
+        <CustomerMetricResult
+          concept={selectedConcept}
           context={analysisContext}
-          rows={explorerResult}
+          rows={customerMetricResult}
         />
       ) : null}
 
@@ -639,7 +653,9 @@ function SelectedConceptState({
         )}
       </div>
 
-      {concept.id === "bsg-margin" ? (
+      {concept.id === "bsg-margin" ||
+      concept.id === "contribution" ||
+      concept.id === "sales" ? (
         selectedPerspective ? (
           <SelectedPerspectiveState
             area={area}
@@ -651,7 +667,7 @@ function SelectedConceptState({
             analysisContext={analysisContext}
           />
         ) : (
-          <MarginPerspectiveSelector />
+          <CommercialPerspectiveSelector concept={concept} />
         )
       ) : (
         <PendingConceptPerspectives concept={concept} />
@@ -660,7 +676,11 @@ function SelectedConceptState({
   );
 }
 
-function MarginPerspectiveSelector() {
+function CommercialPerspectiveSelector({
+  concept,
+}: {
+  concept: ExplorerConcept;
+}) {
   return (
     <div className="rounded-xl border border-dashed bg-background p-5 md:p-6">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -672,14 +692,14 @@ function MarginPerspectiveSelector() {
       </h3>
 
       <p className="mt-1 text-sm text-muted-foreground">
-        Elige cómo quieres desglosar el margen.
+        Elige cómo quieres desglosar {concept.label.toLowerCase()}.
       </p>
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {marginPerspectives.map((perspective) => (
+        {commercialPerspectives.map((perspective) => (
           <Link
             key={perspective.key}
-            href={`/analytics/explorer?area=commercial&concept=bsg-margin&perspective=${perspective.key}`}
+            href={`/analytics/explorer?area=commercial&concept=${concept.id}&perspective=${perspective.key}`}
             className="group flex min-h-40 flex-col rounded-xl border bg-white p-5 transition hover:border-slate-400 hover:shadow-sm"
           >
             <h4 className="text-lg font-semibold">
@@ -1053,26 +1073,91 @@ async function resolveSelectedAnalysisContext(
   return resolveAnalysisContext({ season });
 }
 
-function BsgMarginByCustomerResult({
+async function getExplorerCustomerMetricRows(
+  conceptId: ConceptKey,
+  context: AnalysisContext,
+): Promise<ExplorerCustomerMetricRow[] | undefined> {
+  switch (conceptId) {
+    case "bsg-margin": {
+      const rows = await getExplorerBsgMarginByCustomer(context);
+
+      return rows.map((row) => ({
+        ranking: row.ranking,
+        customer: row.customer,
+        current_value: row.current_value,
+        current_percentage: row.current_margin_pct,
+        comparison_value: row.comparison_value,
+        comparison_percentage: row.comparison_margin_pct,
+        delta_value: row.delta_value,
+        delta_pct: row.delta_pct,
+      }));
+    }
+
+    case "contribution": {
+      const rows = await getExplorerContributionByCustomer(context);
+
+      return rows.map((row) => ({
+        ranking: row.ranking,
+        customer: row.customer,
+        current_value: row.current_value,
+        current_percentage: row.current_contribution_pct,
+        comparison_value: row.comparison_value,
+        comparison_percentage: row.comparison_contribution_pct,
+        delta_value: row.delta_value,
+        delta_pct: row.delta_pct,
+      }));
+    }
+
+    default:
+      return undefined;
+  }
+}
+
+function CustomerMetricResult({
+  concept,
   context,
   rows,
 }: {
+  concept: ExplorerConcept;
   context: AnalysisContext;
-  rows: ExplorerBsgMarginByCustomerRow[];
+  rows: ExplorerCustomerMetricRow[];
 }) {
   const [currentPeriodLabel, comparisonPeriodLabel] =
     context.label.split(" vs ");
 
-  const tableRows = rows.map((row) => ({
-    ranking: row.ranking,
-    customer: row.customer,
-    current_value: row.current_value,
-    current_margin_pct: row.current_margin_pct,
-    comparison_value: row.comparison_value,
-    comparison_margin_pct: row.comparison_margin_pct,
-    delta_value: row.delta_value,
-    delta_pct: row.delta_pct,
-  }));
+  const isComparative =
+    context.type === "COMPARATIVE_SEASONS";
+  const representation = concept.representation;
+  const percentageLabel =
+    representation.percentageLabel ?? `${representation.valueLabel} %`;
+
+  const preferredColumns = isComparative
+    ? [
+        "ranking",
+        "customer",
+        "current_value",
+        ...(representation.showPercentage
+          ? ["current_percentage"]
+          : []),
+        "comparison_value",
+        ...(representation.showPercentage
+          ? ["comparison_percentage"]
+          : []),
+        "delta_value",
+        "delta_pct",
+      ]
+    : [
+        "ranking",
+        "customer",
+        "current_value",
+        ...(representation.showPercentage
+          ? ["current_percentage"]
+          : []),
+      ];
+
+  const valueLabel = isComparative
+    ? `${representation.valueLabel} ${currentPeriodLabel}`
+    : representation.valueLabel;
 
   return (
     <section className="space-y-5">
@@ -1082,84 +1167,58 @@ function BsgMarginByCustomerResult({
         </p>
 
         <h2 className="mt-1 text-xl font-semibold">
-          Margen BSG por cliente
+          {representation.valueLabel} por cliente
         </h2>
 
         <p className="mt-1 text-sm text-muted-foreground">
-          {context.label}. Datos agregados desde líneas de PO.
+          {context.label}. {concept.businessMeaning}
         </p>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
         <AnalyticsBarChart
           title="Ranking visual"
-          rows={tableRows}
+          rows={rows}
           labelKeys={["customer"]}
           valueKeys={["current_value"]}
-          valueLabel={
-            context.type === "COMPARATIVE_SEASONS"
-              ? `Margen ${currentPeriodLabel}`
-              : "Margen BSG"
-          }
-          valueFormat="currency"
+          valueLabel={valueLabel}
+          valueFormat={concept.valueFormat}
           maxItems={10}
         />
 
         <AnalyticsRankingTable
           title={
-            context.type === "COMPARATIVE_SEASONS"
+            isComparative
               ? "Ranking y variación frente a campaña hermana"
-              : "Ranking de margen BSG"
+              : `Ranking de ${representation.valueLabel.toLocaleLowerCase(
+                  "es-ES",
+                )}`
           }
-          rows={tableRows}
-          preferredColumns={
-            context.type === "COMPARATIVE_SEASONS"
-              ? [
-                  "ranking",
-                  "customer",
-                  "current_value",
-                  "current_margin_pct",
-                  "comparison_value",
-                  "comparison_margin_pct",
-                  "delta_value",
-                  "delta_pct",
-                ]
-              : [
-                  "ranking",
-                  "customer",
-                  "current_value",
-                  "current_margin_pct",
-                ]
-          }
+          rows={rows}
+          preferredColumns={preferredColumns}
           columnLabels={{
             ranking: "Ranking",
             customer: "Cliente",
-            current_value:
-              context.type === "COMPARATIVE_SEASONS"
-                ? `Margen ${currentPeriodLabel}`
-                : "Margen BSG",
-            current_margin_pct:
-              context.type === "COMPARATIVE_SEASONS"
-                ? `Margen % ${currentPeriodLabel}`
-                : "Margen %",
-            comparison_value:
-              context.type === "COMPARATIVE_SEASONS"
-                ? `Margen ${comparisonPeriodLabel}`
-                : "Margen campaña anterior",
-            comparison_margin_pct:
-              context.type === "COMPARATIVE_SEASONS"
-                ? `Margen % ${comparisonPeriodLabel}`
-                : "Margen % campaña anterior",
+            current_value: valueLabel,
+            current_percentage: isComparative
+              ? `${percentageLabel} ${currentPeriodLabel}`
+              : percentageLabel,
+            comparison_value: isComparative
+              ? `${representation.valueLabel} ${comparisonPeriodLabel}`
+              : `${representation.valueLabel} campaña anterior`,
+            comparison_percentage: isComparative
+              ? `${percentageLabel} ${comparisonPeriodLabel}`
+              : `${percentageLabel} campaña anterior`,
             delta_value: "Diferencia",
             delta_pct: "Variación",
           }}
           columnFormats={{
             ranking: "number",
-            current_value: "currency",
-            current_margin_pct: "percentage",
-            comparison_value: "currency",
-            comparison_margin_pct: "percentage",
-            delta_value: "currency",
+            current_value: concept.valueFormat,
+            current_percentage: "percentage",
+            comparison_value: concept.valueFormat,
+            comparison_percentage: "percentage",
+            delta_value: concept.valueFormat,
             delta_pct: "percentage",
           }}
           maxHeightClassName="max-h-[520px]"
@@ -1251,36 +1310,36 @@ function getSelectedArea(
 }
 
 function getSelectedConcept(
-  area: AreaKey | undefined,
-  value: string | string[] | undefined,
-): ConceptKey | undefined {
-  if (area !== "commercial") {
-    return undefined;
+    area: AreaKey | undefined,
+    value: string | string[] | undefined,
+  ): ConceptKey | undefined {
+    if (area !== "commercial") {
+      return undefined;
+    }
+  
+    const normalizedValue = Array.isArray(value) ? value[0] : value;
+  
+    return EXPLORER_CONCEPTS.some(
+      (concept) => concept.id === normalizedValue,
+    )
+      ? (normalizedValue as ConceptKey)
+      : undefined;
   }
-
-  const normalizedValue = Array.isArray(value) ? value[0] : value;
-
-  return EXPLORER_CONCEPTS.some(
-    (concept) => concept.id === normalizedValue,
-  )
-    ? (normalizedValue as ConceptKey)
-    : undefined;
-}
-
-function getSelectedPerspective(
-  area: AreaKey | undefined,
-  concept: ConceptKey | undefined,
-  value: string | string[] | undefined,
-): PerspectiveKey | undefined {
-  if (area !== "commercial" || concept !== "bsg-margin") {
-    return undefined;
+  
+  function getSelectedPerspective(
+    area: AreaKey | undefined,
+    concept: ConceptKey | undefined,
+    value: string | string[] | undefined,
+  ): PerspectiveKey | undefined {
+    if (area !== "commercial" || !concept) {
+      return undefined;
+    }
+  
+    const normalizedValue = Array.isArray(value) ? value[0] : value;
+  
+    return commercialPerspectives.some(
+      (perspective) => perspective.key === normalizedValue,
+    )
+      ? (normalizedValue as PerspectiveKey)
+      : undefined;
   }
-
-  const normalizedValue = Array.isArray(value) ? value[0] : value;
-
-  return marginPerspectives.some(
-    (perspective) => perspective.key === normalizedValue,
-  )
-    ? (normalizedValue as PerspectiveKey)
-    : undefined;
-}

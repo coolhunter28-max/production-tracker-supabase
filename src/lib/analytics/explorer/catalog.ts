@@ -18,6 +18,15 @@ export type ExplorerMetricKey =
 
 export type ExplorerValueFormat = "currency" | "percentage";
 
+export type ExplorerChartType = "bar";
+
+export type ExplorerRepresentation = {
+  valueLabel: string;
+  percentageLabel?: string;
+  showPercentage: boolean;
+  chart: ExplorerChartType;
+};
+
 export type ExplorerConcept = {
   id: ExplorerConceptId;
   areaId: ExplorerAreaId;
@@ -26,6 +35,7 @@ export type ExplorerConcept = {
   businessMeaning: string;
   metric: ExplorerMetricKey;
   valueFormat: ExplorerValueFormat;
+  representation: ExplorerRepresentation;
   interpretation: string;
   caution?: string;
 };
@@ -36,11 +46,17 @@ export const EXPLORER_CONCEPTS = [
     areaId: "commercial",
     label: "Contribución",
     shortDescription:
-      "Aportación económica total generada por las dos operativas.",
+      "Aportación económica total generada por cada cliente.",
     businessMeaning:
-      "Suma el margen generado por BSG y la comisión obtenida mediante Xiamen.",
+      "En BSG suma el margen de compraventa y el 10 % sobre el importe de compra. En Xiamen representa el 10 % de comisión sobre el importe.",
     metric: "contribution_total",
     valueFormat: "currency",
+    representation: {
+      valueLabel: "Contribución",
+      percentageLabel: "Contribución %",
+      showPercentage: true,
+      chart: "bar",
+    },
     interpretation:
       "Permite conocer cuánto dinero aporta cada cliente, fábrica, temporada u operativa a la empresa.",
     caution:
@@ -55,6 +71,11 @@ export const EXPLORER_CONCEPTS = [
       "Representa el importe total de venta generado por la actividad comercial.",
     metric: "sell_amount_total",
     valueFormat: "currency",
+    representation: {
+      valueLabel: "Ventas",
+      showPercentage: false,
+      chart: "bar",
+    },
     interpretation:
       "Permite comparar el peso económico de clientes, fábricas, temporadas y operativas.",
   },
@@ -67,6 +88,11 @@ export const EXPLORER_CONCEPTS = [
       "Representa el importe total de compra registrado en las operaciones donde existe coste de compra.",
     metric: "buy_amount_total",
     valueFormat: "currency",
+    representation: {
+      valueLabel: "Compras",
+      showPercentage: false,
+      chart: "bar",
+    },
     interpretation:
       "Ayuda a entender el coste soportado por la operativa BSG y su relación con las ventas.",
     caution:
@@ -78,13 +104,19 @@ export const EXPLORER_CONCEPTS = [
     label: "Margen BSG",
     shortDescription: "Margen generado por la operativa BSG.",
     businessMeaning:
-      "Representa el resultado económico de BSG después de considerar la diferencia entre venta y compra, junto con el componente adicional definido por el negocio.",
+      "Representa exclusivamente la diferencia entre el importe de venta y el importe de compra en la operativa BSG.",
     metric: "margin_bsg_total",
     valueFormat: "currency",
+    representation: {
+      valueLabel: "Margen",
+      percentageLabel: "Margen %",
+      showPercentage: true,
+      chart: "bar",
+    },
     interpretation:
       "Permite analizar qué clientes y operaciones generan más margen dentro de BSG.",
     caution:
-      "No debe utilizarse para medir la aportación económica de clientes que trabajan principalmente mediante Xiamen.",
+      "No incluye el 10 % adicional sobre el importe de compra. Para conocer la aportación económica total debe analizarse el concepto Contribución.",
   },
   {
     id: "xiamen-commission",
@@ -95,6 +127,12 @@ export const EXPLORER_CONCEPTS = [
       "Representa la remuneración obtenida sobre las ventas gestionadas mediante Xiamen.",
     metric: "margin_xiamen_total",
     valueFormat: "currency",
+    representation: {
+      valueLabel: "Comisión",
+      percentageLabel: "Comisión %",
+      showPercentage: true,
+      chart: "bar",
+    },
     interpretation:
       "Permite conocer la aportación económica absoluta de los clientes y operaciones de Xiamen.",
     caution:
@@ -110,6 +148,11 @@ export const EXPLORER_CONCEPTS = [
       "Mide qué proporción del volumen vendido se transforma en aportación económica para la empresa.",
     metric: "contribution_pct",
     valueFormat: "percentage",
+    representation: {
+      valueLabel: "Rentabilidad",
+      showPercentage: false,
+      chart: "bar",
+    },
     interpretation:
       "Permite contextualizar la aportación económica en relación con el volumen de ventas.",
     caution:
