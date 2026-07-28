@@ -9,6 +9,7 @@ import {
 } from "@/lib/analytics/context/analysis-context";
 import { getExplorerBsgMarginByCustomer } from "@/lib/analytics/explorer/bsg-margin";
 import { getExplorerContributionByCustomer } from "@/lib/analytics/explorer/contribution";
+import { getExplorerProfitabilityByCustomer } from "@/lib/analytics/explorer/profitability";
 import { getExplorerPurchasesByCustomer } from "@/lib/analytics/explorer/purchases";
 import { getExplorerSalesByCustomer } from "@/lib/analytics/explorer/sales";
 import { getExplorerXiamenCommissionByCustomer } from "@/lib/analytics/explorer/xiamen-commission";
@@ -659,7 +660,8 @@ function SelectedConceptState({
       concept.id === "contribution" ||
       concept.id === "sales" ||
       concept.id === "purchases" ||
-      concept.id === "xiamen-commission" ? (
+      concept.id === "xiamen-commission" ||
+      concept.id === "profitability" ? (
         selectedPerspective ? (
           <SelectedPerspectiveState
             area={area}
@@ -1153,6 +1155,22 @@ async function getExplorerCustomerMetricRows(
         current_percentage: row.current_commission_pct,
         comparison_value: row.comparison_value,
         comparison_percentage: row.comparison_commission_pct,
+        delta_value: row.delta_value,
+        delta_pct: row.delta_pct,
+      }));
+    }
+
+    case "profitability": {
+      const rows =
+        await getExplorerProfitabilityByCustomer(context);
+
+      return rows.map((row) => ({
+        ranking: row.ranking,
+        customer: row.customer,
+        current_value: row.current_value,
+        current_percentage: null,
+        comparison_value: row.comparison_value,
+        comparison_percentage: null,
         delta_value: row.delta_value,
         delta_pct: row.delta_pct,
       }));
