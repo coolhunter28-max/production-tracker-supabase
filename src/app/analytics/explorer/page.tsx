@@ -9,6 +9,7 @@ import {
 } from "@/lib/analytics/context/analysis-context";
 import { getExplorerBsgMarginByCustomer } from "@/lib/analytics/explorer/bsg-margin";
 import { getExplorerContributionByCustomer } from "@/lib/analytics/explorer/contribution";
+import { getExplorerPurchasesByCustomer } from "@/lib/analytics/explorer/purchases";
 import { getExplorerSalesByCustomer } from "@/lib/analytics/explorer/sales";
 import {
   EXPLORER_CONCEPTS,
@@ -655,7 +656,8 @@ function SelectedConceptState({
 
       {concept.id === "bsg-margin" ||
       concept.id === "contribution" ||
-      concept.id === "sales" ? (
+      concept.id === "sales" ||
+      concept.id === "purchases" ? (
         selectedPerspective ? (
           <SelectedPerspectiveState
             area={area}
@@ -1103,6 +1105,36 @@ async function getExplorerCustomerMetricRows(
         current_percentage: row.current_contribution_pct,
         comparison_value: row.comparison_value,
         comparison_percentage: row.comparison_contribution_pct,
+        delta_value: row.delta_value,
+        delta_pct: row.delta_pct,
+      }));
+    }
+
+    case "sales": {
+      const rows = await getExplorerSalesByCustomer(context);
+
+      return rows.map((row) => ({
+        ranking: row.ranking,
+        customer: row.customer,
+        current_value: row.current_value,
+        current_percentage: null,
+        comparison_value: row.comparison_value,
+        comparison_percentage: null,
+        delta_value: row.delta_value,
+        delta_pct: row.delta_pct,
+      }));
+    }
+
+    case "purchases": {
+      const rows = await getExplorerPurchasesByCustomer(context);
+
+      return rows.map((row) => ({
+        ranking: row.ranking,
+        customer: row.customer,
+        current_value: row.current_value,
+        current_percentage: null,
+        comparison_value: row.comparison_value,
+        comparison_percentage: null,
         delta_value: row.delta_value,
         delta_pct: row.delta_pct,
       }));
