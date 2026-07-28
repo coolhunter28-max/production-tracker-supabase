@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AnalyticsBarChart } from "@/components/analytics/charts/AnalyticsBarChart";
+import { ExplorerSummaryCard } from "@/components/analytics/explorer/ExplorerSummaryCard";
 import { AnalyticsRankingTable } from "@/components/analytics/tables/AnalyticsRankingTable";
 import {
   getCommercialSeasons,
@@ -13,6 +14,7 @@ import { getExplorerProfitabilityByCustomer } from "@/lib/analytics/explorer/pro
 import { getExplorerPurchasesByCustomer } from "@/lib/analytics/explorer/purchases";
 import { getExplorerSalesByCustomer } from "@/lib/analytics/explorer/sales";
 import { getExplorerXiamenCommissionByCustomer } from "@/lib/analytics/explorer/xiamen-commission";
+import type { ExplorerSummary } from "@/lib/analytics/explorer/types";
 import {
   EXPLORER_CONCEPTS,
   type ExplorerConcept,
@@ -230,6 +232,17 @@ export default async function AnalyticsExplorerPage({
         )
       : undefined;
 
+  const customerMetricSummary =
+    selectedConceptKey &&
+    analysisContext &&
+    customerMetricResult
+      ? await buildExplorerSummary(
+          selectedConceptKey,
+          analysisContext,
+          customerMetricResult,
+        )
+      : undefined;
+
   return (
     <main className="space-y-6">
       <ExplorerHeader
@@ -256,11 +269,13 @@ export default async function AnalyticsExplorerPage({
       {analysisContext &&
       selectedConcept &&
       selectedPerspectiveKey === "customer" &&
-      customerMetricResult ? (
+      customerMetricResult &&
+      customerMetricSummary ? (
         <CustomerMetricResult
           concept={selectedConcept}
           context={analysisContext}
           rows={customerMetricResult}
+          summary={customerMetricSummary}
         />
       ) : null}
 
@@ -1181,14 +1196,240 @@ async function getExplorerCustomerMetricRows(
   }
 }
 
+async function buildExplorerSummary(
+  conceptId: ConceptKey,
+  context: AnalysisContext,
+  rows: ExplorerCustomerMetricRow[],
+): Promise<ExplorerSummary> {
+  const total = sumCurrentValues(rows);
+  const customerCount = rows.length;
+  const top3Share = calculateTop3Share(rows);
+
+  switch (conceptId) {
+    case "sales":
+      return {
+        primary: {
+          label: "Ventas totales",
+          value: total,
+          format: "currency",
+          currency: "USD",
+        },
+        secondary: {
+          label: "Clientes analizados",
+          value: customerCount,
+          format: "integer",
+        },
+        tertiary: {
+          label: "Peso Top 3",
+          value: top3Share,
+          format: "percentage",
+        },
+      };
+
+    case "purchases":
+      return {
+        primary: {
+          label: "Compras totales",
+          value: total,
+          format: "currency",
+          currency: "USD",
+        },
+        secondary: {
+          label: "Clientes analizados",
+          value: customerCount,
+          format: "integer",
+        },
+        tertiary: {
+          label: "Peso Top 3",
+          value: top3Share,
+          format: "percentage",
+        },
+      };
+
+    case "bsg-margin": {
+      const salesRows = await getExplorerSalesByCustomer(context);
+      const matchingSalesTotal = sumValuesForCustomers(
+        salesRows,
+        rows.map((row) => row.customer),
+      );
+
+      return {
+        primary: {
+          label: "Margen total",
+          value: total,
+          format: "currency",
+          currency: "USD",
+        },
+        secondary: {
+          label: "Margen global",
+          value: calculatePercentage(total, matchingSalesTotal),
+          format: "percentage",
+        },
+        tertiary: {
+          label: "Peso Top 3",
+          value: top3Share,
+          format: "percentage",
+        },
+      };
+    }
+
+    case "xiamen-commission":
+      return {
+        primary: {
+          label: "Comisión total",
+          value: total,
+          format: "currency",
+          currency: "USD",
+        },
+        secondary: {
+          label: "Clientes analizados",
+          value: customerCount,
+          format: "integer",
+        },
+        tertiary: {
+          label: "Peso Top 3",
+          value: top3Share,
+          format: "percentage",
+        },
+      };
+
+    case "contribution": {
+      const salesRows = await getExplorerSalesByCustomer(context);
+      const matchingSalesTotal = sumValuesForCustomers(
+        salesRows,
+        rows.map((row) => row.customer),
+      );
+
+      return {
+        primary: {
+          label: "Contribución total",
+          value: total,
+          format: "currency",
+          currency: "USD",
+        },
+        secondary: {
+          label: "Contribución global",
+          value: calculatePercentage(total, matchingSalesTotal),
+          format: "percentage",
+        },
+        tertiary: {
+          label: "Peso Top 3",
+          value: top3Share,
+          format: "percentage",
+        },
+      };
+    }
+
+    case "profitability": {
+      const [salesRows, contributionRows] = await Promise.all([
+        getExplorerSalesByCustomer(context),
+        getExplorerContributionByCustomer(context),
+      ]);
+
+      const contributionTotal = contributionRows.reduce(
+        (sum, row) => sum + row.current_value,
+        0,
+      );
+      const salesTotal = sumValuesForCustomers(
+        salesRows,
+        contributionRows.map((row) => row.customer),
+      );
+      const profitabilityRows = [...rows].sort(
+        (a, b) => b.current_value - a.current_value,
+      );
+      const highest = profitabilityRows[0];
+      const lowest =
+        profitabilityRows[profitabilityRows.length - 1];
+
+      return {
+        primary: {
+          label: "Rentabilidad global",
+          value: calculatePercentage(contributionTotal, salesTotal),
+          format: "percentage",
+        },
+        secondary: {
+          label: "Mayor rentabilidad",
+          value: highest
+            ? `${highest.customer} · ${formatPercentageText(
+                highest.current_value,
+              )}`
+            : null,
+          format: "text",
+        },
+        tertiary: {
+          label: "Menor rentabilidad",
+          value: lowest
+            ? `${lowest.customer} · ${formatPercentageText(
+                lowest.current_value,
+              )}`
+            : null,
+          format: "text",
+        },
+      };
+    }
+  }
+}
+
+function sumCurrentValues(rows: ExplorerCustomerMetricRow[]): number {
+  return rows.reduce((sum, row) => sum + row.current_value, 0);
+}
+
+function calculateTop3Share(
+  rows: ExplorerCustomerMetricRow[],
+): number | null {
+  const total = sumCurrentValues(rows);
+
+  if (total === 0) {
+    return null;
+  }
+
+  const top3Total = [...rows]
+    .sort((a, b) => a.ranking - b.ranking)
+    .slice(0, 3)
+    .reduce((sum, row) => sum + row.current_value, 0);
+
+  return (top3Total / total) * 100;
+}
+
+function calculatePercentage(
+  numerator: number,
+  denominator: number,
+): number | null {
+  return denominator === 0 ? null : (numerator / denominator) * 100;
+}
+
+function sumValuesForCustomers(
+  rows: Array<{ customer: string; current_value: number }>,
+  customers: string[],
+): number {
+  const customerSet = new Set(customers);
+
+  return rows.reduce(
+    (sum, row) =>
+      customerSet.has(row.customer)
+        ? sum + row.current_value
+        : sum,
+    0,
+  );
+}
+
+function formatPercentageText(value: number): string {
+  return `${new Intl.NumberFormat("es-ES", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)} %`;
+}
+
 function CustomerMetricResult({
   concept,
   context,
   rows,
+  summary,
 }: {
   concept: ExplorerConcept;
   context: AnalysisContext;
   rows: ExplorerCustomerMetricRow[];
+  summary: ExplorerSummary;
 }) {
   const [currentPeriodLabel, comparisonPeriodLabel] =
     context.label.split(" vs ");
@@ -1242,6 +1483,8 @@ function CustomerMetricResult({
           {context.label}. {concept.businessMeaning}
         </p>
       </div>
+
+      <ExplorerSummaryCard summary={summary} />
 
       <div className="grid gap-5 xl:grid-cols-2">
         <AnalyticsBarChart
