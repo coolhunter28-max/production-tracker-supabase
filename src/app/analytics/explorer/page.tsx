@@ -16,6 +16,7 @@ import { getExplorerSalesByCustomer } from "@/lib/analytics/explorer/sales";
 import { getExplorerXiamenCommissionByCustomer } from "@/lib/analytics/explorer/xiamen-commission";
 import type { ExplorerSummary } from "@/lib/analytics/explorer/types";
 import type { CustomerKpiSummary } from "@/lib/analytics/summary/customer-kpi-summary";
+import { buildBsgMarginSummary } from "@/lib/analytics/summary/bsg-margin-summary-adapter";
 import { buildSalesSummary } from "@/lib/analytics/summary/sales-summary-adapter";
 import {
   EXPLORER_CONCEPTS,
@@ -1518,15 +1519,24 @@ function buildSelectedCustomerSummary(
         value: selectedRow.delta_pct,
         format: "percentage",
       },
-      ...(conceptId === "sales"
-        ? {
-            cards: buildSalesSummary(selectedRow).map((card) => ({
+      ...(["sales", "bsg-margin"].includes(conceptId)
+  ? {
+      cards:
+        conceptId === "sales"
+          ? buildSalesSummary(selectedRow).map((card) => ({
               ...card,
               periodLabel: context.seasons[0],
-              comparisonPeriodLabel: context.comparisonSeasons[0],
+              comparisonPeriodLabel:
+                context.comparisonSeasons[0],
+            }))
+          : buildBsgMarginSummary(selectedRow).map((card) => ({
+              ...card,
+              periodLabel: context.seasons[0],
+              comparisonPeriodLabel:
+                context.comparisonSeasons[0],
             })),
-          }
-        : {}),
+    }
+  : {}),
     };
   }
 
