@@ -212,6 +212,7 @@ export default async function AnalyticsExplorerPage({
   );
 
   const selectedSeason = getSearchParam(searchParams.season);
+  const requestedCustomer = getSearchParam(searchParams.customer);
 
   const commercialSeasons = selectedPerspective
     ? await getCommercialSeasons()
@@ -232,15 +233,36 @@ export default async function AnalyticsExplorerPage({
         )
       : undefined;
 
+  const selectedCustomer =
+    requestedCustomer &&
+    customerMetricResult?.some(
+      (row) => row.customer === requestedCustomer,
+    )
+      ? requestedCustomer
+      : undefined;
+
+  const displayedCustomerMetricRows = selectedCustomer
+    ? customerMetricResult?.filter(
+        (row) => row.customer === selectedCustomer,
+      )
+    : customerMetricResult;
+
   const customerMetricSummary =
     selectedConceptKey &&
     analysisContext &&
     customerMetricResult
-      ? await buildExplorerSummary(
-          selectedConceptKey,
-          analysisContext,
-          customerMetricResult,
-        )
+      ? selectedCustomer
+        ? buildSelectedCustomerSummary(
+            selectedConceptKey,
+            analysisContext,
+            customerMetricResult,
+            selectedCustomer,
+          )
+        : await buildExplorerSummary(
+            selectedConceptKey,
+            analysisContext,
+            customerMetricResult,
+          )
       : undefined;
 
   return (
@@ -267,15 +289,26 @@ export default async function AnalyticsExplorerPage({
       )}
 
       {analysisContext &&
+      selectedAreaKey &&
+      selectedConceptKey &&
       selectedConcept &&
       selectedPerspectiveKey === "customer" &&
+      selectedContextKey &&
       customerMetricResult &&
+      displayedCustomerMetricRows &&
       customerMetricSummary ? (
         <CustomerMetricResult
           concept={selectedConcept}
           context={analysisContext}
-          rows={customerMetricResult}
+          rows={displayedCustomerMetricRows}
+          allRows={customerMetricResult}
           summary={customerMetricSummary}
+          selectedCustomer={selectedCustomer}
+          selectedAreaKey={selectedAreaKey}
+          selectedConceptKey={selectedConceptKey}
+          selectedPerspectiveKey={selectedPerspectiveKey}
+          selectedContextKey={selectedContextKey}
+          selectedSeason={selectedSeason}
         />
       ) : null}
 
@@ -1215,12 +1248,12 @@ async function buildExplorerSummary(
           currency: "USD",
         },
         secondary: {
-          label: "Clientes analizados",
+          label: "Clientes con actividad",
           value: customerCount,
           format: "integer",
         },
         tertiary: {
-          label: "Peso Top 3",
+          label: "Concentración (Top 3)",
           value: top3Share,
           format: "percentage",
         },
@@ -1235,12 +1268,12 @@ async function buildExplorerSummary(
           currency: "USD",
         },
         secondary: {
-          label: "Clientes analizados",
+          label: "Clientes con actividad",
           value: customerCount,
           format: "integer",
         },
         tertiary: {
-          label: "Peso Top 3",
+            label: "Concentración (Top 3)",
           value: top3Share,
           format: "percentage",
         },
@@ -1266,7 +1299,7 @@ async function buildExplorerSummary(
           format: "percentage",
         },
         tertiary: {
-          label: "Peso Top 3",
+            label: "Concentración (Top 3)",
           value: top3Share,
           format: "percentage",
         },
@@ -1282,12 +1315,12 @@ async function buildExplorerSummary(
           currency: "USD",
         },
         secondary: {
-          label: "Clientes analizados",
+            label: "Clientes con actividad",
           value: customerCount,
           format: "integer",
         },
         tertiary: {
-          label: "Peso Top 3",
+            label: "Concentración (Top 3)",
           value: top3Share,
           format: "percentage",
         },
@@ -1313,7 +1346,7 @@ async function buildExplorerSummary(
           format: "percentage",
         },
         tertiary: {
-          label: "Peso Top 3",
+            label: "Concentración (Top 3)",
           value: top3Share,
           format: "percentage",
         },
@@ -1348,7 +1381,7 @@ async function buildExplorerSummary(
           format: "percentage",
         },
         secondary: {
-          label: "Mayor rentabilidad",
+            label: "Cliente más rentable",
           value: highest
             ? `${highest.customer} · ${formatPercentageText(
                 highest.current_value,
@@ -1357,7 +1390,7 @@ async function buildExplorerSummary(
           format: "text",
         },
         tertiary: {
-          label: "Menor rentabilidad",
+            label: "Cliente menos rentable",
           value: lowest
             ? `${lowest.customer} · ${formatPercentageText(
                 lowest.current_value,
@@ -1420,16 +1453,221 @@ function formatPercentageText(value: number): string {
   }).format(value)} %`;
 }
 
+function buildSelectedCustomerSummary(
+  conceptId: ConceptKey,
+  context: AnalysisContext,
+  allRows: ExplorerCustomerMetricRow[],
+  selectedCustomer: string,
+): ExplorerSummary {
+  const selectedRow = allRows.find(
+    (row) => row.customer === selectedCustomer,
+  );
+
+  if (!selectedRow) {
+    return {
+      primary: {
+        label: "Valor actual",
+        value: null,
+        format: "text",
+      },
+      secondary: {
+        label: "Posición en ranking",
+        value: null,
+        format: "text",
+      },
+      tertiary: {
+        label: "Peso sobre el total",
+        value: null,
+        format: "percentage",
+      },
+    };
+  }
+
+  const concept = EXPLORER_CONCEPTS.find(
+    (item) => item.id === conceptId,
+  );
+  const valueLabel =
+    concept?.representation.valueLabel ?? "Valor";
+  const valueFormat =
+    conceptId === "profitability" ? "percentage" : "currency";
+  const isComparative =
+    context.type === "COMPARATIVE_SEASONS";
+
+  if (isComparative) {
+    return {
+      primary: {
+        label: `${valueLabel} actual`,
+        value: selectedRow.current_value,
+        format: valueFormat,
+        ...(valueFormat === "currency"
+          ? { currency: "USD" }
+          : {}),
+      },
+      secondary: {
+        label: `${valueLabel} campaña comparada`,
+        value: selectedRow.comparison_value,
+        format: valueFormat,
+        ...(valueFormat === "currency"
+          ? { currency: "USD" }
+          : {}),
+      },
+      tertiary: {
+        label: "Variación",
+        value: selectedRow.delta_pct,
+        format: "percentage",
+      },
+    };
+  }
+
+  const total = sumCurrentValues(allRows);
+  const shareOfTotal =
+    conceptId === "profitability"
+      ? null
+      : calculatePercentage(selectedRow.current_value, total);
+
+  return {
+    primary: {
+      label: valueLabel,
+      value: selectedRow.current_value,
+      format: valueFormat,
+      ...(valueFormat === "currency"
+        ? { currency: "USD" }
+        : {}),
+    },
+    secondary:
+      selectedRow.current_percentage !== null
+        ? {
+            label:
+              concept &&
+              "percentageLabel" in concept.representation
+                ? concept.representation.percentageLabel ??
+                  `${valueLabel} %`
+                : `${valueLabel} %`,
+            value: selectedRow.current_percentage,
+            format: "percentage",
+          }
+        : {
+            label: "Posición en ranking",
+            value: `${selectedRow.ranking} de ${allRows.length}`,
+            format: "text",
+          },
+    tertiary:
+      conceptId === "profitability"
+        ? {
+            label: "Clientes comparados",
+            value: allRows.length,
+            format: "integer",
+          }
+        : {
+            label: "Peso sobre el total",
+            value: shareOfTotal,
+            format: "percentage",
+          },
+  };
+}
+
+function CustomerSelector({
+  customers,
+  selectedCustomer,
+  area,
+  concept,
+  perspective,
+  context,
+  season,
+}: {
+  customers: string[];
+  selectedCustomer: string | undefined;
+  area: AreaKey;
+  concept: ConceptKey;
+  perspective: PerspectiveKey;
+  context: ContextKey;
+  season: string | undefined;
+}) {
+  return (
+    <section className="rounded-2xl border bg-card p-5 shadow-sm">
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Cliente
+        </p>
+        <h2 className="mt-1 text-lg font-semibold">
+          ¿Quieres aislar un cliente?
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Mantén «Todos los clientes» para ver el ranking completo o
+          selecciona uno para analizarlo de forma aislada.
+        </p>
+      </div>
+
+      <form
+        method="get"
+        action="/analytics/explorer"
+        className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
+      >
+        <input type="hidden" name="area" value={area} />
+        <input type="hidden" name="concept" value={concept} />
+        <input
+          type="hidden"
+          name="perspective"
+          value={perspective}
+        />
+        <input type="hidden" name="context" value={context} />
+        {season ? (
+          <input type="hidden" name="season" value={season} />
+        ) : null}
+
+        <label className="flex-1">
+          <span className="mb-1.5 block text-sm font-medium">
+            Cliente seleccionado
+          </span>
+          <select
+            name="customer"
+            defaultValue={selectedCustomer ?? ""}
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+          >
+            <option value="">Todos los clientes</option>
+            {customers.map((customer) => (
+              <option key={customer} value={customer}>
+                {customer}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center justify-center rounded-md bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+        >
+          Aplicar
+        </button>
+      </form>
+    </section>
+  );
+}
+
 function CustomerMetricResult({
   concept,
   context,
   rows,
+  allRows,
   summary,
+  selectedCustomer,
+  selectedAreaKey,
+  selectedConceptKey,
+  selectedPerspectiveKey,
+  selectedContextKey,
+  selectedSeason,
 }: {
   concept: ExplorerConcept;
   context: AnalysisContext;
   rows: ExplorerCustomerMetricRow[];
+  allRows: ExplorerCustomerMetricRow[];
   summary: ExplorerSummary;
+  selectedCustomer: string | undefined;
+  selectedAreaKey: AreaKey;
+  selectedConceptKey: ConceptKey;
+  selectedPerspectiveKey: PerspectiveKey;
+  selectedContextKey: ContextKey;
+  selectedSeason: string | undefined;
 }) {
   const [currentPeriodLabel, comparisonPeriodLabel] =
     context.label.split(" vs ");
@@ -1438,7 +1676,10 @@ function CustomerMetricResult({
     context.type === "COMPARATIVE_SEASONS";
   const representation = concept.representation;
   const percentageLabel =
-    representation.percentageLabel ?? `${representation.valueLabel} %`;
+    "percentageLabel" in representation
+      ? representation.percentageLabel ??
+        `${representation.valueLabel} %`
+      : `${representation.valueLabel} %`;
 
   const preferredColumns = isComparative
     ? [
@@ -1467,6 +1708,12 @@ function CustomerMetricResult({
   const valueLabel = isComparative
     ? `${representation.valueLabel} ${currentPeriodLabel}`
     : representation.valueLabel;
+  const customers = [...allRows]
+    .sort((a, b) => a.ranking - b.ranking)
+    .map((row) => row.customer);
+  const resultTitle = selectedCustomer
+    ? `${representation.valueLabel} de ${selectedCustomer}`
+    : `${representation.valueLabel} por cliente`;
 
   return (
     <section className="space-y-5">
@@ -1476,7 +1723,7 @@ function CustomerMetricResult({
         </p>
 
         <h2 className="mt-1 text-xl font-semibold">
-          {representation.valueLabel} por cliente
+          {resultTitle}
         </h2>
 
         <p className="mt-1 text-sm text-muted-foreground">
@@ -1484,11 +1731,21 @@ function CustomerMetricResult({
         </p>
       </div>
 
+      <CustomerSelector
+        customers={customers}
+        selectedCustomer={selectedCustomer}
+        area={selectedAreaKey}
+        concept={selectedConceptKey}
+        perspective={selectedPerspectiveKey}
+        context={selectedContextKey}
+        season={selectedSeason}
+      />
+
       <ExplorerSummaryCard summary={summary} />
 
       <div className="grid gap-5 xl:grid-cols-2">
         <AnalyticsBarChart
-          title="Ranking visual"
+          title={selectedCustomer ? "Vista del cliente" : "Ranking visual"}
           rows={rows}
           labelKeys={["customer"]}
           valueKeys={["current_value"]}
@@ -1499,11 +1756,15 @@ function CustomerMetricResult({
 
         <AnalyticsRankingTable
           title={
-            isComparative
-              ? "Ranking y variación frente a campaña hermana"
-              : `Ranking de ${representation.valueLabel.toLocaleLowerCase(
-                  "es-ES",
-                )}`
+            selectedCustomer
+              ? isComparative
+                ? `Detalle comparativo de ${selectedCustomer}`
+                : `Detalle de ${selectedCustomer}`
+              : isComparative
+                ? "Ranking y variación frente a campaña hermana"
+                : `Ranking de ${representation.valueLabel.toLocaleLowerCase(
+                    "es-ES",
+                  )}`
           }
           rows={rows}
           preferredColumns={preferredColumns}
