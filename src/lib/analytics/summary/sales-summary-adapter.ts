@@ -1,9 +1,13 @@
-﻿import type { ExplorerSalesByCustomerRow } from "@/lib/analytics/explorer/sales";
-import type { AnalyticsKpi } from "@/lib/analytics/summary/analytics-kpi";
+﻿import type { AnalyticsKpi } from "@/lib/analytics/summary/analytics-kpi";
 import { buildMonetaryChange } from "@/lib/analytics/summary/change-utils";
 
+export type SalesSummarySource = {
+  current_value: number;
+  comparison_value: number | null;
+};
+
 export function buildSalesSummary(
-  row: ExplorerSalesByCustomerRow,
+  row: SalesSummarySource,
 ): AnalyticsKpi[] {
   const change = buildMonetaryChange(
     row.current_value,

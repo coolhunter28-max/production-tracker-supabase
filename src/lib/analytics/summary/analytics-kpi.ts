@@ -8,6 +8,8 @@ export type AnalyticsKpi = {
   value: number | null;
   format: "currency" | "percentage" | "integer";
   currency?: string;
+  periodLabel?: string;
+  comparisonPeriodLabel?: string;
 
   comparisonValue?: number | null;
   changeValue?: number | null;

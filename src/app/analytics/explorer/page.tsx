@@ -15,6 +15,8 @@ import { getExplorerPurchasesByCustomer } from "@/lib/analytics/explorer/purchas
 import { getExplorerSalesByCustomer } from "@/lib/analytics/explorer/sales";
 import { getExplorerXiamenCommissionByCustomer } from "@/lib/analytics/explorer/xiamen-commission";
 import type { ExplorerSummary } from "@/lib/analytics/explorer/types";
+import type { CustomerKpiSummary } from "@/lib/analytics/summary/customer-kpi-summary";
+import { buildSalesSummary } from "@/lib/analytics/summary/sales-summary-adapter";
 import {
   EXPLORER_CONCEPTS,
   type ExplorerConcept,
@@ -1458,7 +1460,7 @@ function buildSelectedCustomerSummary(
   context: AnalysisContext,
   allRows: ExplorerCustomerMetricRow[],
   selectedCustomer: string,
-): ExplorerSummary {
+): CustomerKpiSummary {
   const selectedRow = allRows.find(
     (row) => row.customer === selectedCustomer,
   );
@@ -1516,6 +1518,15 @@ function buildSelectedCustomerSummary(
         value: selectedRow.delta_pct,
         format: "percentage",
       },
+      ...(conceptId === "sales"
+        ? {
+            cards: buildSalesSummary(selectedRow).map((card) => ({
+              ...card,
+              periodLabel: context.seasons[0],
+              comparisonPeriodLabel: context.comparisonSeasons[0],
+            })),
+          }
+        : {}),
     };
   }
 
