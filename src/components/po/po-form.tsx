@@ -184,10 +184,6 @@ function unique(values: Array<string | null | undefined>) {
   return [...new Set(values.filter(Boolean) as string[])].sort();
 }
 
-function isBsgOperativa(value?: string | null) {
-  return String(value ?? "").toUpperCase().includes("BSG");
-}
-
 function normalizeMuestras(linea: any): MuestraForm[] {
   const muestras = Array.isArray(linea?.muestras) ? linea.muestras : [];
 
@@ -290,10 +286,6 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
 
   function updateHeader(field: string, value: string) {
     setFormData((prev) => ({ ...prev, [field]: value }));
-
-    if (field === "channel" && !isBsgOperativa(value)) {
-      setLineas((prev) => prev.map((linea) => ({ ...linea, pi_bsg: "" })));
-    }
   }
 
   function updateLinea(index: number, field: keyof LineaForm, value: string) {
@@ -313,10 +305,6 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
           field === "qty" ? value : row.qty,
           field === "price_selling" ? value : row.price_selling
         );
-      }
-
-      if (field === "channel" && !isBsgOperativa(value)) {
-        row.pi_bsg = "";
       }
 
       next[index] = row;
@@ -577,11 +565,6 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
       if (!linea.factory.trim()) return `La línea ${rowNumber} no tiene factory.`;
       if (!linea.qty || Number(linea.qty) <= 0) return `La línea ${rowNumber} no tiene cantidad válida.`;
 
-      const operativeChannel = linea.channel || formData.channel;
-      if (!isBsgOperativa(operativeChannel) && linea.pi_bsg.trim()) {
-        return `La línea ${rowNumber} tiene PI BSG pero no pertenece a operativa BSG.`;
-      }
-
       for (const [muestraIndex, muestra] of linea.muestras.entries()) {
         const muestraNumber = muestraIndex + 1;
 
@@ -612,15 +595,10 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
 
     const payload = {
       po: formData,
-      lineas_pedido: lineas.map((linea) => {
-        const operativeChannel = linea.channel || formData.channel;
-
-        return {
-          ...linea,
-          pi_bsg: isBsgOperativa(operativeChannel) ? linea.pi_bsg : "",
-          muestras: linea.muestras,
-        };
-      }),
+      lineas_pedido: lineas.map((linea) => ({
+        ...linea,
+        muestras: linea.muestras,
+      })),
     };
 
     const url = po?.id ? `/api/po/${po.id}` : "/api/po";
@@ -695,9 +673,6 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
               Boolean(formData.season) &&
               colorOptions.length === 0 &&
               sourceSeasonOptions.length > 0;
-            const operativeChannel = linea.channel || formData.channel;
-            const isBsg = isBsgOperativa(operativeChannel);
-
             return (
               <article key={`${linea.id ?? "new"}-${index}`} className="rounded-lg border bg-slate-50 p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
@@ -846,9 +821,8 @@ export function POForm({ po, successUrl, cancelUrl }: POFormProps) {
                           <Td><SmallInput value={linea.pi_number} onChange={(v) => updateLinea(index, "pi_number", v)} /></Td>
                           <Td>
                             <SmallInput
-                              value={isBsg ? linea.pi_bsg : ""}
-                              disabled={!isBsg}
-                              placeholder={isBsg ? "" : "Solo BSG"}
+                              value={linea.pi_bsg}
+                              placeholder="Opcional"
                               onChange={(v) => updateLinea(index, "pi_bsg", v)}
                             />
                           </Td>
