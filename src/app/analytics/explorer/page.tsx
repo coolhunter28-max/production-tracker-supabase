@@ -11,7 +11,10 @@ import {
 import { getExplorerBsgMarginByCustomer } from "@/lib/analytics/explorer/bsg-margin";
 import { getExplorerContributionByCustomer } from "@/lib/analytics/explorer/contribution";
 import { getExplorerProfitabilityByCustomer } from "@/lib/analytics/explorer/profitability";
-import { getExplorerPurchasesByCustomer } from "@/lib/analytics/explorer/purchases";
+import {
+  getExplorerPurchasesByCustomer,
+  type ExplorerPurchasesByCustomerRow,
+} from "@/lib/analytics/explorer/purchases";
 import { getExplorerSalesByCustomer } from "@/lib/analytics/explorer/sales";
 import { getExplorerXiamenCommissionByCustomer } from "@/lib/analytics/explorer/xiamen-commission";
 import type { ExplorerSummary } from "@/lib/analytics/explorer/types";
@@ -19,6 +22,7 @@ import type { CustomerKpiSummary } from "@/lib/analytics/summary/customer-kpi-su
 import { buildBsgMarginSummary } from "@/lib/analytics/summary/bsg-margin-summary-adapter";
 import { buildContributionSummary } from "@/lib/analytics/summary/contribution-summary-adapter";
 import { buildSalesSummary } from "@/lib/analytics/summary/sales-summary-adapter";
+import { buildPurchasesSummary } from "@/lib/analytics/summary/purchases-summary-adapter";
 import {
   EXPLORER_CONCEPTS,
   type ExplorerConcept,
@@ -245,7 +249,19 @@ export default async function AnalyticsExplorerPage({
       ? requestedCustomer
       : undefined;
 
-  const displayedCustomerMetricRows = selectedCustomer
+      const selectedPurchasesRow =
+      selectedConceptKey === "purchases" &&
+      selectedCustomer &&
+      analysisContext
+        ? (
+            await getExplorerPurchasesByCustomer(
+              analysisContext,
+            )
+          ).find(
+            (row) => row.customer === selectedCustomer,
+          )
+        : undefined;
+      const displayedCustomerMetricRows = selectedCustomer
     ? customerMetricResult?.filter(
         (row) => row.customer === selectedCustomer,
       )
@@ -261,6 +277,7 @@ export default async function AnalyticsExplorerPage({
             analysisContext,
             customerMetricResult,
             selectedCustomer,
+            selectedPurchasesRow,
           )
         : await buildExplorerSummary(
             selectedConceptKey,
@@ -1462,6 +1479,7 @@ function buildSelectedCustomerSummary(
   context: AnalysisContext,
   allRows: ExplorerCustomerMetricRow[],
   selectedCustomer: string,
+  selectedPurchasesRow?: ExplorerPurchasesByCustomerRow,
 ): CustomerKpiSummary {
   const selectedRow = allRows.find(
     (row) => row.customer === selectedCustomer,
@@ -1520,7 +1538,7 @@ function buildSelectedCustomerSummary(
         value: selectedRow.delta_pct,
         format: "percentage",
       },
-      ...(["sales", "bsg-margin", "contribution"].includes(conceptId)
+      ...(["sales", "bsg-margin", "contribution", "purchases"].includes(conceptId)
   ? {
       cards:
         conceptId === "sales"
@@ -1537,12 +1555,23 @@ function buildSelectedCustomerSummary(
                 comparisonPeriodLabel:
                   context.comparisonSeasons[0],
               }))
-            : buildContributionSummary(selectedRow).map((card) => ({
+              : conceptId === "contribution"
+              ? buildContributionSummary(selectedRow).map((card) => ({
                 ...card,
                 periodLabel: context.seasons[0],
                 comparisonPeriodLabel:
                   context.comparisonSeasons[0],
-              })),
+              }))
+              : selectedPurchasesRow
+              ? buildPurchasesSummary(
+                  selectedPurchasesRow,
+                ).map((card) => ({
+                  ...card,
+                  periodLabel: context.seasons[0],
+                  comparisonPeriodLabel:
+                    context.comparisonSeasons[0],
+                }))
+                : undefined,
     }
   : {}),
     };

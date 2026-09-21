@@ -1,4 +1,4 @@
-import type { AnalysisContext } from "@/lib/analytics/context/analysis-context";
+﻿import type { AnalysisContext } from "@/lib/analytics/context/analysis-context";
 import { createClient } from "@/lib/supabase";
 
 export type ExplorerPurchasesByCustomerRow = {
@@ -8,6 +8,21 @@ export type ExplorerPurchasesByCustomerRow = {
   comparison_value: number | null;
   delta_value: number | null;
   delta_pct: number | null;
+
+  current_avg_purchase_price: number | null;
+  comparison_avg_purchase_price: number | null;
+
+  current_pairs: number | null;
+  comparison_pairs: number | null;
+
+  current_orders: number | null;
+  comparison_orders: number | null;
+
+  current_sales: number | null;
+  comparison_sales: number | null;
+
+  current_bsg_margin: number | null;
+  comparison_bsg_margin: number | null;
 };
 
 type ExplorerPurchasesByCustomerRpcRow = {
@@ -17,9 +32,26 @@ type ExplorerPurchasesByCustomerRpcRow = {
   comparison_value: number | string | null;
   delta_value: number | string | null;
   delta_pct: number | string | null;
+
+  current_avg_purchase_price: number | string | null;
+  comparison_avg_purchase_price: number | string | null;
+
+  current_pairs: number | string | null;
+  comparison_pairs: number | string | null;
+
+  current_orders: number | string | null;
+  comparison_orders: number | string | null;
+
+  current_sales: number | string | null;
+  comparison_sales: number | string | null;
+
+  current_bsg_margin: number | string | null;
+  comparison_bsg_margin: number | string | null;
 };
 
-function toNumber(value: number | string | null): number {
+function toNumber(
+  value: number | string | null,
+): number {
   if (value === null) {
     return 0;
   }
@@ -51,7 +83,9 @@ export async function getExplorerPurchasesByCustomer(
     "get_explorer_purchases_by_customer_v1",
     {
       p_seasons:
-        context.seasons.length > 0 ? context.seasons : null,
+        context.seasons.length > 0
+          ? context.seasons
+          : null,
       p_comparison_seasons:
         context.comparisonSeasons.length > 0
           ? context.comparisonSeasons
@@ -87,6 +121,35 @@ export async function getExplorerPurchasesByCustomer(
         ),
         delta_value: toNullableNumber(row.delta_value),
         delta_pct: toNullableNumber(row.delta_pct),
+
+        current_avg_purchase_price: toNullableNumber(
+          row.current_avg_purchase_price,
+        ),
+        comparison_avg_purchase_price: toNullableNumber(
+          row.comparison_avg_purchase_price,
+        ),
+
+        current_pairs: toNullableNumber(row.current_pairs),
+        comparison_pairs: toNullableNumber(
+          row.comparison_pairs,
+        ),
+
+        current_orders: toNullableNumber(row.current_orders),
+        comparison_orders: toNullableNumber(
+          row.comparison_orders,
+        ),
+
+        current_sales: toNullableNumber(row.current_sales),
+        comparison_sales: toNullableNumber(
+          row.comparison_sales,
+        ),
+
+        current_bsg_margin: toNullableNumber(
+          row.current_bsg_margin,
+        ),
+        comparison_bsg_margin: toNullableNumber(
+          row.comparison_bsg_margin,
+        ),
       },
     ];
   });
