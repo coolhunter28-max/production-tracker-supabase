@@ -23,6 +23,7 @@ import { buildBsgMarginSummary } from "@/lib/analytics/summary/bsg-margin-summar
 import { buildContributionSummary } from "@/lib/analytics/summary/contribution-summary-adapter";
 import { buildSalesSummary } from "@/lib/analytics/summary/sales-summary-adapter";
 import { buildXiamenCommissionSummary } from "@/lib/analytics/summary/xiamen-commission-summary-adapter";
+import { buildProfitabilitySummary } from "@/lib/analytics/summary/profitability-summary-adapter";
 import { buildPurchasesSummary } from "@/lib/analytics/summary/purchases-summary-adapter";
 import {
   EXPLORER_CONCEPTS,
@@ -1539,7 +1540,7 @@ function buildSelectedCustomerSummary(
         value: selectedRow.delta_pct,
         format: "percentage",
       },
-      ...(["sales", "bsg-margin", "contribution", "purchases", "xiamen-commission"].includes(conceptId)
+      ...(["sales", "bsg-margin", "contribution", "purchases", "xiamen-commission", "profitability"].includes(conceptId)
   ? {
       cards:
         conceptId === "sales"
@@ -1563,8 +1564,15 @@ function buildSelectedCustomerSummary(
                 comparisonPeriodLabel:
                   context.comparisonSeasons[0],
               }))
-                            : conceptId === "xiamen-commission"
+              : conceptId === "xiamen-commission"
               ? buildXiamenCommissionSummary(selectedRow).map((card) => ({
+                  ...card,
+                  periodLabel: context.seasons[0],
+                  comparisonPeriodLabel:
+                    context.comparisonSeasons[0],
+                }))
+              : conceptId === "profitability"
+              ? buildProfitabilitySummary(selectedRow).map((card) => ({
                   ...card,
                   periodLabel: context.seasons[0],
                   comparisonPeriodLabel:
