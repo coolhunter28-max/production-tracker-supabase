@@ -25,6 +25,11 @@ import { buildSalesSummary } from "@/lib/analytics/summary/sales-summary-adapter
 import { buildXiamenCommissionSummary } from "@/lib/analytics/summary/xiamen-commission-summary-adapter";
 import { buildProfitabilitySummary } from "@/lib/analytics/summary/profitability-summary-adapter";
 import { buildPurchasesSummary } from "@/lib/analytics/summary/purchases-summary-adapter";
+import type {
+  ExplorerAreaKey,
+  ExplorerContextKey,
+  ExplorerPerspectiveKey,
+} from "@/lib/analytics/explorer/analysis-definition";
 import {
   EXPLORER_CONCEPTS,
   type ExplorerConcept,
@@ -50,29 +55,10 @@ type PageProps = {
   searchParams: Record<string, string | string[] | undefined>;
 };
 
-type AreaKey =
-  | "operations"
-  | "commercial"
-  | "product"
-  | "production"
-  | "quality"
-  | "logistics"
-  | "development"
-  | "all";
-
+type AreaKey = ExplorerAreaKey;
 type ConceptKey = ExplorerConceptId;
-
-type PerspectiveKey =
-  | "customer"
-  | "factory"
-  | "season"
-  | "operativa";
-
-type ContextKey =
-  | "active"
-  | "single"
-  | "comparative"
-  | "historical";
+type PerspectiveKey = ExplorerPerspectiveKey;
+type ContextKey = ExplorerContextKey;
 
 type AnalysisArea = {
   key: AreaKey;
