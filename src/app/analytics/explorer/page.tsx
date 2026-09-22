@@ -25,10 +25,12 @@ import { buildSalesSummary } from "@/lib/analytics/summary/sales-summary-adapter
 import { buildXiamenCommissionSummary } from "@/lib/analytics/summary/xiamen-commission-summary-adapter";
 import { buildProfitabilitySummary } from "@/lib/analytics/summary/profitability-summary-adapter";
 import { buildPurchasesSummary } from "@/lib/analytics/summary/purchases-summary-adapter";
-import type {
-  ExplorerAreaKey,
-  ExplorerContextKey,
-  ExplorerPerspectiveKey,
+import {
+  buildExplorerAnalysisDefinition,
+  type ExplorerAnalysisDefinition,
+  type ExplorerAreaKey,
+  type ExplorerContextKey,
+  type ExplorerPerspectiveKey,
 } from "@/lib/analytics/explorer/analysis-definition";
 import {
   EXPLORER_CONCEPTS,
@@ -236,6 +238,14 @@ export default async function AnalyticsExplorerPage({
     )
       ? requestedCustomer
       : undefined;
+      const analysisDefinition = buildExplorerAnalysisDefinition({
+        area: selectedAreaKey,
+        concept: selectedConceptKey,
+        perspective: selectedPerspectiveKey,
+        context: selectedContextKey,
+        season: selectedSeason,
+        customer: selectedCustomer,
+      });
 
       const selectedPurchasesRow =
       selectedConceptKey === "purchases" &&
@@ -298,6 +308,7 @@ export default async function AnalyticsExplorerPage({
       )}
 
       {analysisContext &&
+      analysisDefinition &&
       selectedAreaKey &&
       selectedConceptKey &&
       selectedConcept &&
@@ -312,12 +323,7 @@ export default async function AnalyticsExplorerPage({
           rows={displayedCustomerMetricRows}
           allRows={customerMetricResult}
           summary={customerMetricSummary}
-          selectedCustomer={selectedCustomer}
-          selectedAreaKey={selectedAreaKey}
-          selectedConceptKey={selectedConceptKey}
-          selectedPerspectiveKey={selectedPerspectiveKey}
-          selectedContextKey={selectedContextKey}
-          selectedSeason={selectedSeason}
+          analysisDefinition={analysisDefinition}
         />
       ) : null}
 
@@ -1710,25 +1716,23 @@ function CustomerMetricResult({
   rows,
   allRows,
   summary,
-  selectedCustomer,
-  selectedAreaKey,
-  selectedConceptKey,
-  selectedPerspectiveKey,
-  selectedContextKey,
-  selectedSeason,
+  analysisDefinition,
 }: {
   concept: ExplorerConcept;
   context: AnalysisContext;
   rows: ExplorerCustomerMetricRow[];
   allRows: ExplorerCustomerMetricRow[];
   summary: ExplorerSummary;
-  selectedCustomer: string | undefined;
-  selectedAreaKey: AreaKey;
-  selectedConceptKey: ConceptKey;
-  selectedPerspectiveKey: PerspectiveKey;
-  selectedContextKey: ContextKey;
-  selectedSeason: string | undefined;
+  analysisDefinition: ExplorerAnalysisDefinition;
 }) {
+  const {
+    area: selectedAreaKey,
+    concept: selectedConceptKey,
+    perspective: selectedPerspectiveKey,
+    context: selectedContextKey,
+    season: selectedSeason,
+    customer: selectedCustomer,
+  } = analysisDefinition;
   const [currentPeriodLabel, comparisonPeriodLabel] =
     context.label.split(" vs ");
 
