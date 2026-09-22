@@ -18,6 +18,10 @@ import {
 import { getExplorerSalesByCustomer } from "@/lib/analytics/explorer/sales";
 import { getExplorerXiamenCommissionByCustomer } from "@/lib/analytics/explorer/xiamen-commission";
 import type { ExplorerSummary } from "@/lib/analytics/explorer/types";
+import {
+  getSavedExplorerAnalyses,
+  type SavedExplorerAnalysis,
+} from "@/lib/analytics/explorer/saved-analyses";
 import type { CustomerKpiSummary } from "@/lib/analytics/summary/customer-kpi-summary";
 import { buildBsgMarginSummary } from "@/lib/analytics/summary/bsg-margin-summary-adapter";
 import { buildContributionSummary } from "@/lib/analytics/summary/contribution-summary-adapter";
@@ -179,6 +183,9 @@ const allAreasOption = areas.find((area) => area.key === "all");
 export default async function AnalyticsExplorerPage({
   searchParams,
 }: PageProps) {
+  const savedAnalyses = !searchParams.area
+  ? await getSavedExplorerAnalyses()
+  : [];
   const selectedAreaKey = getSelectedArea(searchParams.area);
 
   const selectedArea = areas.find(
@@ -327,7 +334,9 @@ export default async function AnalyticsExplorerPage({
         />
       ) : null}
 
-      {!selectedArea && <ExistingAnalysesSection />}
+{!selectedArea && (
+  <ExistingAnalysesSection savedAnalyses={savedAnalyses} />
+)}
     </main>
   );
 }
@@ -1864,7 +1873,11 @@ function CustomerMetricResult({
   );
 }
 
-function ExistingAnalysesSection() {
+function ExistingAnalysesSection({
+  savedAnalyses,
+}: {
+  savedAnalyses: SavedExplorerAnalysis[];
+}) {
   return (
     <section className="grid gap-4 lg:grid-cols-2">
       <div className="rounded-2xl border bg-card p-5 shadow-sm">
@@ -1895,14 +1908,39 @@ function ExistingAnalysesSection() {
           <div>
             <h2 className="font-semibold">Abrir análisis guardado</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Sin análisis guardados.
+              {savedAnalyses.length === 0
+                ? "Sin análisis guardados."
+                : `${savedAnalyses.length} ${
+                    savedAnalyses.length === 1
+                      ? "análisis guardado"
+                      : "análisis guardados"
+                  }.`}
             </p>
           </div>
         </div>
 
-        <div className="mt-5 rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
-          Tus análisis guardados aparecerán aquí.
-        </div>
+        {savedAnalyses.length === 0 ? (
+          <div className="mt-5 rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
+            Tus análisis guardados aparecerán aquí.
+          </div>
+        ) : (
+          <div className="mt-5 space-y-3">
+            {savedAnalyses.map((analysis) => (
+              <div
+                key={analysis.id}
+                className="rounded-xl border bg-background p-4"
+              >
+                <div className="font-medium">{analysis.name}</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {analysis.definition.season ?? "Sin temporada"}
+                  {analysis.definition.customer
+                    ? ` · ${analysis.definition.customer}`
+                    : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
