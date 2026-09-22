@@ -11,6 +11,7 @@ import {
 import { getExplorerBsgMarginByCustomer } from "@/lib/analytics/explorer/bsg-margin";
 import { getExplorerContributionByCustomer } from "@/lib/analytics/explorer/contribution";
 import { getExplorerProfitabilityByCustomer } from "@/lib/analytics/explorer/profitability";
+import { saveExplorerAnalysisAction } from "@/app/analytics/explorer/actions";
 import {
   getExplorerPurchasesByCustomer,
   type ExplorerPurchasesByCustomerRow,
@@ -1803,8 +1804,61 @@ function CustomerMetricResult({
           {context.label}. {concept.businessMeaning}
         </p>
       </div>
+      <form
+        action={saveExplorerAnalysisAction}
+        className="flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-end"
+      >
+        <input type="hidden" name="area" value={analysisDefinition.area} />
+        <input type="hidden" name="concept" value={analysisDefinition.concept} />
+        <input
+          type="hidden"
+          name="perspective"
+          value={analysisDefinition.perspective}
+        />
+        <input
+          type="hidden"
+          name="context"
+          value={analysisDefinition.context}
+        />
 
-      <CustomerSelector
+        {analysisDefinition.season ? (
+          <input
+            type="hidden"
+            name="season"
+            value={analysisDefinition.season}
+          />
+        ) : null}
+
+        {analysisDefinition.customer ? (
+          <input
+            type="hidden"
+            name="customer"
+            value={analysisDefinition.customer}
+          />
+        ) : null}
+
+        <label className="flex-1">
+          <span className="mb-1 block text-sm font-medium">
+            Nombre del análisis
+          </span>
+          <input
+            type="text"
+            name="name"
+            required
+            placeholder="Ej. Ventas LOLA CASADEMUNT — FW26 vs FW25"
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+          />
+        </label>
+
+        <button
+          type="submit"
+          className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border bg-background px-4 text-sm font-semibold transition hover:bg-slate-50"
+        >
+          Guardar análisis
+        </button>
+      </form>
+
+        <CustomerSelector
         customers={customers}
         selectedCustomer={selectedCustomer}
         area={selectedAreaKey}
