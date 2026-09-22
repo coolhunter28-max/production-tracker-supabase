@@ -1872,6 +1872,26 @@ function CustomerMetricResult({
     </section>
   );
 }
+function buildExplorerAnalysisHref(
+  definition: ExplorerAnalysisDefinition,
+): string {
+  const params = new URLSearchParams({
+    area: definition.area,
+    concept: definition.concept,
+    perspective: definition.perspective,
+    context: definition.context,
+  });
+
+  if (definition.season) {
+    params.set("season", definition.season);
+  }
+
+  if (definition.customer) {
+    params.set("customer", definition.customer);
+  }
+
+  return `/analytics/explorer?${params.toString()}`;
+}
 
 function ExistingAnalysesSection({
   savedAnalyses,
@@ -1927,17 +1947,28 @@ function ExistingAnalysesSection({
           <div className="mt-5 space-y-3">
             {savedAnalyses.map((analysis) => (
               <div
-                key={analysis.id}
-                className="rounded-xl border bg-background p-4"
-              >
-                <div className="font-medium">{analysis.name}</div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  {analysis.definition.season ?? "Sin temporada"}
-                  {analysis.definition.customer
-                    ? ` · ${analysis.definition.customer}`
-                    : ""}
-                </div>
-              </div>
+  key={analysis.id}
+  className="rounded-xl border bg-background p-4"
+>
+  <div className="flex items-center justify-between gap-4">
+    <div className="min-w-0">
+      <div className="font-medium">{analysis.name}</div>
+      <div className="mt-1 text-sm text-muted-foreground">
+        {analysis.definition.season ?? "Sin temporada"}
+        {analysis.definition.customer
+          ? ` · ${analysis.definition.customer}`
+          : ""}
+      </div>
+    </div>
+
+    <Link
+      href={buildExplorerAnalysisHref(analysis.definition)}
+      className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border px-3 text-sm font-medium transition hover:bg-slate-50"
+    >
+      Abrir
+    </Link>
+  </div>
+</div>
             ))}
           </div>
         )}
