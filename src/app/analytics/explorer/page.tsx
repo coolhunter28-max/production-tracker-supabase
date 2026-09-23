@@ -11,7 +11,10 @@ import {
 import { getExplorerBsgMarginByCustomer } from "@/lib/analytics/explorer/bsg-margin";
 import { getExplorerContributionByCustomer } from "@/lib/analytics/explorer/contribution";
 import { getExplorerProfitabilityByCustomer } from "@/lib/analytics/explorer/profitability";
-import { saveExplorerAnalysisAction } from "@/app/analytics/explorer/actions";
+import {
+  deleteExplorerAnalysisAction,
+  saveExplorerAnalysisAction,
+} from "@/app/analytics/explorer/actions";
 import {
   getExplorerPurchasesByCustomer,
   type ExplorerPurchasesByCustomerRow,
@@ -2015,12 +2018,25 @@ function ExistingAnalysesSection({
       </div>
     </div>
 
-    <Link
-      href={buildExplorerAnalysisHref(analysis.definition)}
-      className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border px-3 text-sm font-medium transition hover:bg-slate-50"
-    >
-      Abrir
-    </Link>
+    <div className="flex shrink-0 items-center gap-2">
+      <Link
+        href={buildExplorerAnalysisHref(analysis.definition)}
+        className="inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition hover:bg-slate-50"
+      >
+        Abrir
+      </Link>
+
+      <form action={deleteExplorerAnalysisAction}>
+        <input type="hidden" name="id" value={analysis.id} />
+
+        <button
+          type="submit"
+          className="inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium text-red-600 transition hover:bg-red-50"
+        >
+          Eliminar
+        </button>
+      </form>
+    </div>
   </div>
 </div>
             ))}

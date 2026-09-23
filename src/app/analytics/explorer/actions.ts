@@ -60,3 +60,34 @@ export async function saveExplorerAnalysisAction(
 
   revalidatePath("/analytics/explorer");
 }
+export async function deleteExplorerAnalysisAction(
+  formData: FormData,
+): Promise<void> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    throw new Error("No authenticated user.");
+  }
+
+  const id = Number(formData.get("id"));
+
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error("Invalid saved analysis id.");
+  }
+
+  const { error } = await supabase
+    .from("analytics_saved_analyses")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    throw new Error(`Error deleting saved analysis: ${error.message}`);
+  }
+
+  revalidatePath("/analytics/explorer");
+}
