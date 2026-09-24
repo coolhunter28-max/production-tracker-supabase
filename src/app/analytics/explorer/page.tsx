@@ -23,6 +23,7 @@ import { getExplorerSalesByCustomer } from "@/lib/analytics/explorer/sales";
 import { PrintAnalysisButton } from "@/app/analytics/explorer/PrintAnalysisButton";
 import { getExplorerXiamenCommissionByCustomer } from "@/lib/analytics/explorer/xiamen-commission";
 import type { ExplorerSummary } from "@/lib/analytics/explorer/types";
+import { CustomerSelector } from "./CustomerSelector";
 import {
   getSavedExplorerAnalyses,
   type SavedExplorerAnalysis,
@@ -1646,85 +1647,6 @@ function buildSelectedCustomerSummary(
           },
   };
 }
-
-function CustomerSelector({
-  customers,
-  selectedCustomer,
-  area,
-  concept,
-  perspective,
-  context,
-  season,
-}: {
-  customers: string[];
-  selectedCustomer: string | undefined;
-  area: AreaKey;
-  concept: ConceptKey;
-  perspective: PerspectiveKey;
-  context: ContextKey;
-  season: string | undefined;
-}) {
-  return (
-    <section className="rounded-2xl border bg-card p-5 shadow-sm">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Cliente
-        </p>
-        <h2 className="mt-1 text-lg font-semibold">
-          ¿Quieres aislar un cliente?
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Mantén «Todos los clientes» para ver el ranking completo o
-          selecciona uno para analizarlo de forma aislada.
-        </p>
-      </div>
-
-      <form
-        method="get"
-        action="/analytics/explorer"
-        className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
-      >
-        <input type="hidden" name="area" value={area} />
-        <input type="hidden" name="concept" value={concept} />
-        <input
-          type="hidden"
-          name="perspective"
-          value={perspective}
-        />
-        <input type="hidden" name="context" value={context} />
-        {season ? (
-          <input type="hidden" name="season" value={season} />
-        ) : null}
-
-        <label className="flex-1">
-          <span className="mb-1.5 block text-sm font-medium">
-            Cliente seleccionado
-          </span>
-          <select
-            name="customer"
-            defaultValue={selectedCustomer ?? ""}
-            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-          >
-            <option value="">Todos los clientes</option>
-            {customers.map((customer) => (
-              <option key={customer} value={customer}>
-                {customer}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <button
-          type="submit"
-          className="inline-flex h-10 items-center justify-center rounded-md bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
-        >
-          Aplicar
-        </button>
-      </form>
-    </section>
-  );
-}
-
 function CustomerMetricResult({
   concept,
   context,
