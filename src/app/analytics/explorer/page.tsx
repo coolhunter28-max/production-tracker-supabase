@@ -20,6 +20,7 @@ import {
   type ExplorerPurchasesByCustomerRow,
 } from "@/lib/analytics/explorer/purchases";
 import { getExplorerSalesByCustomer } from "@/lib/analytics/explorer/sales";
+import { PrintAnalysisButton } from "@/app/analytics/explorer/PrintAnalysisButton";
 import { getExplorerXiamenCommissionByCustomer } from "@/lib/analytics/explorer/xiamen-commission";
 import type { ExplorerSummary } from "@/lib/analytics/explorer/types";
 import {
@@ -1793,20 +1794,26 @@ function CustomerMetricResult({
     : `${representation.valueLabel} por cliente`;
 
   return (
-    <section className="space-y-5">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Resultado automático
-        </p>
+    <section
+  id="analytics-print-report"
+  className="space-y-5"
+>      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+  <div>
+    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      Resultado automático
+    </p>
 
-        <h2 className="mt-1 text-xl font-semibold">
-          {resultTitle}
-        </h2>
+    <h2 className="mt-1 text-xl font-semibold">
+      {resultTitle}
+    </h2>
 
-        <p className="mt-1 text-sm text-muted-foreground">
-          {context.label}. {concept.businessMeaning}
-        </p>
-      </div>
+    <p className="mt-1 text-sm text-muted-foreground">
+      {context.label}. {concept.businessMeaning}
+    </p>
+  </div>
+
+  <PrintAnalysisButton />
+</div>
       <form
         action={saveExplorerAnalysisAction}
         className="flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-end"
@@ -1956,27 +1963,8 @@ function ExistingAnalysesSection({
   savedAnalyses: SavedExplorerAnalysis[];
 }) {
   return (
-    <section className="grid gap-4 lg:grid-cols-2">
-      <div className="rounded-2xl border bg-card p-5 shadow-sm">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-background">
-            <RotateCcw className="h-4 w-4" />
-          </div>
-
-          <div>
-            <h2 className="font-semibold">Continuar análisis reciente</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Sin análisis recientes.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-5 rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
-          Tus últimos análisis aparecerán aquí.
-        </div>
-      </div>
-
-      <div className="rounded-2xl border bg-card p-5 shadow-sm">
+    <section>
+<div className="rounded-2xl border bg-card p-5 shadow-sm">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-background">
             <FolderOpen className="h-4 w-4" />

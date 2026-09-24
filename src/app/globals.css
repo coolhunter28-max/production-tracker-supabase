@@ -128,3 +128,31 @@ table {
   border-radius: 12px;
   overflow: hidden;
 }
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #analytics-print-report,
+  #analytics-print-report * {
+    visibility: visible;
+  }
+
+  #analytics-print-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  #analytics-print-report form,
+  #analytics-print-report button {
+    display: none !important;
+  }
+
+  @page {
+    margin: 12mm;
+  }
+}
