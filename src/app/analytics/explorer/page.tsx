@@ -330,13 +330,14 @@ export default async function AnalyticsExplorerPage({
       displayedCustomerMetricRows &&
       customerMetricSummary ? (
         <CustomerMetricResult
-          concept={selectedConcept}
-          context={analysisContext}
-          rows={displayedCustomerMetricRows}
-          allRows={customerMetricResult}
-          summary={customerMetricSummary}
-          analysisDefinition={analysisDefinition}
-        />
+  concept={selectedConcept}
+  context={analysisContext}
+  rows={displayedCustomerMetricRows}
+  allRows={customerMetricResult}
+  summary={customerMetricSummary}
+  analysisDefinition={analysisDefinition}
+  commercialSeasons={commercialSeasons}
+/>
       ) : null}
 
 {!selectedArea && (
@@ -1731,6 +1732,7 @@ function CustomerMetricResult({
   allRows,
   summary,
   analysisDefinition,
+  commercialSeasons,
 }: {
   concept: ExplorerConcept;
   context: AnalysisContext;
@@ -1738,6 +1740,7 @@ function CustomerMetricResult({
   allRows: ExplorerCustomerMetricRow[];
   summary: ExplorerSummary;
   analysisDefinition: ExplorerAnalysisDefinition;
+  commercialSeasons: CommercialSeasonOption[];
 }) {
   const {
     area: selectedAreaKey,
@@ -1807,7 +1810,19 @@ if (selectedCustomer) {
       }
 return `/analytics/explorer?${params.toString()}`;
     };
-
+    const buildSeasonHref = (season: string) => {
+      const params = new URLSearchParams({
+        area: selectedAreaKey,
+        concept: selectedConceptKey,
+        perspective: selectedPerspectiveKey,
+        context: selectedContextKey,
+        season,
+      });
+ if (selectedCustomer) {
+        params.set("customer", selectedCustomer);
+}
+ return `/analytics/explorer?${params.toString()}`;
+    };
   return (
     <section
   id="analytics-print-report"
@@ -1833,7 +1848,45 @@ return `/analytics/explorer?${params.toString()}`;
   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
     Cambiar qué quieres medir
   </p>
+  {(selectedContextKey === "single" ||
+  selectedContextKey === "comparative") && (
+  <div className="print:hidden">
+    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      Cambiar periodo
+    </p>
 
+    <div className="flex flex-wrap gap-2">
+      {commercialSeasons.map((season) => {
+        const disabled =
+          selectedContextKey === "comparative" &&
+          !season.previousSisterSeason;
+
+        if (disabled) {
+          return null;
+        }
+
+        const isSelected = season.season === selectedSeason;
+
+        return (
+          <Link
+            key={season.season}
+            href={buildSeasonHref(season.season)}
+            className={
+              isSelected
+                ? "inline-flex h-9 items-center rounded-md bg-slate-900 px-3 text-sm font-medium text-white"
+                : "inline-flex h-9 items-center rounded-md border bg-white px-3 text-sm font-medium transition hover:bg-slate-50"
+            }
+          >
+            {selectedContextKey === "comparative" &&
+            season.previousSisterSeason
+              ? `${season.displayName} vs ${season.previousSisterSeason}`
+              : season.displayName}
+          </Link>
+        );
+      })}
+    </div>
+  </div>
+)}
   <div className="flex flex-wrap gap-2">
     {EXPLORER_CONCEPTS.map((availableConcept) => {
       const isSelected = availableConcept.id === selectedConceptKey;
@@ -2119,16 +2172,16 @@ function getSelectedConcept(
     if (area !== "commercial") {
       return undefined;
     }
-  
+
     const normalizedValue = Array.isArray(value) ? value[0] : value;
-  
+
     return EXPLORER_CONCEPTS.some(
       (concept) => concept.id === normalizedValue,
     )
       ? (normalizedValue as ConceptKey)
       : undefined;
   }
-  
+
   function getSelectedPerspective(
     area: AreaKey | undefined,
     concept: ConceptKey | undefined,
@@ -2137,9 +2190,9 @@ function getSelectedConcept(
     if (area !== "commercial" || !concept) {
       return undefined;
     }
-  
+
     const normalizedValue = Array.isArray(value) ? value[0] : value;
-  
+
     return commercialPerspectives.some(
       (perspective) => perspective.key === normalizedValue,
     )
