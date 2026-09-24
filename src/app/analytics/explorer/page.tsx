@@ -1820,7 +1820,7 @@ return `/analytics/explorer?${params.toString()}`;
       });
  if (selectedCustomer) {
         params.set("customer", selectedCustomer);
-}
+    }
  return `/analytics/explorer?${params.toString()}`;
     };
   return (
@@ -1877,10 +1877,15 @@ return `/analytics/explorer?${params.toString()}`;
                 : "inline-flex h-9 items-center rounded-md border bg-white px-3 text-sm font-medium transition hover:bg-slate-50"
             }
           >
-            {selectedContextKey === "comparative" &&
-            season.previousSisterSeason
-              ? `${season.displayName} vs ${season.previousSisterSeason}`
-              : season.displayName}
+{selectedContextKey === "comparative" &&
+season.previousSisterSeason
+  ? `${season.displayName} vs ${
+      commercialSeasons.find(
+        (candidate) =>
+          candidate.season === season.previousSisterSeason,
+      )?.displayName ?? season.previousSisterSeason
+    }`
+  : season.displayName}
           </Link>
         );
       })}
