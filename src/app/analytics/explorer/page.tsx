@@ -1792,6 +1792,21 @@ function CustomerMetricResult({
   const resultTitle = selectedCustomer
     ? `${representation.valueLabel} de ${selectedCustomer}`
     : `${representation.valueLabel} por cliente`;
+    const buildConceptHref = (conceptId: ExplorerConceptId) => {
+      const params = new URLSearchParams({
+        area: selectedAreaKey,
+        concept: conceptId,
+        perspective: selectedPerspectiveKey,
+        context: selectedContextKey,
+      });
+if (selectedSeason) {
+        params.set("season", selectedSeason);
+      }
+if (selectedCustomer) {
+        params.set("customer", selectedCustomer);
+      }
+return `/analytics/explorer?${params.toString()}`;
+    };
 
   return (
     <section
@@ -1813,6 +1828,31 @@ function CustomerMetricResult({
   </div>
 
   <PrintAnalysisButton />
+</div>
+<div className="print:hidden">
+  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    Cambiar qué quieres medir
+  </p>
+
+  <div className="flex flex-wrap gap-2">
+    {EXPLORER_CONCEPTS.map((availableConcept) => {
+      const isSelected = availableConcept.id === selectedConceptKey;
+
+      return (
+        <Link
+          key={availableConcept.id}
+          href={buildConceptHref(availableConcept.id)}
+          className={
+            isSelected
+              ? "inline-flex h-9 items-center rounded-md bg-slate-900 px-3 text-sm font-medium text-white"
+              : "inline-flex h-9 items-center rounded-md border bg-white px-3 text-sm font-medium transition hover:bg-slate-50"
+          }
+        >
+          {availableConcept.label}
+        </Link>
+      );
+    })}
+  </div>
 </div>
       <form
         action={saveExplorerAnalysisAction}
