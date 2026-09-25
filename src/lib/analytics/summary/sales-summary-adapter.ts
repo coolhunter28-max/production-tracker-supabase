@@ -31,29 +31,41 @@ export function buildSalesSummary(
       value: row.current_value,
       format: "currency",
       currency: "USD",
-      comparisonValue: row.comparison_value,
-      changeValue: change.changeValue,
-      changeFormat: change.changeFormat,
+      ...(row.comparison_value !== null
+        ? {
+            comparisonValue: row.comparison_value,
+            changeValue: change.changeValue,
+            changeFormat: change.changeFormat,
+          }
+        : {}),
     },
     {
       label: "Pares",
       value: row.current_pairs,
       format: "integer",
-      comparisonValue: row.comparison_pairs,
-      changeValue: calculateRelativeChange(
-        row.current_pairs,
-        row.comparison_pairs,
-      ),
-      changeFormat: "percentage",
+      ...(row.comparison_pairs !== null
+        ? {
+            comparisonValue: row.comparison_pairs,
+            changeValue: calculateRelativeChange(
+              row.current_pairs,
+              row.comparison_pairs,
+            ),
+            changeFormat: "percentage" as const,
+          }
+        : {}),
     },
     {
       label: "Precio medio venta/par",
       value: row.current_avg_price,
       format: "currency",
       currency: "USD",
-      comparisonValue: row.comparison_avg_price,
-      changeValue: averagePriceChange.changeValue,
-      changeFormat: averagePriceChange.changeFormat,
+      ...(row.comparison_avg_price !== null
+        ? {
+            comparisonValue: row.comparison_avg_price,
+            changeValue: averagePriceChange.changeValue,
+            changeFormat: averagePriceChange.changeFormat,
+          }
+        : {}),
     },
   ];
 }

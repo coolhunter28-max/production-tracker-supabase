@@ -1272,13 +1272,34 @@ async function buildExplorerSummary(
   conceptId: ConceptKey,
   context: AnalysisContext,
   rows: ExplorerCustomerMetricRow[],
-): Promise<ExplorerSummary> {
+): Promise<CustomerKpiSummary> {
   const total = sumCurrentValues(rows);
   const customerCount = rows.length;
   const top3Share = calculateTop3Share(rows);
 
   switch (conceptId) {
-    case "sales":
+    case "sales": {
+      const currentPairs = rows.reduce(
+        (sum, row) => sum + (row.current_pairs ?? 0),
+        0,
+      );
+      const comparisonValue = rows.some(
+        (row) => row.comparison_value !== null,
+      )
+        ? rows.reduce(
+            (sum, row) => sum + (row.comparison_value ?? 0),
+            0,
+          )
+        : null;
+      const comparisonPairs = rows.some(
+        (row) => row.comparison_pairs !== null,
+      )
+        ? rows.reduce(
+            (sum, row) => sum + (row.comparison_pairs ?? 0),
+            0,
+          )
+        : null;
+
       return {
         primary: {
           label: "Ventas totales",
@@ -1296,7 +1317,27 @@ async function buildExplorerSummary(
           value: top3Share,
           format: "percentage",
         },
+        cards: buildSalesSummary({
+          current_value: total,
+          comparison_value: comparisonValue,
+          current_pairs: currentPairs,
+          comparison_pairs: comparisonPairs,
+          current_avg_price:
+            currentPairs > 0 ? total / currentPairs : null,
+          comparison_avg_price:
+            comparisonValue !== null &&
+            comparisonPairs !== null &&
+            comparisonPairs > 0
+              ? comparisonValue / comparisonPairs
+              : null,
+        }).map((card) => ({
+          ...card,
+          periodLabel: context.seasons[0],
+          comparisonPeriodLabel:
+            context.comparisonSeasons[0],
+        })),
       };
+    }
 
     case "purchases":
       return {
@@ -1657,11 +1698,30 @@ function buildSelectedCustomerSummary(
             value: allRows.length,
             format: "integer",
           }
-        : {
+          : {
             label: "Peso sobre el total",
             value: shareOfTotal,
             format: "percentage",
           },
+    ...(conceptId === "sales"
+      ? {
+          cards: buildSalesSummary({
+            ...selectedRow,
+            current_pairs: selectedRow.current_pairs ?? null,
+            comparison_pairs:
+              selectedRow.comparison_pairs ?? null,
+            current_avg_price:
+              selectedRow.current_avg_price ?? null,
+            comparison_avg_price:
+              selectedRow.comparison_avg_price ?? null,
+          }).map((card) => ({
+            ...card,
+            periodLabel: context.seasons[0],
+            comparisonPeriodLabel:
+              context.comparisonSeasons[0],
+          })),
+        }
+      : {}),
   };
 }
 function CustomerMetricResult({
