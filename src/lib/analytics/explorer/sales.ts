@@ -8,6 +8,10 @@ export type ExplorerSalesByCustomerRow = {
   comparison_value: number | null;
   delta_value: number | null;
   delta_pct: number | null;
+  current_pairs: number | null;
+  comparison_pairs: number | null;
+  current_avg_price: number | null;
+  comparison_avg_price: number | null;
 };
 
 type ExplorerSalesByCustomerRpcRow = {
@@ -17,6 +21,10 @@ type ExplorerSalesByCustomerRpcRow = {
   comparison_value: number | string | null;
   delta_value: number | string | null;
   delta_pct: number | string | null;
+  current_pairs: number | string | null;
+  comparison_pairs: number | string | null;
+  current_avg_price: number | string | null;
+  comparison_avg_price: number | string | null;
 };
 
 function toNumber(value: number | string | null): number {
@@ -87,6 +95,16 @@ export async function getExplorerSalesByCustomer(
         ),
         delta_value: toNullableNumber(row.delta_value),
         delta_pct: toNullableNumber(row.delta_pct),
+        current_pairs: toNullableNumber(row.current_pairs),
+        comparison_pairs: toNullableNumber(
+          row.comparison_pairs,
+        ),
+        current_avg_price: toNullableNumber(
+          row.current_avg_price,
+        ),
+        comparison_avg_price: toNullableNumber(
+          row.comparison_avg_price,
+        ),
       },
     ];
   });

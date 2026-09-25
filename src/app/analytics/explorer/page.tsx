@@ -95,6 +95,10 @@ type ExplorerCustomerMetricRow = {
   comparison_percentage: number | null;
   delta_value: number | null;
   delta_pct: number | null;
+  current_pairs?: number | null;
+  comparison_pairs?: number | null;
+  current_avg_price?: number | null;
+  comparison_avg_price?: number | null;
 };
 
 const areas: AnalysisArea[] = [
@@ -1205,6 +1209,10 @@ async function getExplorerCustomerMetricRows(
         comparison_percentage: null,
         delta_value: row.delta_value,
         delta_pct: row.delta_pct,
+        current_pairs: row.current_pairs,
+        comparison_pairs: row.comparison_pairs,
+        current_avg_price: row.current_avg_price,
+        comparison_avg_price: row.comparison_avg_price,
       }));
     }
 
@@ -1552,7 +1560,16 @@ function buildSelectedCustomerSummary(
   ? {
       cards:
         conceptId === "sales"
-          ? buildSalesSummary(selectedRow).map((card) => ({
+          ? buildSalesSummary({
+              ...selectedRow,
+              current_pairs: selectedRow.current_pairs ?? null,
+              comparison_pairs:
+                selectedRow.comparison_pairs ?? null,
+              current_avg_price:
+                selectedRow.current_avg_price ?? null,
+              comparison_avg_price:
+                selectedRow.comparison_avg_price ?? null,
+            }).map((card) => ({
               ...card,
               periodLabel: context.seasons[0],
               comparisonPeriodLabel:
