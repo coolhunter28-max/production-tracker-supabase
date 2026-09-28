@@ -1,6 +1,10 @@
 ﻿"use client";
 
 import { useRouter } from "next/navigation";
+import {
+  applyRepresentationToSearchParams,
+  type ExplorerRepresentationMode,
+} from "@/lib/analytics/explorer/representation";
 
 type CustomerSelectorProps = {
   customers: string[];
@@ -10,6 +14,7 @@ type CustomerSelectorProps = {
   perspective: string;
   context: string;
   season?: string;
+  representationMode: ExplorerRepresentationMode;
 };
 
 export function CustomerSelector({
@@ -20,6 +25,7 @@ export function CustomerSelector({
   perspective,
   context,
   season,
+  representationMode,
 }: CustomerSelectorProps) {
   const router = useRouter();
 
@@ -38,6 +44,8 @@ export function CustomerSelector({
     if (customer) {
       params.set("customer", customer);
     }
+
+    applyRepresentationToSearchParams(params, representationMode);
 
     router.push(`/analytics/explorer?${params.toString()}`);
   };

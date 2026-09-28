@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ExplorerResultRenderer } from "@/components/analytics/explorer/ExplorerResultRenderer";
+import { ExplorerRepresentationSelector } from "@/components/analytics/explorer/ExplorerRepresentationSelector";
 import {
   getCommercialSeasons,
   resolveAnalysisContext,
@@ -41,8 +42,11 @@ import {
   type ExplorerPerspectiveKey,
 } from "@/lib/analytics/explorer/analysis-definition";
 import {
+  applyRepresentationToSearchParams,
   AUTOMATIC_EXPLORER_REPRESENTATION,
+  parseExplorerRepresentationMode,
   resolveRepresentationPlan,
+  type ExplorerRepresentationMode,
   type ExplorerRepresentationPlan,
 } from "@/lib/analytics/explorer/representation";
 import {
@@ -231,6 +235,9 @@ export default async function AnalyticsExplorerPage({
 
   const selectedSeason = getSearchParam(searchParams.season);
   const requestedCustomer = getSearchParam(searchParams.customer);
+  const requestedRepresentation = parseExplorerRepresentationMode(
+    getSearchParam(searchParams.representation),
+  );
 
   const commercialSeasons = selectedPerspective
     ? await getCommercialSeasons()
@@ -266,9 +273,20 @@ export default async function AnalyticsExplorerPage({
         season: selectedSeason,
         customer: selectedCustomer,
       });
-      const representationPlan = analysisDefinition
-        ? resolveRepresentationPlan(analysisDefinition)
+      const representationPlan =
+        selectedConceptKey && selectedPerspectiveKey
+        ? resolveRepresentationPlan(
+            {
+              concept: selectedConceptKey,
+              perspective: selectedPerspectiveKey,
+            },
+            requestedRepresentation,
+          )
         : AUTOMATIC_EXPLORER_REPRESENTATION;
+      const navigationRepresentationMode =
+        selectedConceptKey && selectedPerspectiveKey
+          ? representationPlan.mode
+          : requestedRepresentation;
 
       const selectedPurchasesRow =
       selectedConceptKey === "purchases" &&
@@ -326,6 +344,7 @@ export default async function AnalyticsExplorerPage({
           commercialSeasons={commercialSeasons}
           analysisContext={analysisContext}
           representationPlan={representationPlan}
+          navigationRepresentationMode={navigationRepresentationMode}
         />
       ) : (
         <NewAnalysisSection />
@@ -576,6 +595,7 @@ function SelectedAreaState({
   commercialSeasons,
   analysisContext,
   representationPlan,
+  navigationRepresentationMode,
 }: {
   area: AnalysisArea;
   selectedConcept: ExplorerConcept | undefined;
@@ -585,6 +605,7 @@ function SelectedAreaState({
   commercialSeasons: CommercialSeasonOption[];
   analysisContext: AnalysisContext | undefined;
   representationPlan: ExplorerRepresentationPlan;
+  navigationRepresentationMode: ExplorerRepresentationMode;
 }) {
   const Icon = area.icon;
 
@@ -635,9 +656,12 @@ function SelectedAreaState({
             selectedSeason={selectedSeason}
             commercialSeasons={commercialSeasons}
             analysisContext={analysisContext}
+            representationMode={navigationRepresentationMode}
           />
         ) : (
-          <CommercialConceptSelector />
+          <CommercialConceptSelector
+            representationMode={navigationRepresentationMode}
+          />
         )
       ) : (
         <PendingAreaState area={area} />
@@ -654,7 +678,11 @@ function SelectedAreaState({
   );
 }
 
-function CommercialConceptSelector() {
+function CommercialConceptSelector({
+  representationMode,
+}: {
+  representationMode: ExplorerRepresentationMode;
+}) {
   return (
     <div className="mt-7">
       <div>
@@ -675,7 +703,13 @@ function CommercialConceptSelector() {
         {EXPLORER_CONCEPTS.map((concept) => (
           <Link
             key={concept.id}
-            href={`/analytics/explorer?area=commercial&concept=${concept.id}`}
+            href={`/analytics/explorer?${applyRepresentationToSearchParams(
+              new URLSearchParams({
+                area: "commercial",
+                concept: concept.id,
+              }),
+              representationMode,
+            ).toString()}`}
             className="group flex min-h-40 flex-col rounded-xl border bg-background p-5 transition hover:border-slate-400 hover:shadow-sm"
           >
             <h4 className="text-lg font-semibold">{concept.label}</h4>
@@ -703,6 +737,7 @@ function SelectedConceptState({
   selectedSeason,
   commercialSeasons,
   analysisContext,
+  representationMode,
 }: {
   area: AnalysisArea;
   concept: ExplorerConcept;
@@ -711,6 +746,7 @@ function SelectedConceptState({
   selectedSeason: string | undefined;
   commercialSeasons: CommercialSeasonOption[];
   analysisContext: AnalysisContext | undefined;
+  representationMode: ExplorerRepresentationMode;
 }) {
   return (
     <div className="mt-7 space-y-4">
@@ -729,7 +765,10 @@ function SelectedConceptState({
           </div>
 
           <Link
-            href={`/analytics/explorer?area=${area.key}`}
+            href={`/analytics/explorer?${applyRepresentationToSearchParams(
+              new URLSearchParams({ area: area.key }),
+              representationMode,
+            ).toString()}`}
             className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border bg-white px-4 text-sm font-medium transition hover:bg-slate-50"
           >
             <RotateCcw className="h-4 w-4" />
@@ -765,9 +804,13 @@ function SelectedConceptState({
             selectedSeason={selectedSeason}
             commercialSeasons={commercialSeasons}
             analysisContext={analysisContext}
+            representationMode={representationMode}
           />
         ) : (
-          <CommercialPerspectiveSelector concept={concept} />
+          <CommercialPerspectiveSelector
+            concept={concept}
+            representationMode={representationMode}
+          />
         )
       ) : (
         <PendingConceptPerspectives concept={concept} />
@@ -778,8 +821,10 @@ function SelectedConceptState({
 
 function CommercialPerspectiveSelector({
   concept,
+  representationMode,
 }: {
   concept: ExplorerConcept;
+  representationMode: ExplorerRepresentationMode;
 }) {
   return (
     <div className="rounded-xl border border-dashed bg-background p-5 md:p-6">
@@ -799,7 +844,14 @@ function CommercialPerspectiveSelector({
         {commercialPerspectives.map((perspective) => (
           <Link
             key={perspective.key}
-            href={`/analytics/explorer?area=commercial&concept=${concept.id}&perspective=${perspective.key}`}
+            href={`/analytics/explorer?${applyRepresentationToSearchParams(
+              new URLSearchParams({
+                area: "commercial",
+                concept: concept.id,
+                perspective: perspective.key,
+              }),
+              representationMode,
+            ).toString()}`}
             className="group flex min-h-40 flex-col rounded-xl border bg-white p-5 transition hover:border-slate-400 hover:shadow-sm"
           >
             <h4 className="text-lg font-semibold">
@@ -829,6 +881,7 @@ function SelectedPerspectiveState({
   selectedSeason,
   commercialSeasons,
   analysisContext,
+  representationMode,
 }: {
   area: AnalysisArea;
   concept: ExplorerConcept;
@@ -837,6 +890,7 @@ function SelectedPerspectiveState({
   selectedSeason: string | undefined;
   commercialSeasons: CommercialSeasonOption[];
   analysisContext: AnalysisContext | undefined;
+  representationMode: ExplorerRepresentationMode;
 }) {
   return (
     <div className="rounded-xl border bg-background p-5 md:p-6">
@@ -856,7 +910,13 @@ function SelectedPerspectiveState({
         </div>
 
         <Link
-          href={`/analytics/explorer?area=${area.key}&concept=${concept.id}`}
+          href={`/analytics/explorer?${applyRepresentationToSearchParams(
+            new URLSearchParams({
+              area: area.key,
+              concept: concept.id,
+            }),
+            representationMode,
+          ).toString()}`}
           className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border bg-white px-4 text-sm font-medium transition hover:bg-slate-50"
         >
           <RotateCcw className="h-4 w-4" />
@@ -871,6 +931,7 @@ function SelectedPerspectiveState({
         selectedSeason={selectedSeason}
         commercialSeasons={commercialSeasons}
         analysisContext={analysisContext}
+        representationMode={representationMode}
       />
     </div>
   );
@@ -983,6 +1044,7 @@ function AnalysisContextSelector({
   selectedSeason,
   commercialSeasons,
   analysisContext,
+  representationMode,
 }: {
   concept: ExplorerConcept;
   perspective: AnalyticalPerspective;
@@ -990,8 +1052,17 @@ function AnalysisContextSelector({
   selectedSeason: string | undefined;
   commercialSeasons: CommercialSeasonOption[];
   analysisContext: AnalysisContext | undefined;
+  representationMode: ExplorerRepresentationMode;
 }) {
-  const basePath = `/analytics/explorer?area=commercial&concept=${concept.id}&perspective=${perspective.key}`;
+  const baseParams = applyRepresentationToSearchParams(
+    new URLSearchParams({
+      area: "commercial",
+      concept: concept.id,
+      perspective: perspective.key,
+    }),
+    representationMode,
+  );
+  const basePath = `/analytics/explorer?${baseParams.toString()}`;
 
   const options: Array<{
     key: ContextKey;
@@ -1810,12 +1881,15 @@ function CustomerMetricResult({
     ? `${representation.valueLabel} de ${selectedCustomer}`
     : `${representation.valueLabel} por cliente`;
     const buildConceptHref = (conceptId: ExplorerConceptId) => {
-      const params = new URLSearchParams({
-        area: selectedAreaKey,
-        concept: conceptId,
-        perspective: selectedPerspectiveKey,
-        context: selectedContextKey,
-      });
+      const params = applyRepresentationToSearchParams(
+        new URLSearchParams({
+          area: selectedAreaKey,
+          concept: conceptId,
+          perspective: selectedPerspectiveKey,
+          context: selectedContextKey,
+        }),
+        representationPlan.mode,
+      );
 if (selectedSeason) {
         params.set("season", selectedSeason);
       }
@@ -1825,17 +1899,43 @@ if (selectedCustomer) {
 return `/analytics/explorer?${params.toString()}`;
     };
     const buildSeasonHref = (season: string) => {
-      const params = new URLSearchParams({
-        area: selectedAreaKey,
-        concept: selectedConceptKey,
-        perspective: selectedPerspectiveKey,
-        context: selectedContextKey,
-        season,
-      });
+      const params = applyRepresentationToSearchParams(
+        new URLSearchParams({
+          area: selectedAreaKey,
+          concept: selectedConceptKey,
+          perspective: selectedPerspectiveKey,
+          context: selectedContextKey,
+          season,
+        }),
+        representationPlan.mode,
+      );
  if (selectedCustomer) {
         params.set("customer", selectedCustomer);
     }
  return `/analytics/explorer?${params.toString()}`;
+    };
+    const buildRepresentationHref = (
+      mode: ExplorerRepresentationMode,
+    ) => {
+      const params = applyRepresentationToSearchParams(
+        new URLSearchParams({
+          area: selectedAreaKey,
+          concept: selectedConceptKey,
+          perspective: selectedPerspectiveKey,
+          context: selectedContextKey,
+        }),
+        mode,
+      );
+
+      if (selectedSeason) {
+        params.set("season", selectedSeason);
+      }
+
+      if (selectedCustomer) {
+        params.set("customer", selectedCustomer);
+      }
+
+      return `/analytics/explorer?${params.toString()}`;
     };
   return (
     <section
@@ -1844,7 +1944,7 @@ return `/analytics/explorer?${params.toString()}`;
 >      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
   <div>
     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-      Resultado automático
+      {representationPlan.resultLabel}
     </p>
 
     <h2 className="mt-1 text-xl font-semibold">
@@ -1988,13 +2088,33 @@ season.previousSisterSeason
         perspective={selectedPerspectiveKey}
         context={selectedContextKey}
         season={selectedSeason}
+        representationMode={representationPlan.mode}
+      />
+
+      <ExplorerRepresentationSelector
+        plan={representationPlan}
+        hrefs={{
+          automatic: buildRepresentationHref("automatic"),
+          bar: buildRepresentationHref("bar"),
+        }}
       />
 
       <ExplorerResultRenderer
         plan={representationPlan}
         summary={summary}
-        barChart={{
+        ranking={{
           title: selectedCustomer ? "Vista del cliente" : "Ranking visual",
+          rows,
+          labelKeys: ["customer"],
+          valueKeys: ["current_value"],
+          valueLabel,
+          valueFormat: concept.valueFormat,
+          maxItems: 10,
+        }}
+        barChart={{
+          title: selectedCustomer
+            ? `${representation.valueLabel} de ${selectedCustomer}`
+            : `${representation.valueLabel} por cliente`,
           rows,
           labelKeys: ["customer"],
           valueKeys: ["current_value"],
