@@ -2,11 +2,13 @@
 
 import { createClient } from "@/lib/supabase";
 import type { ExplorerAnalysisDefinition } from "@/lib/analytics/explorer/analysis-definition";
+import type { ExplorerRepresentationMode } from "@/lib/analytics/explorer/representation";
 
 export type SavedExplorerAnalysis = {
   id: number;
   name: string;
   definition: ExplorerAnalysisDefinition;
+  representation: ExplorerRepresentationMode;
   createdAt: string;
 };
 
@@ -19,6 +21,7 @@ type SavedAnalysisRow = {
   context: ExplorerAnalysisDefinition["context"];
   season: string | null;
   customer: string | null;
+  representation: ExplorerRepresentationMode;
   created_at: string;
 };
 
@@ -30,7 +33,7 @@ export async function getSavedExplorerAnalyses(): Promise<
   const { data, error } = await supabase
     .from("analytics_saved_analyses")
     .select(
-      "id, name, area, concept, perspective, context, season, customer, created_at",
+      "id, name, area, concept, perspective, context, season, customer, representation, created_at",
     )
     .order("created_at", { ascending: false });
 
@@ -53,6 +56,7 @@ function mapSavedAnalysisRow(row: SavedAnalysisRow): SavedExplorerAnalysis {
       ...(row.season ? { season: row.season } : {}),
       ...(row.customer ? { customer: row.customer } : {}),
     },
+    representation: row.representation,
     createdAt: row.created_at,
   };
 }

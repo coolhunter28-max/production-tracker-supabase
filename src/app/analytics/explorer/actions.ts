@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import type { ExplorerAnalysisDefinition } from "@/lib/analytics/explorer/analysis-definition";
+import { parseExplorerRepresentationMode } from "@/lib/analytics/explorer/representation";
 import { createClient } from "@/lib/supabase";
 
 export async function saveExplorerAnalysisAction(
@@ -26,7 +27,9 @@ export async function saveExplorerAnalysisAction(
   const context = String(formData.get("context") ?? "").trim();
   const season = String(formData.get("season") ?? "").trim();
   const customer = String(formData.get("customer") ?? "").trim();
-
+  const representation = parseExplorerRepresentationMode(
+    formData.get("representation"),
+  );
   if (!name) {
     throw new Error("Analysis name is required.");
   }
@@ -52,6 +55,7 @@ export async function saveExplorerAnalysisAction(
     context: definition.context,
     season: definition.season ?? null,
     customer: definition.customer ?? null,
+    representation,
   });
 
   if (error) {

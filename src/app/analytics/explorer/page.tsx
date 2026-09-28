@@ -2042,6 +2042,11 @@ season.previousSisterSeason
           name="context"
           value={analysisDefinition.context}
         />
+        <input
+  type="hidden"
+  name="representation"
+  value={representationPlan.mode}
+/>
 
         {analysisDefinition.season ? (
           <input
@@ -2167,6 +2172,7 @@ season.previousSisterSeason
 }
 function buildExplorerAnalysisHref(
   definition: ExplorerAnalysisDefinition,
+  representation: ExplorerRepresentationMode = "automatic",
 ): string {
   const params = new URLSearchParams({
     area: definition.area,
@@ -2181,6 +2187,10 @@ function buildExplorerAnalysisHref(
 
   if (definition.customer) {
     params.set("customer", definition.customer);
+  }
+
+  if (representation === "bar") {
+    params.set("representation", "bar");
   }
 
   return `/analytics/explorer?${params.toString()}`;
@@ -2237,7 +2247,10 @@ function ExistingAnalysesSection({
 
     <div className="flex shrink-0 items-center gap-2">
       <Link
-        href={buildExplorerAnalysisHref(analysis.definition)}
+        href={buildExplorerAnalysisHref(
+          analysis.definition,
+          analysis.representation,
+        )}
         className="inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition hover:bg-slate-50"
       >
         Abrir
