@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { AnalyticsBarChart } from "@/components/analytics/charts/AnalyticsBarChart";
-import { ExplorerSummaryCard } from "@/components/analytics/explorer/ExplorerSummaryCard";
-import { AnalyticsRankingTable } from "@/components/analytics/tables/AnalyticsRankingTable";
+import { ExplorerResultRenderer } from "@/components/analytics/explorer/ExplorerResultRenderer";
 import {
   getCommercialSeasons,
   resolveAnalysisContext,
@@ -42,6 +40,11 @@ import {
   type ExplorerContextKey,
   type ExplorerPerspectiveKey,
 } from "@/lib/analytics/explorer/analysis-definition";
+import {
+  AUTOMATIC_EXPLORER_REPRESENTATION,
+  resolveRepresentationPlan,
+  type ExplorerRepresentationPlan,
+} from "@/lib/analytics/explorer/representation";
 import {
   EXPLORER_CONCEPTS,
   type ExplorerConcept,
@@ -263,6 +266,9 @@ export default async function AnalyticsExplorerPage({
         season: selectedSeason,
         customer: selectedCustomer,
       });
+      const representationPlan = analysisDefinition
+        ? resolveRepresentationPlan(analysisDefinition)
+        : AUTOMATIC_EXPLORER_REPRESENTATION;
 
       const selectedPurchasesRow =
       selectedConceptKey === "purchases" &&
@@ -319,6 +325,7 @@ export default async function AnalyticsExplorerPage({
           selectedSeason={selectedSeason}
           commercialSeasons={commercialSeasons}
           analysisContext={analysisContext}
+          representationPlan={representationPlan}
         />
       ) : (
         <NewAnalysisSection />
@@ -342,6 +349,7 @@ export default async function AnalyticsExplorerPage({
   summary={customerMetricSummary}
   analysisDefinition={analysisDefinition}
   commercialSeasons={commercialSeasons}
+  representationPlan={representationPlan}
 />
       ) : null}
 
@@ -567,6 +575,7 @@ function SelectedAreaState({
   selectedSeason,
   commercialSeasons,
   analysisContext,
+  representationPlan,
 }: {
   area: AnalysisArea;
   selectedConcept: ExplorerConcept | undefined;
@@ -575,6 +584,7 @@ function SelectedAreaState({
   selectedSeason: string | undefined;
   commercialSeasons: CommercialSeasonOption[];
   analysisContext: AnalysisContext | undefined;
+  representationPlan: ExplorerRepresentationPlan;
 }) {
   const Icon = area.icon;
 
@@ -638,6 +648,7 @@ function SelectedAreaState({
         selectedConcept={selectedConcept}
         selectedPerspective={selectedPerspective}
         analysisContext={analysisContext}
+        representationLabel={representationPlan.label}
       />
     </section>
   );
@@ -914,11 +925,13 @@ function AnalysisSummary({
   selectedConcept,
   selectedPerspective,
   analysisContext,
+  representationLabel,
 }: {
   area: AnalysisArea;
   selectedConcept: ExplorerConcept | undefined;
   selectedPerspective: AnalyticalPerspective | undefined;
   analysisContext: AnalysisContext | undefined;
+  representationLabel: string;
 }) {
   return (
     <dl className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -939,7 +952,7 @@ function AnalysisSummary({
         value={analysisContext?.label ?? "Sin definir"}
       />
 
-      <AnalysisState label="Representación" value="Automática" />
+      <AnalysisState label="Representación" value={representationLabel} />
     </dl>
   );
 }
@@ -1732,6 +1745,7 @@ function CustomerMetricResult({
   summary,
   analysisDefinition,
   commercialSeasons,
+  representationPlan,
 }: {
   concept: ExplorerConcept;
   context: AnalysisContext;
@@ -1740,6 +1754,7 @@ function CustomerMetricResult({
   summary: ExplorerSummary;
   analysisDefinition: ExplorerAnalysisDefinition;
   commercialSeasons: CommercialSeasonOption[];
+  representationPlan: ExplorerRepresentationPlan;
 }) {
   const {
     area: selectedAreaKey,
@@ -1975,34 +1990,31 @@ season.previousSisterSeason
         season={selectedSeason}
       />
 
-      <ExplorerSummaryCard summary={summary} />
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <AnalyticsBarChart
-          title={selectedCustomer ? "Vista del cliente" : "Ranking visual"}
-          rows={rows}
-          labelKeys={["customer"]}
-          valueKeys={["current_value"]}
-          valueLabel={valueLabel}
-          valueFormat={concept.valueFormat}
-          maxItems={10}
-        />
-
-        <AnalyticsRankingTable
-          title={
-            selectedCustomer
-              ? isComparative
-                ? `Detalle comparativo de ${selectedCustomer}`
-                : `Detalle de ${selectedCustomer}`
-              : isComparative
-                ? "Ranking y variación frente a campaña hermana"
-                : `Ranking de ${representation.valueLabel.toLocaleLowerCase(
-                    "es-ES",
-                  )}`
-          }
-          rows={rows}
-          preferredColumns={preferredColumns}
-          columnLabels={{
+      <ExplorerResultRenderer
+        plan={representationPlan}
+        summary={summary}
+        barChart={{
+          title: selectedCustomer ? "Vista del cliente" : "Ranking visual",
+          rows,
+          labelKeys: ["customer"],
+          valueKeys: ["current_value"],
+          valueLabel,
+          valueFormat: concept.valueFormat,
+          maxItems: 10,
+        }}
+        rankingTable={{
+          title: selectedCustomer
+            ? isComparative
+              ? `Detalle comparativo de ${selectedCustomer}`
+              : `Detalle de ${selectedCustomer}`
+            : isComparative
+              ? "Ranking y variación frente a campaña hermana"
+              : `Ranking de ${representation.valueLabel.toLocaleLowerCase(
+                  "es-ES",
+                )}`,
+          rows,
+          preferredColumns,
+          columnLabels: {
             ranking: "Ranking",
             customer: "Cliente",
             current_value: valueLabel,
@@ -2017,8 +2029,8 @@ season.previousSisterSeason
               : `${percentageLabel} campaña anterior`,
             delta_value: "Diferencia",
             delta_pct: "Variación",
-          }}
-          columnFormats={{
+          },
+          columnFormats: {
             ranking: "number",
             current_value: concept.valueFormat,
             current_percentage: "percentage",
@@ -2026,10 +2038,10 @@ season.previousSisterSeason
             comparison_percentage: "percentage",
             delta_value: concept.valueFormat,
             delta_pct: "percentage",
-          }}
-          maxHeightClassName="max-h-[520px]"
-        />
-      </div>
+          },
+          maxHeightClassName: "max-h-[520px]",
+        }}
+      />
     </section>
   );
 }
