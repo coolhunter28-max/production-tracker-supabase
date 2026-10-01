@@ -26,6 +26,19 @@ type ExplorerSalesByCustomerRpcRow = {
   current_avg_price: number | string | null;
   comparison_avg_price: number | string | null;
 };
+export type ExplorerSalesEvolutionRow = {
+  season: string;
+  display_name: string;
+  sequence_prefix: number;
+  value: number;
+};
+
+type ExplorerSalesEvolutionRpcRow = {
+  season: string | null;
+  display_name: string | null;
+  sequence_prefix: number | string | null;
+  value: number | string | null;
+};
 
 function toNumber(value: number | string | null): number {
   if (value === null) {
@@ -105,6 +118,44 @@ export async function getExplorerSalesByCustomer(
         comparison_avg_price: toNullableNumber(
           row.comparison_avg_price,
         ),
+      },
+    ];
+  });
+}
+export async function getExplorerSalesEvolution(
+  customer?: string,
+): Promise<ExplorerSalesEvolutionRow[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc(
+    "get_explorer_sales_evolution_v1",
+    {
+      p_customer: customer ?? null,
+    },
+  );
+
+  if (error) {
+    throw new Error(
+      `[getExplorerSalesEvolution] No se pudo cargar la evolución de ventas: ${error.message}`,
+    );
+  }
+
+  const rows =
+    (data ?? []) as unknown as ExplorerSalesEvolutionRpcRow[];
+
+  return rows.flatMap((row) => {
+    const season = row.season?.trim();
+
+    if (!season) {
+      return [];
+    }
+
+    return [
+      {
+        season,
+        display_name: row.display_name?.trim() || season,
+        sequence_prefix: toNumber(row.sequence_prefix),
+        value: toNumber(row.value),
       },
     ];
   });

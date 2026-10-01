@@ -18,7 +18,11 @@ import {
   getExplorerPurchasesByCustomer,
   type ExplorerPurchasesByCustomerRow,
 } from "@/lib/analytics/explorer/purchases";
-import { getExplorerSalesByCustomer } from "@/lib/analytics/explorer/sales";
+import {
+  getExplorerSalesByCustomer,
+  getExplorerSalesEvolution,
+  type ExplorerSalesEvolutionRow,
+} from "@/lib/analytics/explorer/sales";
 import { PrintAnalysisButton } from "@/app/analytics/explorer/PrintAnalysisButton";
 import { getExplorerXiamenCommissionByCustomer } from "@/lib/analytics/explorer/xiamen-commission";
 import type { ExplorerSummary } from "@/lib/analytics/explorer/types";
@@ -274,11 +278,12 @@ export default async function AnalyticsExplorerPage({
         customer: selectedCustomer,
       });
       const representationPlan =
-        selectedConceptKey && selectedPerspectiveKey
+      selectedConceptKey && selectedPerspectiveKey && selectedContextKey
         ? resolveRepresentationPlan(
             {
               concept: selectedConceptKey,
               perspective: selectedPerspectiveKey,
+              context: selectedContextKey,
             },
             requestedRepresentation,
           )
@@ -287,7 +292,10 @@ export default async function AnalyticsExplorerPage({
         selectedConceptKey && selectedPerspectiveKey
           ? representationPlan.mode
           : requestedRepresentation;
-
+          const salesEvolutionRows =
+          representationPlan.mode === "line"
+            ? await getExplorerSalesEvolution(selectedCustomer ?? undefined)
+            : [];
       const selectedPurchasesRow =
       selectedConceptKey === "purchases" &&
       selectedCustomer &&
@@ -369,6 +377,7 @@ export default async function AnalyticsExplorerPage({
   analysisDefinition={analysisDefinition}
   commercialSeasons={commercialSeasons}
   representationPlan={representationPlan}
+  salesEvolutionRows={salesEvolutionRows}
 />
       ) : null}
 
@@ -1817,6 +1826,7 @@ function CustomerMetricResult({
   analysisDefinition,
   commercialSeasons,
   representationPlan,
+  salesEvolutionRows,
 }: {
   concept: ExplorerConcept;
   context: AnalysisContext;
@@ -1826,6 +1836,7 @@ function CustomerMetricResult({
   analysisDefinition: ExplorerAnalysisDefinition;
   commercialSeasons: CommercialSeasonOption[];
   representationPlan: ExplorerRepresentationPlan;
+  salesEvolutionRows: ExplorerSalesEvolutionRow[];
 }) {
   const {
     area: selectedAreaKey,
@@ -2101,6 +2112,7 @@ season.previousSisterSeason
         hrefs={{
           automatic: buildRepresentationHref("automatic"),
           bar: buildRepresentationHref("bar"),
+          line: buildRepresentationHref("line"),
         }}
       />
 
@@ -2116,7 +2128,7 @@ season.previousSisterSeason
           valueFormat: concept.valueFormat,
           maxItems: 10,
         }}
-        barChart={{
+         barChart={{
           title: selectedCustomer
             ? `${representation.valueLabel} de ${selectedCustomer}`
             : `${representation.valueLabel} por cliente`,
@@ -2126,6 +2138,16 @@ season.previousSisterSeason
           valueLabel,
           valueFormat: concept.valueFormat,
           maxItems: 10,
+        }}
+        lineChart={{
+          title: selectedCustomer
+            ? `Evolución de ventas de ${selectedCustomer}`
+            : "Evolución de ventas",
+          rows: salesEvolutionRows.map((row) => ({
+            label: row.display_name,
+            value: row.value,
+          })),
+          valueLabel: "Ventas",
         }}
         rankingTable={{
           title: selectedCustomer
@@ -2189,9 +2211,9 @@ function buildExplorerAnalysisHref(
     params.set("customer", definition.customer);
   }
 
-  if (representation === "bar") {
-    params.set("representation", "bar");
-  }
+  if (representation !== "automatic") {
+  params.set("representation", representation);
+}
 
   return `/analytics/explorer?${params.toString()}`;
 }
