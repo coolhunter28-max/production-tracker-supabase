@@ -1,3 +1,4 @@
+import Link from "next/link";
 type AnalyticsRankingTableValue =
   | string
   | number
@@ -10,14 +11,18 @@ export type AnalyticsRankingTableFormat =
   | "currency"
   | "percentage";
 
-type AnalyticsRankingTableProps = {
-  title: string;
-  rows: Array<Record<string, AnalyticsRankingTableValue>>;
-  preferredColumns?: string[];
-  columnLabels?: Record<string, string>;
-  columnFormats?: Record<string, AnalyticsRankingTableFormat>;
-  maxHeightClassName?: string;
-};
+  type AnalyticsRankingTableProps = {
+    title: string;
+    rows: Array<Record<string, AnalyticsRankingTableValue>>;
+    preferredColumns?: string[];
+    columnLabels?: Record<string, string>;
+    columnFormats?: Record<string, AnalyticsRankingTableFormat>;
+    maxHeightClassName?: string;
+    getCellHref?: (
+      row: Record<string, AnalyticsRankingTableValue>,
+      column: string,
+    ) => string | null;
+  };
 
 function humanizeKey(key: string) {
   return key
@@ -129,6 +134,7 @@ export function AnalyticsRankingTable({
   columnLabels = {},
   columnFormats = {},
   maxHeightClassName = "max-h-[340px]",
+  getCellHref,
 }: AnalyticsRankingTableProps) {
   const autoColumns = rows.length > 0 ? Object.keys(rows[0]) : [];
 
@@ -201,18 +207,34 @@ export function AnalyticsRankingTable({
                       key={column}
                       className={getCellClassName(column)}
                     >
-                      <span
-                        className={
-                          column === "customer"
-                            ? "block break-words"
-                            : "block"
-                        }
-                      >
-                        {formatCell(
-                          row[column],
-                          columnFormats[column],
-                        )}
-                      </span>
+                      {getCellHref?.(row, column) ? (
+  <Link
+    href={getCellHref(row, column) ?? "#"}
+    className={
+      column === "customer"
+        ? "block break-words font-medium underline-offset-4 hover:underline"
+        : "block underline-offset-4 hover:underline"
+    }
+  >
+    {formatCell(
+      row[column],
+      columnFormats[column],
+    )}
+  </Link>
+) : (
+  <span
+    className={
+      column === "customer"
+        ? "block break-words"
+        : "block"
+    }
+  >
+    {formatCell(
+      row[column],
+      columnFormats[column],
+    )}
+  </span>
+)}
                     </td>
                   ))}
                 </tr>

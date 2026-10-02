@@ -24,7 +24,7 @@ export type ExplorerRepresentationPlan = {
 
 export type ExplorerRepresentationContext = Pick<
   ExplorerAnalysisDefinition,
-  "concept" | "perspective" | "context"
+  "concept" | "perspective" | "context" | "customer"
 >;
 
 export const AUTOMATIC_EXPLORER_REPRESENTATION = {
@@ -78,7 +78,6 @@ export function resolveRepresentationPlan(
   const supportsBar =
     context.perspective === "customer" &&
     concept.representation.chart === "bar";
-
   const supportsLine =
     context.concept === "sales" &&
     context.perspective === "customer" &&

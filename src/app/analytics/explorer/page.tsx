@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ExplorerResultRenderer } from "@/components/analytics/explorer/ExplorerResultRenderer";
 import { ExplorerRepresentationSelector } from "@/components/analytics/explorer/ExplorerRepresentationSelector";
+import { AnalyticsRankingTable } from "@/components/analytics/tables/AnalyticsRankingTable";
 import {
   getCommercialSeasons,
   resolveAnalysisContext,
@@ -239,6 +240,7 @@ export default async function AnalyticsExplorerPage({
 
   const selectedSeason = getSearchParam(searchParams.season);
   const requestedCustomer = getSearchParam(searchParams.customer);
+  const requestedDrilldown = getSearchParam(searchParams.drilldown);
   const requestedRepresentation = parseExplorerRepresentationMode(
     getSearchParam(searchParams.representation),
   );
@@ -277,25 +279,33 @@ export default async function AnalyticsExplorerPage({
         season: selectedSeason,
         customer: selectedCustomer,
       });
-      const representationPlan =
-      selectedConceptKey && selectedPerspectiveKey && selectedContextKey
-        ? resolveRepresentationPlan(
-            {
-              concept: selectedConceptKey,
-              perspective: selectedPerspectiveKey,
-              context: selectedContextKey,
-            },
-            requestedRepresentation,
-          )
-        : AUTOMATIC_EXPLORER_REPRESENTATION;
+      const selectedDrilldown =
+  requestedDrilldown === "season" &&
+  selectedConceptKey === "sales" &&
+  selectedPerspectiveKey === "customer" &&
+  selectedCustomer
+    ? "season"
+    : undefined;
+    const representationPlan =
+    selectedConceptKey && selectedPerspectiveKey && selectedContextKey
+      ? resolveRepresentationPlan(
+          {
+            concept: selectedConceptKey,
+            perspective: selectedPerspectiveKey,
+            context: selectedContextKey,
+            customer: selectedCustomer,
+          },
+          requestedRepresentation,
+        )
+      : AUTOMATIC_EXPLORER_REPRESENTATION;
       const navigationRepresentationMode =
         selectedConceptKey && selectedPerspectiveKey
           ? representationPlan.mode
           : requestedRepresentation;
           const salesEvolutionRows =
-          representationPlan.mode === "line"
-            ? await getExplorerSalesEvolution(selectedCustomer ?? undefined)
-            : [];
+  representationPlan.mode === "line" || selectedDrilldown === "season"
+    ? await getExplorerSalesEvolution(selectedCustomer ?? undefined)
+    : [];
       const selectedPurchasesRow =
       selectedConceptKey === "purchases" &&
       selectedCustomer &&
@@ -369,16 +379,17 @@ export default async function AnalyticsExplorerPage({
       displayedCustomerMetricRows &&
       customerMetricSummary ? (
         <CustomerMetricResult
-  concept={selectedConcept}
-  context={analysisContext}
-  rows={displayedCustomerMetricRows}
-  allRows={customerMetricResult}
-  summary={customerMetricSummary}
-  analysisDefinition={analysisDefinition}
-  commercialSeasons={commercialSeasons}
-  representationPlan={representationPlan}
-  salesEvolutionRows={salesEvolutionRows}
-/>
+        concept={selectedConcept}
+        context={analysisContext}
+        rows={displayedCustomerMetricRows}
+        allRows={customerMetricResult}
+        summary={customerMetricSummary}
+        analysisDefinition={analysisDefinition}
+        commercialSeasons={commercialSeasons}
+        representationPlan={representationPlan}
+        drilldown={selectedDrilldown}
+        salesEvolutionRows={salesEvolutionRows}
+      />
       ) : null}
 
 {!selectedArea && (
@@ -1826,6 +1837,7 @@ function CustomerMetricResult({
   analysisDefinition,
   commercialSeasons,
   representationPlan,
+  drilldown,
   salesEvolutionRows,
 }: {
   concept: ExplorerConcept;
@@ -1836,6 +1848,7 @@ function CustomerMetricResult({
   analysisDefinition: ExplorerAnalysisDefinition;
   commercialSeasons: CommercialSeasonOption[];
   representationPlan: ExplorerRepresentationPlan;
+  drilldown?: "season";
   salesEvolutionRows: ExplorerSalesEvolutionRow[];
 }) {
   const {
@@ -1925,6 +1938,20 @@ return `/analytics/explorer?${params.toString()}`;
     }
  return `/analytics/explorer?${params.toString()}`;
     };
+    const buildCustomerDrilldownHref = (customer: string) => {
+      const params = new URLSearchParams({
+        area: selectedAreaKey,
+        concept: selectedConceptKey,
+        perspective: selectedPerspectiveKey,
+        context: selectedContextKey,
+        customer,
+        drilldown: "season",
+      });
+      if (selectedSeason) {
+        params.set("season", selectedSeason);
+      }
+    return `/analytics/explorer?${params.toString()}`;
+  };
     const buildRepresentationHref = (
       mode: ExplorerRepresentationMode,
     ) => {
@@ -2115,8 +2142,26 @@ season.previousSisterSeason
           line: buildRepresentationHref("line"),
         }}
       />
-
-      <ExplorerResultRenderer
+     {drilldown === "season" && selectedCustomer ? (
+  <AnalyticsRankingTable
+    title={`Ventas de ${selectedCustomer} por campaña`}
+    rows={salesEvolutionRows.map((row) => ({
+      season: row.display_name,
+      value: row.value,
+    }))}
+    preferredColumns={["season", "value"]}
+    columnLabels={{
+      season: "Campaña",
+      value: "Ventas",
+    }}
+    columnFormats={{
+      season: "text",
+      value: "currency",
+    }}
+    maxHeightClassName="max-h-[520px]"
+  />
+) : (
+  <ExplorerResultRenderer
         plan={representationPlan}
         summary={summary}
         ranking={{
@@ -2187,8 +2232,19 @@ season.previousSisterSeason
             delta_pct: "percentage",
           },
           maxHeightClassName: "max-h-[520px]",
+          getCellHref: (row, column) => {
+            if (
+              selectedConceptKey !== "sales" ||
+              column !== "customer" ||
+              typeof row.customer !== "string"
+            ) {
+              return null;
+            }
+                   return buildCustomerDrilldownHref(row.customer);
+          },
         }}
       />
+    )}
     </section>
   );
 }
