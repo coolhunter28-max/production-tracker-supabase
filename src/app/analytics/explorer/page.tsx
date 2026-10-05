@@ -19,6 +19,7 @@ import {
 } from "@/app/analytics/explorer/actions";
 import {
   getExplorerPurchasesByCustomer,
+  getExplorerPurchasesEvolution,
   type ExplorerPurchasesByCustomerRow,
 } from "@/lib/analytics/explorer/purchases";
 import {
@@ -283,7 +284,7 @@ export default async function AnalyticsExplorerPage({
       });
       const selectedDrilldown =
   requestedDrilldown === "season" &&
-  selectedConceptKey === "sales" &&
+  (selectedConceptKey === "sales" || selectedConceptKey === "purchases") &&
   selectedPerspectiveKey === "customer" &&
   selectedCustomer
     ? "season"
@@ -296,6 +297,7 @@ export default async function AnalyticsExplorerPage({
             perspective: selectedPerspectiveKey,
             context: selectedContextKey,
             customer: selectedCustomer,
+            drilldown: selectedDrilldown,
           },
           requestedRepresentation,
         )
@@ -304,10 +306,12 @@ export default async function AnalyticsExplorerPage({
         selectedConceptKey && selectedPerspectiveKey
           ? representationPlan.mode
           : requestedRepresentation;
-          const salesEvolutionRows =
-  representationPlan.mode === "line" || selectedDrilldown === "season"
-    ? await getExplorerSalesEvolution(selectedCustomer ?? undefined)
-    : [];
+          const campaignEvolutionRows =
+  selectedConceptKey === "purchases" && selectedDrilldown === "season" && selectedCustomer
+    ? await getExplorerPurchasesEvolution(selectedCustomer, commercialSeasons)
+    : selectedConceptKey === "sales" && (representationPlan.mode === "line" || selectedDrilldown === "season")
+      ? await getExplorerSalesEvolution(selectedCustomer ?? undefined)
+      : [];
       const selectedPurchasesRow =
       selectedConceptKey === "purchases" &&
       selectedCustomer &&
@@ -390,7 +394,7 @@ export default async function AnalyticsExplorerPage({
         commercialSeasons={commercialSeasons}
         representationPlan={representationPlan}
         drilldown={selectedDrilldown}
-        salesEvolutionRows={salesEvolutionRows}
+        campaignEvolutionRows={campaignEvolutionRows}
       />
       ) : null}
 
@@ -1840,7 +1844,7 @@ function CustomerMetricResult({
   commercialSeasons,
   representationPlan,
   drilldown,
-  salesEvolutionRows,
+  campaignEvolutionRows,
 }: {
   concept: ExplorerConcept;
   context: AnalysisContext;
@@ -1851,7 +1855,7 @@ function CustomerMetricResult({
   commercialSeasons: CommercialSeasonOption[];
   representationPlan: ExplorerRepresentationPlan;
   drilldown?: "season";
-  salesEvolutionRows: ExplorerSalesEvolutionRow[];
+  campaignEvolutionRows: ExplorerSalesEvolutionRow[];
 }) {
   const {
     area: selectedAreaKey,
@@ -2192,39 +2196,39 @@ season.previousSisterSeason
      {drilldown === "season" && selectedCustomer ? (
   representationPlan.mode === "bar" ? (
     <ExplorerBarChart
-      title={`Ventas de ${selectedCustomer} por campaña`}
-      rows={salesEvolutionRows.map((row) => ({
+      title={`${representation.valueLabel} de ${selectedCustomer} por campaña`}
+      rows={campaignEvolutionRows.map((row) => ({
         season: row.display_name,
         value: row.value,
       }))}
       labelKeys={["season"]}
       valueKeys={["value"]}
-      valueLabel="Ventas"
+      valueLabel={representation.valueLabel}
       valueFormat="currency"
-      maxItems={salesEvolutionRows.length}
+      maxItems={campaignEvolutionRows.length}
     />
   ) : representationPlan.mode === "line" ? (
     <ExplorerLineChart
-      title={`Evolución de ventas de ${selectedCustomer} por campaña`}
-      rows={salesEvolutionRows.map((row) => ({
+      title={`Evolución de ${representation.valueLabel.toLocaleLowerCase("es-ES")} de ${selectedCustomer} por campaña`}
+      rows={campaignEvolutionRows.map((row) => ({
         label: row.display_name,
         value: row.value,
       }))}
-      valueLabel="Ventas"
+      valueLabel={representation.valueLabel}
     />
   ) : (
   <AnalyticsRankingTable
-    title={`Ventas de ${selectedCustomer} por campaña`}
+    title={`${representation.valueLabel} de ${selectedCustomer} por campaña`}
     density="comfortable"
     className="w-full max-w-3xl"
-    rows={salesEvolutionRows.map((row) => ({
+    rows={campaignEvolutionRows.map((row) => ({
       season: row.display_name,
       value: row.value,
     }))}
     preferredColumns={["season", "value"]}
     columnLabels={{
       season: "Campaña",
-      value: "Ventas",
+      value: representation.valueLabel,
     }}
     columnFormats={{
       season: "text",
@@ -2261,7 +2265,7 @@ season.previousSisterSeason
           title: selectedCustomer
             ? `Evolución de ventas de ${selectedCustomer}`
             : "Evolución de ventas",
-          rows: salesEvolutionRows.map((row) => ({
+          rows: campaignEvolutionRows.map((row) => ({
             label: row.display_name,
             value: row.value,
           })),
@@ -2307,13 +2311,13 @@ season.previousSisterSeason
           maxHeightClassName: "max-h-[520px]",
           getCellHref: (row, column) => {
             if (
-              selectedConceptKey !== "sales" ||
+              (selectedConceptKey !== "sales" && selectedConceptKey !== "purchases") ||
               column !== "customer" ||
               typeof row.customer !== "string"
             ) {
               return null;
             }
-                   return buildCustomerDrilldownHref(row.customer);
+            return buildCustomerDrilldownHref(row.customer);
           },
         }}
       />

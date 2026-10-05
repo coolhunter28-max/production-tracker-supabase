@@ -1,5 +1,6 @@
 ﻿import type { AnalysisContext } from "@/lib/analytics/context/analysis-context";
 import { createClient } from "@/lib/supabase";
+import type { CommercialSeasonOption } from "@/lib/analytics/context/analysis-context";
 
 export type ExplorerPurchasesByCustomerRow = {
   ranking: number;
@@ -71,6 +72,31 @@ function toNullableNumber(
   const parsed = Number(value);
 
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+export async function getExplorerPurchasesEvolution(
+  customer: string,
+  seasons: CommercialSeasonOption[],
+) {
+  // Reuse the purchases RPC to preserve its BSG scope and calculation.
+  // The catalogue arrives newest first; charts need chronological order.
+  const campaignRows = await Promise.all([...seasons].reverse().map(async (season, index) => {
+    const rows = await getExplorerPurchasesByCustomer({
+      type: "SINGLE_SEASON",
+      seasons: [season.season],
+      comparisonSeasons: [],
+      label: season.displayName,
+      isHistorical: false,
+    }, 2_147_483_647);
+    const row = rows.find((row) => row.customer === customer);
+    return row ? [{
+      season: season.season,
+      display_name: season.displayName,
+      sequence_prefix: index,
+      value: row.current_value,
+    }] : [];
+  }));
+  return campaignRows.flat();
 }
 
 export async function getExplorerPurchasesByCustomer(

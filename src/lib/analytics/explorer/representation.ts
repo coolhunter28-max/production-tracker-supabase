@@ -25,7 +25,10 @@ export type ExplorerRepresentationPlan = {
 export type ExplorerRepresentationContext = Pick<
   ExplorerAnalysisDefinition,
   "concept" | "perspective" | "context" | "customer"
->;
+> & {
+  // Navigation depth only; not part of the saved analysis definition.
+  drilldown?: "season";
+};
 
 export const AUTOMATIC_EXPLORER_REPRESENTATION = {
   mode: "automatic",
@@ -74,14 +77,20 @@ export function resolveRepresentationPlan(
   requestedMode: ExplorerRepresentationMode = "automatic",
 ): ExplorerRepresentationPlan {
   const concept = getExplorerConcept(context.concept);
+  const isCampaignDrilldown =
+    context.perspective === "customer" &&
+    Boolean(context.customer) &&
+    context.drilldown === "season" &&
+    (context.concept === "sales" || context.concept === "purchases");
 
   const supportsBar =
     context.perspective === "customer" &&
-    concept.representation.chart === "bar";
+    concept.representation.chart === "bar" &&
+    (!context.customer || isCampaignDrilldown);
   const supportsLine =
-    context.concept === "sales" &&
+    isCampaignDrilldown || (context.concept === "sales" &&
     context.perspective === "customer" &&
-    context.context === "historical";
+    context.context === "historical");
 
   const availableModes: readonly ExplorerRepresentationMode[] = [
     "automatic",
