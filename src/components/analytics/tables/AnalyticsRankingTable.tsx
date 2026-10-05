@@ -18,6 +18,8 @@ export type AnalyticsRankingTableFormat =
     columnLabels?: Record<string, string>;
     columnFormats?: Record<string, AnalyticsRankingTableFormat>;
     maxHeightClassName?: string;
+    density?: "compact" | "comfortable";
+    className?: string;
     getCellHref?: (
       row: Record<string, AnalyticsRankingTableValue>,
       column: string,
@@ -135,7 +137,10 @@ export function AnalyticsRankingTable({
   columnFormats = {},
   maxHeightClassName = "max-h-[340px]",
   getCellHref,
+  density = "compact",
+  className = "",
 }: AnalyticsRankingTableProps) {
+  const comfortable = density === "comfortable";
   const autoColumns = rows.length > 0 ? Object.keys(rows[0]) : [];
 
   const columns =
@@ -146,9 +151,9 @@ export function AnalyticsRankingTable({
       : autoColumns;
 
   return (
-    <section className="rounded-2xl border bg-card shadow-sm">
-      <div className="border-b px-3 py-2.5">
-        <h3 className="text-sm font-medium">{title}</h3>
+    <section className={`rounded-2xl border bg-card shadow-sm ${className}`}>
+      <div className={comfortable ? "border-b px-6 py-5" : "border-b px-3 py-2.5"}>
+        <h3 className={comfortable ? "text-base font-semibold" : "text-sm font-medium"}>{title}</h3>
       </div>
 
       {rows.length === 0 ? (
@@ -187,7 +192,9 @@ export function AnalyticsRankingTable({
                 {columns.map((column) => (
                   <th
                     key={column}
-                    className={getHeaderClassName(column)}
+                    className={comfortable
+                      ? `px-6 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground ${columnFormats[column] === "text" ? "text-left" : "text-right"}`
+                      : getHeaderClassName(column)}
                   >
                     {columnLabels[column] ??
                       humanizeKey(column)}
@@ -205,7 +212,9 @@ export function AnalyticsRankingTable({
                   {columns.map((column) => (
                     <td
                       key={column}
-                      className={getCellClassName(column)}
+                      className={comfortable
+                        ? `px-6 py-4 align-middle text-base tabular-nums ${columnFormats[column] === "text" ? "text-left font-medium" : "text-right whitespace-nowrap"}`
+                        : getCellClassName(column)}
                     >
                       {getCellHref?.(row, column) ? (
   <Link

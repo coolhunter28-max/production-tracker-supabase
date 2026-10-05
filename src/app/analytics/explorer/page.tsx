@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ExplorerResultRenderer } from "@/components/analytics/explorer/ExplorerResultRenderer";
 import { ExplorerRepresentationSelector } from "@/components/analytics/explorer/ExplorerRepresentationSelector";
+import { ExplorerBarChart } from "@/components/analytics/explorer/ExplorerBarChart";
+import { ExplorerLineChart } from "@/components/analytics/explorer/ExplorerLineChart";
 import { AnalyticsRankingTable } from "@/components/analytics/tables/AnalyticsRankingTable";
 import {
   getCommercialSeasons,
@@ -1952,6 +1954,20 @@ return `/analytics/explorer?${params.toString()}`;
       }
     return `/analytics/explorer?${params.toString()}`;
   };
+  const buildCustomerLevelHref = () => {
+    const params = new URLSearchParams({
+      area: selectedAreaKey,
+      concept: selectedConceptKey,
+      perspective: selectedPerspectiveKey,
+      context: selectedContextKey,
+    });
+
+    if (selectedSeason) {
+      params.set("season", selectedSeason);
+    }
+
+    return `/analytics/explorer?${params.toString()}`;
+  };
     const buildRepresentationHref = (
       mode: ExplorerRepresentationMode,
     ) => {
@@ -1971,6 +1987,10 @@ return `/analytics/explorer?${params.toString()}`;
 
       if (selectedCustomer) {
         params.set("customer", selectedCustomer);
+      }
+
+      if (drilldown === "season") {
+        params.set("drilldown", drilldown);
       }
 
       return `/analytics/explorer?${params.toString()}`;
@@ -2122,18 +2142,45 @@ season.previousSisterSeason
           Guardar análisis
         </button>
       </form>
+      {drilldown === "season" && selectedCustomer ? (
+  <div className="print:hidden rounded-xl border bg-slate-50 px-4 py-3">
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <Link
+        href={buildCustomerLevelHref()}
+        className="font-medium text-muted-foreground transition hover:text-foreground hover:underline"
+      >
+        Clientes
+      </Link>
 
-        <CustomerSelector
-        customers={customers}
-        selectedCustomer={selectedCustomer}
-        area={selectedAreaKey}
-        concept={selectedConceptKey}
-        perspective={selectedPerspectiveKey}
-        context={selectedContextKey}
-        season={selectedSeason}
-        representationMode={representationPlan.mode}
-      />
+      <span className="text-muted-foreground">›</span>
 
+      <span className="font-medium">{selectedCustomer}</span>
+
+      <span className="text-muted-foreground">›</span>
+
+      <span className="font-semibold">Campañas</span>
+
+      <Link
+        href={buildCustomerLevelHref()}
+        className="ml-auto inline-flex h-8 items-center rounded-md border bg-white px-3 text-xs font-medium transition hover:bg-slate-50"
+      >
+        ← Volver a clientes
+      </Link>
+    </div>
+  </div>
+) : null}
+  {drilldown !== "season" ? (
+  <CustomerSelector
+    customers={customers}
+    selectedCustomer={selectedCustomer}
+    area={selectedAreaKey}
+    concept={selectedConceptKey}
+    perspective={selectedPerspectiveKey}
+    context={selectedContextKey}
+    season={selectedSeason}
+    representationMode={representationPlan.mode}
+  />
+) : null}
       <ExplorerRepresentationSelector
         plan={representationPlan}
         hrefs={{
@@ -2143,8 +2190,33 @@ season.previousSisterSeason
         }}
       />
      {drilldown === "season" && selectedCustomer ? (
+  representationPlan.mode === "bar" ? (
+    <ExplorerBarChart
+      title={`Ventas de ${selectedCustomer} por campaña`}
+      rows={salesEvolutionRows.map((row) => ({
+        season: row.display_name,
+        value: row.value,
+      }))}
+      labelKeys={["season"]}
+      valueKeys={["value"]}
+      valueLabel="Ventas"
+      valueFormat="currency"
+      maxItems={salesEvolutionRows.length}
+    />
+  ) : representationPlan.mode === "line" ? (
+    <ExplorerLineChart
+      title={`Evolución de ventas de ${selectedCustomer} por campaña`}
+      rows={salesEvolutionRows.map((row) => ({
+        label: row.display_name,
+        value: row.value,
+      }))}
+      valueLabel="Ventas"
+    />
+  ) : (
   <AnalyticsRankingTable
     title={`Ventas de ${selectedCustomer} por campaña`}
+    density="comfortable"
+    className="w-full max-w-3xl"
     rows={salesEvolutionRows.map((row) => ({
       season: row.display_name,
       value: row.value,
@@ -2160,6 +2232,7 @@ season.previousSisterSeason
     }}
     maxHeightClassName="max-h-[520px]"
   />
+  )
 ) : (
   <ExplorerResultRenderer
         plan={representationPlan}
