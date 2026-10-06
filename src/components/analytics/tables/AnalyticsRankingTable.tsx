@@ -20,6 +20,7 @@ export type AnalyticsRankingTableFormat =
     maxHeightClassName?: string;
     density?: "compact" | "comfortable";
     className?: string;
+    getRowKey?: (row: Record<string, AnalyticsRankingTableValue>) => string | number;
     getCellHref?: (
       row: Record<string, AnalyticsRankingTableValue>,
       column: string,
@@ -137,6 +138,7 @@ export function AnalyticsRankingTable({
   columnFormats = {},
   maxHeightClassName = "max-h-[340px]",
   getCellHref,
+  getRowKey,
   density = "compact",
   className = "",
 }: AnalyticsRankingTableProps) {
@@ -206,7 +208,7 @@ export function AnalyticsRankingTable({
             <tbody>
               {rows.map((row, index) => (
                 <tr
-                  key={index}
+                  key={getRowKey?.(row) ?? index}
                   className="border-b last:border-0 hover:bg-muted/30"
                 >
                   {columns.map((column) => (

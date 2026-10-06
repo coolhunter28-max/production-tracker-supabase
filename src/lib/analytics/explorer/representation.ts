@@ -27,7 +27,7 @@ export type ExplorerRepresentationContext = Pick<
   "concept" | "perspective" | "context" | "customer"
 > & {
   // Navigation depth only; not part of the saved analysis definition.
-  drilldown?: "season";
+  drilldown?: "season" | "model";
 };
 
 export const AUTOMATIC_EXPLORER_REPRESENTATION = {
@@ -82,15 +82,22 @@ export function resolveRepresentationPlan(
     Boolean(context.customer) &&
     context.drilldown === "season" &&
     (context.concept === "sales" || context.concept === "purchases");
+  const isModelDrilldown =
+    context.perspective === "customer" &&
+    Boolean(context.customer) &&
+    context.drilldown === "model" &&
+    (context.concept === "sales" || context.concept === "purchases");
 
   const supportsBar =
     context.perspective === "customer" &&
     concept.representation.chart === "bar" &&
-    (!context.customer || isCampaignDrilldown);
+    (!context.customer || isCampaignDrilldown || isModelDrilldown);
   const supportsLine =
-    isCampaignDrilldown || (context.concept === "sales" &&
-    context.perspective === "customer" &&
-    context.context === "historical");
+    context.drilldown !== "model" &&
+    (isCampaignDrilldown ||
+      (context.concept === "sales" &&
+        context.perspective === "customer" &&
+        context.context === "historical"));
 
   const availableModes: readonly ExplorerRepresentationMode[] = [
     "automatic",

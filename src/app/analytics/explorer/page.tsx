@@ -13,6 +13,7 @@ import {
 import { getExplorerBsgMarginByCustomer } from "@/lib/analytics/explorer/bsg-margin";
 import { getExplorerContributionByCustomer } from "@/lib/analytics/explorer/contribution";
 import { getExplorerProfitabilityByCustomer } from "@/lib/analytics/explorer/profitability";
+import { getExplorerModels, type ExplorerModelRow } from "@/lib/analytics/explorer/models";
 import {
   deleteExplorerAnalysisAction,
   saveExplorerAnalysisAction,
@@ -244,6 +245,7 @@ export default async function AnalyticsExplorerPage({
   const selectedSeason = getSearchParam(searchParams.season);
   const requestedCustomer = getSearchParam(searchParams.customer);
   const requestedDrilldown = getSearchParam(searchParams.drilldown);
+  const requestedDrilldownSeason = getSearchParam(searchParams.drilldownSeason);
   const requestedRepresentation = parseExplorerRepresentationMode(
     getSearchParam(searchParams.representation),
   );
@@ -282,12 +284,19 @@ export default async function AnalyticsExplorerPage({
         season: selectedSeason,
         customer: selectedCustomer,
       });
-      const selectedDrilldown =
-  requestedDrilldown === "season" &&
-  (selectedConceptKey === "sales" || selectedConceptKey === "purchases") &&
-  selectedPerspectiveKey === "customer" &&
-  selectedCustomer
-    ? "season"
+  const selectedDrilldownSeason = commercialSeasons.find(
+    (season) => season.season === requestedDrilldownSeason,
+  );
+  const canDrilldown =
+    (selectedConceptKey === "sales" || selectedConceptKey === "purchases") &&
+    selectedPerspectiveKey === "customer" && Boolean(selectedCustomer);
+  // An invalid model campaign returns to campaigns rather than querying an ambiguous scope.
+  const selectedDrilldown = canDrilldown
+    ? requestedDrilldown === "model" && selectedDrilldownSeason
+      ? "model"
+      : requestedDrilldown === "season" || requestedDrilldown === "model"
+        ? "season"
+        : undefined
     : undefined;
     const representationPlan =
     selectedConceptKey && selectedPerspectiveKey && selectedContextKey
@@ -311,6 +320,11 @@ export default async function AnalyticsExplorerPage({
     ? await getExplorerPurchasesEvolution(selectedCustomer, commercialSeasons)
     : selectedConceptKey === "sales" && (representationPlan.mode === "line" || selectedDrilldown === "season")
       ? await getExplorerSalesEvolution(selectedCustomer ?? undefined)
+      : [];
+  const modelRows =
+    selectedDrilldown === "model" && selectedCustomer && selectedDrilldownSeason &&
+    (selectedConceptKey === "sales" || selectedConceptKey === "purchases")
+      ? await getExplorerModels(selectedCustomer, selectedDrilldownSeason.season, selectedConceptKey)
       : [];
       const selectedPurchasesRow =
       selectedConceptKey === "purchases" &&
@@ -395,6 +409,8 @@ export default async function AnalyticsExplorerPage({
         representationPlan={representationPlan}
         drilldown={selectedDrilldown}
         campaignEvolutionRows={campaignEvolutionRows}
+        drilldownSeason={selectedDrilldown === "model" ? selectedDrilldownSeason : undefined}
+        modelRows={modelRows}
       />
       ) : null}
 
@@ -1845,6 +1861,8 @@ function CustomerMetricResult({
   representationPlan,
   drilldown,
   campaignEvolutionRows,
+  drilldownSeason,
+  modelRows,
 }: {
   concept: ExplorerConcept;
   context: AnalysisContext;
@@ -1854,8 +1872,10 @@ function CustomerMetricResult({
   analysisDefinition: ExplorerAnalysisDefinition;
   commercialSeasons: CommercialSeasonOption[];
   representationPlan: ExplorerRepresentationPlan;
-  drilldown?: "season";
+  drilldown?: "season" | "model";
   campaignEvolutionRows: ExplorerSalesEvolutionRow[];
+  drilldownSeason?: CommercialSeasonOption;
+  modelRows: ExplorerModelRow[];
 }) {
   const {
     area: selectedAreaKey,
@@ -1972,6 +1992,19 @@ return `/analytics/explorer?${params.toString()}`;
 
     return `/analytics/explorer?${params.toString()}`;
   };
+  const buildModelDrilldownHref = (season: string) => {
+    const params = new URLSearchParams({
+      area: selectedAreaKey,
+      concept: selectedConceptKey,
+      perspective: selectedPerspectiveKey,
+      context: selectedContextKey,
+      customer: selectedCustomer ?? "",
+      drilldown: "model",
+      drilldownSeason: season,
+    });
+    if (selectedSeason) params.set("season", selectedSeason);
+    return `/analytics/explorer?${params.toString()}`;
+  };
     const buildRepresentationHref = (
       mode: ExplorerRepresentationMode,
     ) => {
@@ -1993,8 +2026,11 @@ return `/analytics/explorer?${params.toString()}`;
         params.set("customer", selectedCustomer);
       }
 
-      if (drilldown === "season") {
+      if (drilldown) {
         params.set("drilldown", drilldown);
+      }
+      if (drilldown === "model" && drilldownSeason) {
+        params.set("drilldownSeason", drilldownSeason.season);
       }
 
       return `/analytics/explorer?${params.toString()}`;
@@ -2146,7 +2182,7 @@ season.previousSisterSeason
           Guardar análisis
         </button>
       </form>
-      {drilldown === "season" && selectedCustomer ? (
+      {drilldown && selectedCustomer ? (
   <div className="print:hidden rounded-xl border bg-slate-50 px-4 py-3">
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <Link
@@ -2158,22 +2194,34 @@ season.previousSisterSeason
 
       <span className="text-muted-foreground">›</span>
 
-      <span className="font-medium">{selectedCustomer}</span>
+      {drilldown === "model" ? (
+        <Link href={buildCustomerDrilldownHref(selectedCustomer)} className="font-medium hover:underline">
+          {selectedCustomer}
+        </Link>
+      ) : <span className="font-medium">{selectedCustomer}</span>}
 
       <span className="text-muted-foreground">›</span>
 
-      <span className="font-semibold">Campañas</span>
+      {drilldown === "model" && drilldownSeason ? (
+        <>
+          <Link href={buildCustomerDrilldownHref(selectedCustomer)} className="font-medium hover:underline">
+            {drilldownSeason.displayName}
+          </Link>
+          <span className="text-muted-foreground">›</span>
+          <span className="font-semibold">Modelos</span>
+        </>
+      ) : <span className="font-semibold">Campañas</span>}
 
       <Link
-        href={buildCustomerLevelHref()}
+        href={drilldown === "model" ? buildCustomerDrilldownHref(selectedCustomer) : buildCustomerLevelHref()}
         className="ml-auto inline-flex h-8 items-center rounded-md border bg-white px-3 text-xs font-medium transition hover:bg-slate-50"
       >
-        ← Volver a clientes
+        {drilldown === "model" ? "← Volver a campañas" : "← Volver a clientes"}
       </Link>
     </div>
   </div>
 ) : null}
-  {drilldown !== "season" ? (
+  {!drilldown ? (
   <CustomerSelector
     customers={customers}
     selectedCustomer={selectedCustomer}
@@ -2193,7 +2241,32 @@ season.previousSisterSeason
           line: buildRepresentationHref("line"),
         }}
       />
-     {drilldown === "season" && selectedCustomer ? (
+     {drilldown === "model" && selectedCustomer && drilldownSeason ? (
+       representationPlan.mode === "bar" ? (
+         <ExplorerBarChart
+           title={`${representation.valueLabel} de ${selectedCustomer} · ${drilldownSeason.displayName} por modelo`}
+           rows={modelRows}
+           rowKey="modelo_id"
+           labelKeys={["style"]}
+           valueKeys={["value"]}
+           valueLabel={representation.valueLabel}
+           valueFormat="currency"
+           maxItems={modelRows.length}
+         />
+       ) : (
+         <AnalyticsRankingTable
+           title={`${representation.valueLabel} de ${selectedCustomer} · ${drilldownSeason.displayName} por modelo`}
+           rows={modelRows}
+           getRowKey={(row) => String(row.modelo_id)}
+           preferredColumns={["style", "pairs", "value"]}
+           columnLabels={{ style: "Modelo", pairs: "Pares", value: representation.valueLabel }}
+           columnFormats={{ style: "text", pairs: "number", value: "currency" }}
+           density="comfortable"
+           className="w-full max-w-4xl"
+           maxHeightClassName="max-h-[520px]"
+         />
+       )
+     ) : drilldown === "season" && selectedCustomer ? (
   representationPlan.mode === "bar" ? (
     <ExplorerBarChart
       title={`${representation.valueLabel} de ${selectedCustomer} por campaña`}
@@ -2223,8 +2296,13 @@ season.previousSisterSeason
     className="w-full max-w-3xl"
     rows={campaignEvolutionRows.map((row) => ({
       season: row.display_name,
+      technicalSeason: row.season,
       value: row.value,
     }))}
+    getRowKey={(row) => String(row.technicalSeason)}
+    getCellHref={(row, column) => column === "season"
+      ? buildModelDrilldownHref(String(row.technicalSeason))
+      : null}
     preferredColumns={["season", "value"]}
     columnLabels={{
       season: "Campaña",

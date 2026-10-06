@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -25,6 +26,7 @@ type ExplorerBarChartProps = {
   valueLabel?: string;
   valueFormat?: ExplorerBarChartValueFormat;
   maxItems?: number;
+  rowKey?: string;
 };
 
 function detectStringKey(
@@ -109,13 +111,15 @@ export function ExplorerBarChart({
   valueLabel = "Valor",
   valueFormat = "number",
   maxItems = 10,
+  rowKey,
 }: ExplorerBarChartProps) {
   const labelKey = detectStringKey(rows, labelKeys);
   const valueKey = detectNumericKey(rows, valueKeys);
   const data =
     labelKey && valueKey
       ? rows
-          .map((row) => ({
+          .map((row, index) => ({
+            id: rowKey ? String(row[rowKey]) : index,
             name: String(row[labelKey] ?? "—"),
             value: Number(row[valueKey]),
           }))
@@ -166,7 +170,9 @@ export function ExplorerBarChart({
                 ]}
                 cursor={{ fill: "hsl(var(--muted))", opacity: 0.5 }}
               />
-              <Bar dataKey="value" name={valueLabel} fill="#334155" radius={[0, 5, 5, 0]} />
+              <Bar dataKey="value" name={valueLabel} fill="#334155" radius={[0, 5, 5, 0]}>
+                {data.map((item) => <Cell key={item.id} />)}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
