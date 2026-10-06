@@ -3987,12 +3987,15 @@ coherencia, la trazabilidad y la operativa del ERP.
 
 # ANEXO --- ESTADO DE IMPLEMENTACIÓN ANALYTICS / EXPLORER
 
-## Corte de continuidad --- 05/10/2026
+## Corte de continuidad --- 06/10/2026
 
 Este anexo registra el estado real de implementación alcanzado durante
 el sprint de Analytics. No sustituye los principios arquitectónicos del
 Documento Maestro. Su finalidad es impedir que futuras sesiones reabran
 decisiones ya cerradas o repitan trabajo ya realizado.
+
+Este corte incorpora el cierre de Profundizar v2. El corte anterior,
+05/10/2026, registraba el cierre de Profundizar v1.
 
 ## 1. Objetivo funcional del sprint
 
@@ -4029,8 +4032,8 @@ parámetros actuales son:
 -   `customer`
 
 La URL incorpora además `representation` para la representación y
-`drilldown` para la profundidad de navegación. Estos dos estados no
-forman parte de la pregunta analítica definida por
+`drilldown` junto con `drilldownSeason` para la profundidad de navegación.
+Estos estados no forman parte de la pregunta analítica definida por
 `ExplorerAnalysisDefinition`.
 
 ### 1.1 Contrato funcional cerrado del Explorer
@@ -4118,6 +4121,9 @@ El resolver de representaciones ofrece únicamente los modos válidos:
     total no aporta información analítica.
 -   Cliente → Campañas: Barras vuelve a ofrecerse porque compara
     campañas; Línea representa su evolución temporal ordenada.
+-   Cliente → Campaña → Modelos: Barras compara modelos de la campaña;
+    Línea no es válida porque los modelos son categorías, no una secuencia
+    temporal.
 
 Contrato actual:
 
@@ -4126,17 +4132,25 @@ Contrato actual:
 | Ventas / todos los clientes | Automática · Barras; Línea en Histórico |
 | Ventas / cliente aislado / Histórico | Automática · Línea |
 | Ventas / Cliente → Campañas | Automática · Barras · Línea |
+| Ventas / Cliente → Campaña → Modelos | Automática · Barras |
 | Compras / todos los clientes | Automática · Barras |
 | Compras / cliente aislado, sin profundización | Automática |
 | Compras / Cliente → Campañas | Automática · Barras · Línea |
+| Compras / Cliente → Campaña → Modelos | Automática · Barras |
 
 Una URL que fuerce una representación no válida degrada limpiamente a
 Automática. Línea en Compras queda vinculada al nivel Campañas, no al
 ranking de clientes.
 
+Se validó manualmente `drilldown=model&representation=line`: el modo
+efectivo es Automática, no se renderiza Línea y la UI ofrece únicamente
+Automática y Barras. La restricción reside en el resolver, no solo en la
+visibilidad del botón.
+
 No existe una jerarquía universal de drill-down. La ruta de
 profundización depende de la pregunta analítica. Ventas por cliente puede
-profundizar actualmente en campañas y, en una fase posterior, en modelos;
+profundizar actualmente en campañas y modelos; Compras dispone del mismo
+recorrido consolidado. En otros dominios,
 una incidencia de calidad por fábrica podría profundizar en tipos
 de defecto, modelos e inspecciones; una negociación de Desarrollo, en
 cotizaciones o modelos. Estos ejemplos futuros no constituyen niveles
@@ -4246,12 +4260,21 @@ La separación arquitectónica queda cerrada en tres responsabilidades:
 -   **Pregunta analítica:** área + concepto + perspectiva + contexto +
     filtros (`season`, `customer` cuando correspondan).
 -   **Representación:** Automática / Barras / Línea.
--   **Profundidad de navegación:** `drilldown`.
+-   **Profundidad de navegación:** `drilldown` y `drilldownSeason`.
 
 `drilldown=season` expresa el nivel Campañas. Es **estado de navegación /
 profundidad**, no un campo de `ExplorerAnalysisDefinition`. El resolver
 lo recibe como contexto de navegación para decidir las representaciones
 válidas, sin alterar la definición de la pregunta persistida.
+
+`drilldown=model` expresa el nivel Modelos y requiere
+`drilldownSeason=<season técnica>`, por ejemplo `16FW25`. `season` forma
+parte de la pregunta/contexto analítico cuando corresponde;
+`drilldownSeason` identifica exclusivamente la campaña profundizada.
+No se reutiliza ni sustituye `season` para navegar al nivel Modelo.
+
+**Pregunta ≠ representación ≠ profundidad.** `ExplorerAnalysisDefinition`
+no incorpora `drilldown` ni `drilldownSeason`.
 
 ## 5. Análisis guardados
 
@@ -4301,8 +4324,8 @@ Decisiones cerradas:
 ### 5.1 Guardar / Reabrir desde un nivel profundo
 
 El análisis guardado persiste la pregunta analítica, sus filtros y la
-representación. **No persiste `drilldown`.** Al reabrirlo se reconstruye
-el nivel Cliente normal y se resuelve la representación válida para ese
+representación. **No persiste `drilldown` ni `drilldownSeason`.** Al
+reabrirlo se reconstruye el nivel Cliente normal y se resuelve la representación válida para ese
 estado, sin restaurar automáticamente la profundidad de navegación.
 
 Pruebas funcionales validadas al cierre de Profundizar v1:
@@ -4312,6 +4335,14 @@ Pruebas funcionales validadas al cierre de Profundizar v1:
 -   Guardar desde Ventas → MORRISON → Campañas → Línea y reabrir
     devuelve Ventas → MORRISON → Línea, en el nivel Cliente normal.
     La representación Línea se conserva; el drilldown no se restaura.
+
+Prueba manual validada al cierre de Profundizar v2: se guardó desde
+Ventas → MORRISON → FW25 → Modelos → Barras. Al reabrir se recuperaron
+Ventas, MORRISON e Histórico completo, con `representation=bar` como
+representación guardada, pero no FW25 ni Modelos. No aparecieron
+`drilldown=model` ni `drilldownSeason`. Como Barras no es válida para el
+cliente aislado en ese nivel, el resolver aplicó Automática como modo
+efectivo. Es el comportamiento correcto, no una pérdida del análisis.
 
 Esto confirma la separación entre pregunta analítica, representación y
 profundidad de navegación. No se guarda una fotografía del resultado ni
@@ -4348,8 +4379,8 @@ conservando perspectiva, contexto, campaña y cliente cuando
 correspondan.
 
 Al cambiar de concepto desde un nivel profundo, los enlaces actuales
-omiten `drilldown`; no se arrastra automáticamente a un concepto
-incompatible. `customer` solo queda seleccionado si sigue siendo válido
+omiten `drilldown` y `drilldownSeason`; no se arrastra automáticamente la
+profundidad a un concepto incompatible. `customer` solo queda seleccionado si sigue siendo válido
 en los datos del concepto destino.
 
 DADA puede conservarse al cambiar de concepto si tiene actividad en el
@@ -4403,8 +4434,8 @@ Commit:
 Este commit constituye el punto de referencia histórico del selector
 instantáneo. Los safe points actuales figuran en la sección 12.
 
-En el nivel Campañas el `CustomerSelector` queda oculto. La navegación
-desde el ranking y el retorno al nivel Cliente se describen en la
+En los niveles Campañas y Modelos el `CustomerSelector` queda oculto.
+La navegación desde el ranking y el retorno al nivel Cliente se describen en la
 sección 11.
 
 ## 8. Temporadas comerciales
@@ -4479,6 +4510,67 @@ Las campañas se ordenan cronológicamente. Las campañas donde la consulta
 no devuelve una fila de actividad del cliente se omiten, sin inventar
 importes ni forzar clientes sin datos.
 
+### 9.2 Modelos por cliente y campaña: backend de Profundizar v2
+
+RPC existente y validada en Supabase:
+
+```text
+public.get_explorer_models_v1(
+    p_customer text,
+    p_season text,
+    p_metric text
+)
+```
+
+Devuelve una fila por modelo: `modelo_id uuid`, `style text`,
+`pairs numeric`, `value numeric`. Es `LANGUAGE plpgsql`, `STABLE`,
+`SECURITY INVOKER` y de solo lectura. Valida cliente y campaña
+obligatorios, limita `p_metric` a `sales` / `purchases` y falla
+explícitamente ante `modelo_id NULL` o referencias a modelos inexistentes
+dentro del ámbito consultado. No oculta una pérdida de identidad.
+
+Fuente: `public.mv_fact_operacion_linea_v2`. Reutiliza importes calculados,
+sin recalcular reglas comerciales:
+
+| Métrica | Universo | Pares | Importe |
+|---|---|---|---|
+| `sales` | `customer` + `season`, sin filtro de operativa | `sum(qty)` | `sum(sell_amount_real)` |
+| `purchases` | `customer` + `season` + `f.operativa_code = 'BSG'` | `sum(qty)` | `sum(buy_amount_real)` |
+
+El filtro de Compras se verificó leyendo la definición real de
+`public.get_explorer_purchases_by_customer_v1`: la condición exacta es
+`f.operativa_code = 'BSG'`. V2 reproduce el alcance BSG consolidado; no
+es una condición deducida.
+
+**`modelo_id` es la identidad técnica; `style` es solo la etiqueta visible.**
+La agregación se realiza exclusivamente por `modelo_id`, nunca por
+`style`. La etiqueta procede de `public.modelos.style` mediante
+`public.modelos.id = modelo_id`.
+
+La investigación previa revisó 1.128 líneas analíticas: 0 con
+`modelo_id NULL`, 0 referencias inexistentes, ningún `modelo_id` asociado
+a varios `style`, ninguna discrepancia entre líneas y catálogo y todos
+los modelos utilizados con `style` informado. En ese corte no existía
+pérdida de identidad en esta capa; las validaciones de la RPC protegen
+frente a incidencias futuras.
+
+### 9.3 Servicio tipado común de modelos
+
+`src/lib/analytics/explorer/models.ts` contiene `getExplorerModels`, común
+a Ventas y Compras:
+
+```ts
+supabase.rpc("get_explorer_models_v1", {
+    p_customer: customer,
+    p_season: season,
+    p_metric: metric
+});
+```
+
+Conserva `modelo_id`, `style`, `pairs` y `value`, así como el orden recibido.
+No reagrupa ni recalcula importes. Propaga los errores de la RPC y no
+descarta silenciosamente filas inválidas.
+
 ## 10. SQL y migraciones
 
 Las vistas, materialized views y RPC analíticas creadas durante el
@@ -4506,13 +4598,15 @@ Cliente → Campaña → Modelo → PO → Línea → ERP.
 La fuente analítica actual contiene claves suficientes para estudiar esa
 evolución.
 
-Al cierre de este corte, **Profundizar v1 está implementado, validado
-funcionalmente y CERRADO**. Solo está implementado el primer nivel:
-Cliente → Campañas, para Ventas y Compras.
+Al cierre de este corte, **Profundizar v1 y v2 están implementados,
+validados y CERRADOS**, para Ventas y Compras. V1 cubre Cliente → Campaña;
+V2 añade Campaña → Modelo. La jerarquía consolidada es:
+
+**Cliente → Campaña → Modelo.**
 
 No se diseña una jerarquía técnica universal. Cada recorrido se define
 desde la pregunta, manteniendo como objetivo arquitectónico el acceso
-final a los hechos originales del ERP. Los niveles posteriores y el
+final a los hechos originales del ERP. Los niveles posteriores a Modelo y el
 recorrido completo al ERP no se consideran implementados por este cierre.
 
 ### 11.1 Ventas → Cliente → Campañas
@@ -4561,20 +4655,97 @@ Ventas y Compras comparten:
     el resolver descrito en la sección 1.4.
 -   Guardar / Reabrir sin persistir `drilldown`, según la sección 5.1.
 
-Profundizar v1 no incluye Campaña → Modelo, PO, Línea ni ERP. No deben
-añadirse interfaces o RPC para esos niveles sin un caso funcional
-concreto de la siguiente fase.
+El alcance histórico de v1 termina en Campañas; Campaña → Modelo se
+incorpora mediante v2. PO, Línea y acceso final al ERP no están
+implementados en este recorrido.
+
+### 11.4 Profundizar v2: Campaña → Modelo
+
+Disponible y validado para Ventas y Compras. Desde la tabla de campañas,
+solo el nombre/celda de campaña es navegable mediante
+`AnalyticsRankingTable.getCellHref`, no toda la fila. Sustituye
+`drilldown=season` por `drilldown=model` y añade la campaña técnica en
+`drilldownSeason`, conservando área, concepto, perspectiva, contexto,
+cliente y `season` analítico cuando corresponda.
+
+Ejemplo validado:
+
+```text
+/analytics/explorer?area=commercial&concept=sales&perspective=customer&context=historical&customer=MORRISON&drilldown=model&drilldownSeason=16FW25
+```
+
+`16FW25` se utiliza para la llamada backend; `FW25` es la etiqueta de
+presentación (`display_name` / `displayName`). Son conceptos distintos.
+
+Breadcrumb: **Clientes › MORRISON › FW25 › Modelos**.
+
+**← Volver a campañas** conserva cliente y contexto analítico, elimina
+`drilldownSeason` y vuelve a `drilldown=season`. Los enlaces del cliente y
+de la campaña en el breadcrumb también regresan a Campañas; Clientes
+recupera el ranking completo. La navegación fue validada manualmente.
+
+Automática muestra `Modelo | Pares | Ventas` o
+`Modelo | Pares | Compras`, una fila por modelo. Barras compara los
+modelos de la campaña seleccionada utilizando directamente su dataset,
+no un total único del cliente ni el dataset superior. No existe Línea
+en Modelos. Automática → Barras → Automática conserva `customer`,
+`drilldown=model` y `drilldownSeason`.
+
+`AnalyticsRankingTable` admite `getRowKey` y `ExplorerBarChart` admite
+`rowKey`, utilizados con `modelo_id` para conservar identidad técnica
+aunque la etiqueta visible sea `style`.
+
+### 11.5 Validaciones reales por modelo
+
+Ventas: **MORRISON / 16FW25 / sales**.
+
+| Modelo | Pares | Ventas (US$) |
+|---|---:|---:|
+| NINETIES | 22.693 | 361.474,60 |
+| MOMA | 9.603 | 182.457,00 |
+| MANTRA | 3.990 | 65.635,50 |
+| MINATO | 3.048 | 55.462,10 |
+| **Total** | **39.334** | **665.029,20** |
+
+Compras: **DADA / 16FW25 / purchases**, alcance BSG.
+
+| Modelo | Pares | Compras (US$) |
+|---|---:|---:|
+| TAKUMI | 5.000 | 85.050,00 |
+| SHIBUYA RETRO | 2.200 | 40.656,00 |
+| SHIBUYA | 1.600 | 19.335,68 |
+| **Total** | **8.800** | **145.041,68** |
+
+En ambos casos **Σ Modelos = Campaña**: pares e importes coinciden
+exactamente con el nivel superior de la métrica correspondiente, sin
+pérdida ni duplicación de volumen.
 
 ## 12. Estado exacto al cerrar esta sesión
 
 Punto seguro:
 
-Último commit comprobado en el repositorio: `3e05c72`.
+Safe point principal consolidado:
+
+**`58577b7 feat(analytics): add model season drilldown`**,
+committed, pushed y confirmado en `origin/main`.
+
+Push confirmado: `e5c753b..58577b7  main -> main`.
+Sustituye a `e5c753b` como punto principal para continuar Analytics.
 
 Safe points relevantes:
 
 -   `30fb741 feat(analytics): refine customer season drilldown navigation`
 -   `3e05c72 feat(analytics): add purchases season drilldown`
+-   `e5c753b docs: update master document to v8.1`
+-   `58577b7 feat(analytics): add model season drilldown`
+
+El commit de v2 modificó únicamente cinco archivos:
+
+-   `src/app/analytics/explorer/page.tsx`
+-   `src/components/analytics/explorer/ExplorerBarChart.tsx`
+-   `src/components/analytics/tables/AnalyticsRankingTable.tsx`
+-   `src/lib/analytics/explorer/representation.ts`
+-   `src/lib/analytics/explorer/models.ts`
 
 Estado funcional implementado:
 
@@ -4589,7 +4760,11 @@ Estado funcional implementado:
 -   **Profundizar v1 CERRADO:** Ventas y Compras, Cliente → Campañas,
     con navegación desde ranking, breadcrumb, retorno y conservación de
     profundidad al cambiar representación.
--   Integración con análisis guardados sin persistir `drilldown`.
+-   **Profundizar v2 CERRADO:** Ventas y Compras, Campaña → Modelo,
+    tabla y barras por modelo, breadcrumb, retorno y campaña técnica
+    independiente del contexto analítico.
+-   Integración con análisis guardados sin persistir `drilldown` ni
+    `drilldownSeason`.
 
 Estado conceptual:
 
@@ -4600,7 +4775,7 @@ Estado conceptual:
     funcional; su implementación será incremental y dependiente de cada
     pregunta.
 
-Validaciones realizadas:
+Validaciones históricas de Profundizar v1:
 
 -   `npm run build` correcto.
 -   TypeScript válido.
@@ -4615,6 +4790,33 @@ Validaciones realizadas:
 -   ESLint y `git diff --check` correctos para la implementación.
 -   Guardar / Reabrir validado en Compras y Ventas sin restaurar
     `drilldown`; Línea de Ventas conservada.
+
+Validaciones técnicas de v2 antes del commit:
+
+-   TypeScript correcto.
+-   ESLint de los cinco archivos correcto.
+-   Resolver: 144 casos aprobados y 1.152 comparaciones con las reglas
+    anteriores sin regresiones.
+-   `npm run build` correcto, 74/74 páginas generadas.
+-   `git diff --check` correcto.
+
+Posteriormente se validó manualmente en navegador, según el cierre
+funcional confirmado:
+
+-   Ventas → clientes → MORRISON → campañas, con Automática, Barras y
+    Línea; FW25 → modelos, con Automática y Barras.
+-   Compras → clientes → DADA → campañas, con Automática, Barras y
+    Línea; FW25 → modelos, con Automática y Barras.
+-   Volver a campañas, volver a clientes y breadcrumb.
+-   Cambio de representación conservando profundidad.
+-   Fallback de Línea forzada en Modelos a Automática.
+-   Saved analyses sin profundidad, incluyendo el fallback de Barras
+    al reabrir MORRISON aislado (sección 5.1).
+
+La versión se mantiene en **v8.1**: no existe en el documento una
+convención explícita que exija incrementarla por este cierre funcional.
+Se actualiza el corte de continuidad al 06/10/2026, conservando los hitos
+históricos y las decisiones estables.
 
 Esta actualización documental no modifica código ni realiza commit o
 push. Los cambios ajenos existentes del working tree se conservan.
@@ -4640,8 +4842,11 @@ No volver a auditar ni rediseñar:
 -   representación Automática por defecto y alternativas contextuales;
 -   profundización dependiente de la pregunta;
 -   Profundizar v1 de Ventas y Compras, Cliente → Campañas;
+-   Profundizar v2 de Ventas y Compras, Campaña → Modelo;
 -   separación pregunta / representación / profundidad de navegación;
--   exclusión de `drilldown` de los análisis guardados;
+-   exclusión de `drilldown` y `drilldownSeason` de los análisis guardados;
+-   `modelo_id` como identidad y `style` como etiqueta del catálogo;
+-   alcance BSG de Compras y reutilización de importes en la RPC de modelos;
 -   trazabilidad obligatoria al ERP;
 -   separación entre Explorer, Executive y el legado Visual Analytics;
 -   alcance actual de Desarrollo y Logística;
@@ -4651,15 +4856,26 @@ No volver a auditar ni rediseñar:
 
 ## 14. Próximos incrementos de valor
 
-La siguiente fase de profundización es **Profundizar v2: Campaña →
-Modelo**, pendiente de diseño e implementación.
+**Profundizar v1 y v2 están CERRADOS.** La jerarquía actual consolidada
+para Ventas y Compras es Cliente → Campaña → Modelo.
+
+**Profundizar V3 — Modelo → PO: siguiente fase candidata. Pendiente de
+definición funcional, semántica analítica, navegación, backend y
+representaciones antes de su implementación.**
 
 La progresión conceptual futura es:
 
 Cliente → Campaña → Modelo → PO → Línea → ERP.
 
-**Solo Cliente → Campaña está implementado actualmente.** Modelo, PO,
-Línea y ERP no forman parte del alcance cerrado de Profundizar v1.
+**El recorrido implementado termina en Modelo.** V3 no está diseñada ni
+decidida; no se define aquí su contrato URL, backend, representaciones,
+UX, estructura o navegación PO, ni PO → Línea o Línea → ERP. No se
+asume que consistirá en copiar el patrón anterior.
+
+Antes de implementarla deberá debatirse qué significa PO como nivel
+analítico, qué información mostrar, qué conceptos soportar, qué
+representaciones tienen sentido y cómo interactúa con la trazabilidad y
+el recorrido posterior Línea → ERP. Estas preguntas permanecen abiertas.
 
 Quedan aparcados como **próximos incrementos posibles**, no como
 funcionalidad implementada ni como compromiso de orden:
