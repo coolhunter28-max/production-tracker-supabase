@@ -48,6 +48,16 @@ function getStylesFromPO(po: PO): string[] {
   return Array.isArray(list) ? list.filter(Boolean) : [];
 }
 
+function getFactoriesFromPO(po: PO): string[] {
+  return [
+    ...new Set(
+      (po.lineas_pedido ?? [])
+        .map((line) => safeStr(line.factory))
+        .filter(Boolean)
+    ),
+  ].sort();
+}
+
 function safeStr(v: any): string {
   return String(v ?? "").trim();
 }
@@ -106,7 +116,7 @@ export default function DashboardPage() {
   );
 
   const factories = useMemo(
-    () => [...new Set(pos.map((p) => p.factory).filter(Boolean))].sort(),
+    () => [...new Set(pos.flatMap((p) => getFactoriesFromPO(p)))].sort(),
     [pos]
   );
 
@@ -135,7 +145,7 @@ export default function DashboardPage() {
     }
 
     if (filters.factory !== "todos") {
-      result = result.filter((p) => p.factory === filters.factory);
+      result = result.filter((p) => getFactoriesFromPO(p).includes(filters.factory));
     }
 
     if (filters.season !== "todos") {
@@ -165,7 +175,7 @@ export default function DashboardPage() {
           test(p.po) ||
           test(p.customer) ||
           test(p.supplier) ||
-          test(p.factory) ||
+          getFactoriesFromPO(p).some((factory) => test(factory)) ||
           test((p as any)?.season) ||
           styles.includes(q)
         );
@@ -260,7 +270,10 @@ export default function DashboardPage() {
   const posForChart = pos
     .filter((p) => selectedSeason === "todas" || (p as any)?.season === selectedSeason)
     .filter((p) => selectedSupplier === "todos" || p.supplier === selectedSupplier)
-    .filter((p) => selectedFactory === "todos" || p.factory === selectedFactory)
+    .filter(
+      (p) =>
+        selectedFactory === "todos" || getFactoriesFromPO(p).includes(selectedFactory)
+    )
     .filter((p) => selectedCustomer === "todos" || p.customer === selectedCustomer);
 
   const chartData = getDashboardEstados(posForChart);

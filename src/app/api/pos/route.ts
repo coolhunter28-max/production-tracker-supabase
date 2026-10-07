@@ -28,6 +28,7 @@ export async function GET() {
         reference,
         style,
         color,
+        factory,
         size_run,
         category,
         qty,

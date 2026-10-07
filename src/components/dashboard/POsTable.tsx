@@ -20,6 +20,18 @@ import { Button } from "@/components/ui/button";
 import { PO } from "@/types";
 import { getEstadoPO } from "@/utils/getEstadoPO";
 
+function getFactorySummary(po: PO): string {
+  const factories = [
+    ...new Set(
+      (po.lineas_pedido ?? [])
+        .map((line) => String(line.factory ?? "").trim())
+        .filter(Boolean)
+    ),
+  ].sort();
+
+  return factories.length > 0 ? factories.join(" · ") : "-";
+}
+
 export default function POsTable({ pos }: { pos: PO[] }) {
   const router = useRouter();
 
@@ -78,7 +90,7 @@ export default function POsTable({ pos }: { pos: PO[] }) {
                       <TableCell>{po.po}</TableCell>
                       <TableCell>{po.supplier}</TableCell>
                       <TableCell>{po.customer}</TableCell>
-                      <TableCell>{po.factory}</TableCell>
+                      <TableCell>{getFactorySummary(po)}</TableCell>
                       <TableCell>{po?.season || "-"}</TableCell>
                       <TableCell>{po.po_date || "-"}</TableCell>
                       <TableCell>{po.etd_pi || "-"}</TableCell>

@@ -30,6 +30,7 @@ type LineaPedido = {
   reference: string | null;
   style: string | null;
   color: string | null;
+  factory: string | null;
   size_run: string | null;
   category: string | null;
   qty: number | null;
@@ -96,6 +97,17 @@ function getQtyTotal(po: PO): number {
   return (po.lineas_pedido ?? []).reduce((sum, line) => sum + Number(line.qty ?? 0), 0);
 }
 
+function getFactories(po: PO): string[] {
+  return [
+    ...new Set((po.lineas_pedido ?? []).map((line) => text(line.factory)).filter(Boolean)),
+  ].sort();
+}
+
+function getFactorySummary(po: PO): string {
+  const factories = getFactories(po);
+  return factories.length > 0 ? factories.join(" · ") : "-";
+}
+
 function getPiSummary(po: PO): string {
   const pis = [
     ...new Set((po.lineas_pedido ?? []).map((line) => text(line.pi_number)).filter(Boolean)),
@@ -159,11 +171,11 @@ function matchesSearch(po: PO, search: string): boolean {
     includes(po.po) ||
     includes(po.customer) ||
     includes(po.supplier) ||
-    includes(po.factory) ||
     includes(po.season) ||
     includes(po.estado) ||
     (po.lineas_pedido ?? []).some(
       (line) =>
+        includes(line.factory) ||
         includes(line.style) ||
         includes(line.reference) ||
         includes(line.color) ||
@@ -259,7 +271,7 @@ export default function POsPage() {
   );
 
   const factories = useMemo(
-    () => [...new Set(pos.map((p) => p.factory).filter(Boolean) as string[])].sort(),
+    () => [...new Set(pos.flatMap((p) => getFactories(p)))].sort(),
     [pos]
   );
 
@@ -298,7 +310,7 @@ export default function POsPage() {
     }
 
     if (filters.factory !== "todos") {
-      result = result.filter((p) => p.factory === filters.factory);
+      result = result.filter((p) => getFactories(p).includes(filters.factory));
     }
 
     if (filters.season !== "todos") {
@@ -445,7 +457,7 @@ export default function POsPage() {
                             <div>{po.customer || "-"}</div>
                             <div>{po.season || "-"}</div>
                             <div>{po.supplier || "-"}</div>
-                            <div>{po.factory || "-"}</div>
+                            <div>{getFactorySummary(po)}</div>
                             <div className="text-right">{lineCount}</div>
                             <div className="text-right">{getQtyTotal(po)}</div>
                             <div>{getPiSummary(po)}</div>

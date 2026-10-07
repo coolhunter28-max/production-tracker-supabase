@@ -30,6 +30,7 @@ type POLine = {
   reference?: string | null;
   style?: string | null;
   color?: string | null;
+  factory?: string | null;
   qty?: number | null;
   pi_number?: string | null;
   etd?: string | null;
@@ -91,6 +92,15 @@ function getLines(po: POListItem) {
   return po.lineas_pedido ?? [];
 }
 
+function getFactories(po: POListItem) {
+  return uniqueValues(getLines(po).map((line) => line.factory));
+}
+
+function getFactorySummary(po: POListItem) {
+  const factories = getFactories(po);
+  return factories.length > 0 ? factories.join(" · ") : "-";
+}
+
 function getQtyTotal(po: POListItem) {
   return getLines(po).reduce((sum, line) => sum + Number(line.qty ?? 0), 0);
 }
@@ -134,7 +144,7 @@ function getSampleSummary(line: POLine) {
 function lineMatchesSearch(line: POLine, search: string) {
   const needle = search.toLowerCase();
 
-  return [line.reference, line.style, line.color, line.pi_number, line.etd]
+  return [line.reference, line.style, line.color, line.factory, line.pi_number, line.etd]
     .map((value) => String(value ?? "").toLowerCase())
     .some((value) => value.includes(needle));
 }
@@ -219,7 +229,7 @@ export default function POsPage() {
   );
 
   const factories = useMemo(
-    () => uniqueValues(pos.map((p) => p.factory)),
+    () => uniqueValues(pos.flatMap((p) => getLines(p).map((line) => line.factory))),
     [pos]
   );
 
@@ -253,7 +263,9 @@ export default function POsPage() {
     }
 
     if (filters.factory !== "todos") {
-      result = result.filter((p) => p.factory === filters.factory);
+      result = result.filter((p) =>
+        getLines(p).some((line) => line.factory === filters.factory)
+      );
     }
 
     if (filters.season !== "todos") {
@@ -281,7 +293,6 @@ export default function POsPage() {
           test(p.po_number) ||
           test(p.customer) ||
           test(p.supplier) ||
-          test(p.factory) ||
           test(p.season) ||
           test(p.estado) ||
           getLines(p).some((line) => lineMatchesSearch(line, filters.search))
@@ -423,7 +434,7 @@ export default function POsPage() {
                       </td>
 
                       <td className="w-[80px] truncate px-2 py-2">
-                        {display(po.factory)}
+                        {getFactorySummary(po)}
                       </td>
 
                       <td className="w-[80px] truncate px-2 py-2">

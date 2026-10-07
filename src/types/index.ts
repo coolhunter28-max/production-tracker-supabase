@@ -13,6 +13,7 @@ export interface PO {
   booking?: string;
   closing?: string;
   shipping_date?: string;
+  lineas_pedido?: LineaPedido[];
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +24,7 @@ export interface LineaPedido {
   reference?: string;
   style: string;
   color: string;
+  factory?: string;
   size_run?: string;
   qty: number;
   category?: string;
