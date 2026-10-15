@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireApiAccess } from "@/lib/api-access";
 
 export const runtime = "nodejs";
 
@@ -9,12 +10,17 @@ const supabase = createClient(
 );
 
 // POST /api/cotizaciones/:cotizacionId/duplicate
-// body opcional: { created_by?: string, status?: string }
+// body opcional: { status?: string }
 export async function POST(
   req: Request,
   { params }: { params: { cotizacionId: string } }
 ) {
   try {
+    const authorization = await requireApiAccess({
+      roles: ["ADMIN", "MANAGER"],
+    });
+    if (!authorization.ok) return authorization.response;
+
     const cotizacionId = params.cotizacionId;
     if (!cotizacionId) {
       return NextResponse.json({ error: "cotizacionId is required" }, { status: 400 });
@@ -36,10 +42,7 @@ export async function POST(
     // ✅ notas vacías
     // ✅ status por defecto "enviada" (o el que mandes)
     const newStatus = String(body?.status || "enviada").trim() || "enviada";
-    const createdBy =
-      body?.created_by !== undefined
-        ? String(body.created_by || "").trim() || null
-        : (original.created_by ? String(original.created_by).trim() : null);
+    const createdBy = authorization.access.email;
 
     const payload: any = {
       modelo_id: original.modelo_id,

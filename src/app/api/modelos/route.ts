@@ -1,6 +1,7 @@
 // src/app/api/modelos/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireApiAccess } from "@/lib/api-access";
 
 export const runtime = "nodejs";
 
@@ -74,6 +75,9 @@ export async function GET(req: Request) {
 // POST /api/modelos -> crea modelo (+ primera variante)
 export async function POST(req: Request) {
   try {
+    const authorization = await requireApiAccess({ roles: ["ADMIN", "MANAGER"] });
+    if (!authorization.ok) return authorization.response;
+
     const body = await req.json();
 
     const style = String(body?.style || "").trim();

@@ -1,6 +1,7 @@
 // src/app/api/variantes/[varianteId]/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireApiAccess } from "@/lib/api-access";
 
 export const runtime = "nodejs";
 
@@ -49,6 +50,9 @@ export async function PATCH(
   { params }: { params: { varianteId: string } }
 ) {
   try {
+    const authorization = await requireApiAccess({ roles: ["ADMIN", "MANAGER"] });
+    if (!authorization.ok) return authorization.response;
+
     const varianteId = params.varianteId;
     if (!varianteId) {
       return NextResponse.json(
@@ -100,6 +104,9 @@ export async function DELETE(
   { params }: { params: { varianteId: string } }
 ) {
   try {
+    const authorization = await requireApiAccess({ roles: ["ADMIN", "MANAGER"] });
+    if (!authorization.ok) return authorization.response;
+
     const varianteId = params.varianteId;
     if (!varianteId) {
       return NextResponse.json(

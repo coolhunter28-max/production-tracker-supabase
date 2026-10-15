@@ -1,6 +1,7 @@
 // src/app/api/modelos/[id]/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireApiAccess } from "@/lib/api-access";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,6 +29,9 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const authorization = await requireApiAccess({ roles: ["ADMIN", "MANAGER"] });
+    if (!authorization.ok) return authorization.response;
+
     const body = await req.json();
 
     // ✅ whitelist de campos editables (para no liarla)

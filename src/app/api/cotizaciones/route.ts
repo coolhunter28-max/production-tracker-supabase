@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireApiAccess } from "@/lib/api-access";
 
 export const runtime = "nodejs";
 
@@ -50,9 +51,14 @@ export async function GET(req: Request) {
 }
 
 // POST /api/cotizaciones
-// body: { variante_id, modelo_id?, currency, buy_price, sell_price, margin_pct?, commission_enabled?, commission_rate?, rounding_step?, status?, notes?, created_by? }
+// body: { variante_id, modelo_id?, currency, buy_price, sell_price, margin_pct?, commission_enabled?, commission_rate?, rounding_step?, status?, notes? }
 export async function POST(req: Request) {
   try {
+    const authorization = await requireApiAccess({
+      roles: ["ADMIN", "MANAGER"],
+    });
+    if (!authorization.ok) return authorization.response;
+
     const body = await req.json();
 
     const variante_id = String(body?.variante_id || "").trim();
@@ -80,7 +86,7 @@ export async function POST(req: Request) {
 
     const status = String(body?.status || "enviada").trim() || "enviada";
     const notes = body?.notes === "" ? null : body?.notes ?? null;
-    const created_by = body?.created_by ? String(body.created_by).trim() : null;
+    const created_by = authorization.access.email;
 
     const payload: any = {
       variante_id,

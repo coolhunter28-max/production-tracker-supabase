@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { requireApiAccess } from "@/lib/api-access";
 
 export const runtime = "nodejs";
 
@@ -59,6 +60,9 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const authorization = await requireApiAccess({ roles: ["ADMIN", "MANAGER"] });
+    if (!authorization.ok) return authorization.response;
+
     assertEnv();
 
     const modeloId = params.id;

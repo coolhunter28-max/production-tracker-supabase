@@ -1,6 +1,7 @@
 // src/app/api/variantes/[varianteId]/componentes/[compId]/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireApiAccess } from "@/lib/api-access";
 
 export const runtime = "nodejs";
 
@@ -50,6 +51,9 @@ export async function PATCH(
   { params }: { params: { varianteId: string; compId: string } }
 ) {
   try {
+    const authorization = await requireApiAccess({ roles: ["ADMIN", "MANAGER"] });
+    if (!authorization.ok) return authorization.response;
+
     const { varianteId, compId } = params;
     if (!varianteId || !compId) {
       return NextResponse.json({ error: "Missing params" }, { status: 400 });
@@ -128,6 +132,9 @@ export async function DELETE(
   { params }: { params: { varianteId: string; compId: string } }
 ) {
   try {
+    const authorization = await requireApiAccess({ roles: ["ADMIN", "MANAGER"] });
+    if (!authorization.ok) return authorization.response;
+
     const { varianteId, compId } = params;
     if (!varianteId || !compId) {
       return NextResponse.json({ error: "Missing params" }, { status: 400 });
