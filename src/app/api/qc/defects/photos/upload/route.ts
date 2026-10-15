@@ -3,6 +3,11 @@ import { createClient } from "@supabase/supabase-js";
 import { uploadToR2 } from "@/lib/r2";
 import { requireApiAccess } from "@/lib/api-access";
 import { requireQcDefectAccess } from "@/lib/qc-access";
+import {
+  hasValidQcImageSignature,
+  qcImageExtension,
+  validateQcImageMetadata,
+} from "@/lib/qc-image-upload";
 
 export const runtime = "nodejs";
 
@@ -56,9 +61,20 @@ export async function POST(req: Request) {
       );
     }
 
+    const validationError = validateQcImageMetadata(file);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
-    const ext = file.name.split(".").pop() || "jpg";
-    const fileName = `defect_${Date.now()}.${ext}`;
+    if (!hasValidQcImageSignature(buffer, file.type)) {
+      return NextResponse.json(
+        { error: "El contenido no coincide con un JPG, PNG o WEBP válido." },
+        { status: 400 }
+      );
+    }
+
+    const fileName = `defect_${Date.now()}.${qcImageExtension(file.type)}`;
 
     const key = `qc/defects/${safePart(po)}/${safePart(
       reference
@@ -67,7 +83,7 @@ export async function POST(req: Request) {
     const photoUrl = await uploadToR2({
       file: buffer,
       fileName: key,
-      contentType: file.type || "image/jpeg",
+      contentType: file.type,
     });
 
     const { data, error } = await supabase
