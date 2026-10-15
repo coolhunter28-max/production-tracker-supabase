@@ -3,7 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import ExcelJS from "exceljs";
 import { uploadToR2 } from "@/lib/r2";
 import { extractExcelImages } from "@/lib/extractExcelImages";
-import { getCurrentUserAccess } from "@/lib/ownership";
+import { requireApiAccess } from "@/lib/api-access";
+import { evaluateQcCustomerAccess } from "@/lib/qc-access-policy";
 
 export const runtime = "nodejs";
 
@@ -14,17 +15,12 @@ const supabase = createClient(
 
 export async function POST(req: Request) {
   try {
-    const access = await getCurrentUserAccess();
+    const authorization = await requireApiAccess({
+      roles: ["ADMIN", "MANAGER", "OPERATOR"],
+    });
+    if (!authorization.ok) return authorization.response;
 
-    const canUploadQC =
-      access.isActive &&
-      (access.role === "ADMIN" ||
-        access.role === "MANAGER" ||
-        access.role === "OPERATOR");
-
-    if (!canUploadQC) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const { access } = authorization;
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -72,8 +68,6 @@ export async function POST(req: Request) {
     const color = cell(sheet, "B12");
     const inspector = cell(sheet, "B13");
 
-    const qtyPo = await getQtyPoFromDatabase(poNumber, reference, style, color);
-
     const defectsDraft = extractDefects(sheet);
 
     const criticalFound = sumDefectsByType(defectsDraft, "critical");
@@ -98,26 +92,20 @@ export async function POST(req: Request) {
       );
     }
 
-    const effectiveCustomer = normalizeCustomerForAccess(po.customer || customer);
+    const customerAccess = evaluateQcCustomerAccess(
+      access,
+      po.customer,
+      customer
+    );
 
-    if (!effectiveCustomer) {
+    if (!customerAccess.allowed) {
       return NextResponse.json(
-        { error: "Customer is required to validate QC permissions" },
-        { status: 400 }
+        { error: customerAccess.error },
+        { status: customerAccess.status }
       );
     }
 
-    if (access.role === "OPERATOR") {
-      const allowedCustomers = new Set(
-        access.customers.map((assignedCustomer) =>
-          normalizeCustomerForAccess(assignedCustomer)
-        )
-      );
-
-      if (!allowedCustomers.has(effectiveCustomer)) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-    }
+    const qtyPo = await getQtyPoFromDatabase(poNumber, reference, style, color);
 
     const { data: inspection, error: inspErr } = await supabase
       .from("qc_inspections")
@@ -477,13 +465,6 @@ function sumDefectsByType(defects: DefectDraft[], type: string): number {
       String(defect.defect_type ?? "").toLowerCase().includes(type)
     )
     .reduce((sum, defect) => sum + defect.defect_quantity, 0);
-}
-
-function normalizeCustomerForAccess(value: string | null | undefined): string {
-  return String(value ?? "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, " ");
 }
 
 async function getQtyPoFromDatabase(

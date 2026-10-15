@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { uploadToR2 } from "@/lib/r2";
+import { requireApiAccess } from "@/lib/api-access";
+import { requireQcDefectAccess } from "@/lib/qc-access";
+
+export const runtime = "nodejs";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,6 +13,11 @@ const supabase = createClient(
 
 export async function POST(req: Request) {
   try {
+    const authorization = await requireApiAccess({
+      roles: ["ADMIN", "MANAGER", "OPERATOR"],
+    });
+    if (!authorization.ok) return authorization.response;
+
     const formData = await req.formData();
 
     const file = formData.get("file") as File | null;
@@ -20,6 +29,13 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    const defectAccess = await requireQcDefectAccess({
+      access: authorization.access,
+      defectId,
+      supabase,
+    });
+    if (!defectAccess.ok) return defectAccess.response;
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const fileName = `qc/defects/${defectId}/${Date.now()}-${file.name}`;

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { uploadToR2 } from "@/lib/r2";
-import { getCurrentUserAccess } from "@/lib/ownership";
+import { requireApiAccess } from "@/lib/api-access";
+import { requireQcDefectAccess } from "@/lib/qc-access";
 
 export const runtime = "nodejs";
 
@@ -19,61 +20,29 @@ function safePart(input: string) {
 
 export async function POST(req: Request) {
   try {
-    const access = await getCurrentUserAccess();
+    const authorization = await requireApiAccess({
+      roles: ["ADMIN", "MANAGER", "OPERATOR"],
+    });
+    if (!authorization.ok) return authorization.response;
 
-if (!access.isActive) {
-  return NextResponse.json(
-    { error: "Forbidden" },
-    { status: 403 }
-  );
-}
+    const form = await req.formData();
 
-const form = await req.formData();
+    const defectId = form.get("defect_id") as string;
 
-const defectId = form.get("defect_id") as string;
+    if (!defectId) {
+      return NextResponse.json(
+        { error: "Missing defect_id" },
+        { status: 400 }
+      );
+    }
 
-if (!defectId) {
-  return NextResponse.json(
-    { error: "Missing defect_id" },
-    { status: 400 }
-  );
-}
+    const defectAccess = await requireQcDefectAccess({
+      access: authorization.access,
+      defectId,
+      supabase,
+    });
+    if (!defectAccess.ok) return defectAccess.response;
 
-if (access.role === "OPERATOR") {
-  const { data: defect, error: defectError } = await supabase
-    .from("qc_defects")
-    .select(`
-      id,
-      inspection:qc_inspections (
-        id,
-        customer
-      )
-    `)
-    .eq("id", defectId)
-    .single();
-
-  if (defectError || !defect) {
-    return NextResponse.json(
-      { error: "Defect not found" },
-      { status: 404 }
-    );
-  }
-
-  const customer = (defect as any).inspection?.customer;
-
-  if (!customer || !access.customers.includes(customer)) {
-    return NextResponse.json(
-      { error: "Forbidden" },
-      { status: 403 }
-    );
-  }
-} else if (access.role !== "ADMIN" && access.role !== "MANAGER") {
-  return NextResponse.json(
-    { error: "Forbidden" },
-    { status: 403 }
-  );
-}
-    
     const po = form.get("po") as string;
     const reference = form.get("reference") as string;
     const style = form.get("style") as string;
