@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { syncAnalytics } from "@/lib/analytics/sync";
 import { createClient } from "@supabase/supabase-js";
-import { getCurrentUserAccess } from "@/lib/ownership";
+import { requireApiAccess } from "@/lib/api-access";
 import { sameIdentity } from "@/lib/normalize-identity";
 import ExcelJS from "exceljs";
 
@@ -179,15 +179,10 @@ type ParsedChinaRow = {
 // -------------------------------------------------------------
 export async function POST(req: Request) {
   try {
-    const access = await getCurrentUserAccess();
-
-    const canImportChina =
-      access.isActive &&
-      (access.role === "ADMIN" || access.role === "MANAGER");
-
-    if (!canImportChina) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const authorization = await requireApiAccess({
+      roles: ["ADMIN", "MANAGER"],
+    });
+    if (!authorization.ok) return authorization.response;
 
     const formData = await req.formData();
     const file = formData.get("file") as File;

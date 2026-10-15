@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireApiAccess } from "@/lib/api-access";
 
 export const runtime = "nodejs";
 
@@ -10,6 +11,11 @@ const supabase = createClient(
 
 export async function POST(req: Request) {
   try {
+    const authorization = await requireApiAccess({
+      roles: ["ADMIN", "MANAGER"],
+    });
+    if (!authorization.ok) return authorization.response;
+
     const body = await req.json();
 
     const sourceVarianteId = String(body?.sourceVarianteId || "").trim();

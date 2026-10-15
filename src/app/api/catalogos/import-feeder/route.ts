@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { createClient } from "@supabase/supabase-js";
+import { requireApiAccess } from "@/lib/api-access";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -115,6 +116,11 @@ function pushUnique(
 // -------------------------------------------------------------
 export async function POST(req: Request) {
   try {
+    const authorization = await requireApiAccess({
+      roles: ["ADMIN", "MANAGER"],
+    });
+    if (!authorization.ok) return authorization.response;
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
