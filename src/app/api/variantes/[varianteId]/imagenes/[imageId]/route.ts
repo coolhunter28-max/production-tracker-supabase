@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { requireApiAccess } from "@/lib/api-access";
 
 export const runtime = "nodejs";
 
@@ -33,13 +34,18 @@ export async function DELETE(
   { params }: { params: { varianteId: string; imageId: string } }
 ) {
   try {
-    assertEnv();
+    const authorization = await requireApiAccess({
+      roles: ["ADMIN", "MANAGER"],
+    });
+    if (!authorization.ok) return authorization.response;
 
     const varianteId = params.varianteId;
     const imageId = params.imageId;
 
     if (!varianteId) return NextResponse.json({ error: "varianteId is required" }, { status: 400 });
     if (!imageId) return NextResponse.json({ error: "imageId is required" }, { status: 400 });
+
+    assertEnv();
 
     // 1) Cargar imagen y validar pertenencia a variante
     const { data: img, error: imgErr } = await supabase

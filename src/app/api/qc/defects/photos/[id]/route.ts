@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { deleteFromR2 } from "@/lib/r2";
+import { requireApiAccess } from "@/lib/api-access";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,6 +19,11 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const authorization = await requireApiAccess({
+      roles: ["ADMIN", "MANAGER"],
+    });
+    if (!authorization.ok) return authorization.response;
+
     const photoId = params.id;
 
     // 1) Leer la fila para saber qué borrar en R2

@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { requireApiAccess } from "@/lib/api-access";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,6 +26,11 @@ export async function DELETE(
   { params }: { params: { id: string; imageId: string } }
 ) {
   try {
+    const authorization = await requireApiAccess({
+      roles: ["ADMIN", "MANAGER"],
+    });
+    if (!authorization.ok) return authorization.response;
+
     const modeloId = params.id;
     const imageId = params.imageId;
 
